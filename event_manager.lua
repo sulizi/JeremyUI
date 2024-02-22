@@ -214,6 +214,7 @@ function(event, ...)
         aura_env.LBG = aura_env.LBG or LibStub( "LibCustomGlow-1.0" )
         local LBG = aura_env.LBG
         
+        
         local jeremy = aura_env.jeremy_update or {}
         local compression_value = 1000
         local spellRaw = function ( name )
@@ -226,6 +227,8 @@ function(event, ...)
         local spells = aura_env.spells
         local actionlist = {}
         local actionhash = {}
+        local default_action = Player.default_action
+        local rate_time = ( aura_env.base_gm and Player.action_modifier / aura_env.base_gm ) or 1
         aura_env.action_cache = aura_env.action_cache or {}
         local action_set = function( tbl )
             if not tbl.name then return end
@@ -237,15 +240,19 @@ function(event, ...)
             tbl.cooldown      = tbl.cooldown or 0
             tbl.cd_remains    = tbl.cooldown_remains or 0
             tbl.start_cd      = tbl.starts_cooldown or {}
-            tbl.execute_time  = tbl.execute_time or 0
+            tbl.execute_time  = max( 0, tbl.execute_time or 0 )
             tbl.cost          = tbl.cost or 0
             tbl.chi_cost      = tbl.chi_cost or 0
             tbl.t_amp         = tbl.t_amp or 1.0
-            tbl.delay         = tbl.delay or 0
+            tbl.delay         = max( 0, tbl.delay or 0 )
             tbl.mastery_break = tbl.mastery_break or false            
             local raw_comp = tbl.raw / compression_value
             jeremy.raw[ tbl.name ] = raw_comp > 1 and floor( raw_comp ) or raw_comp 
             if not tbl.background then
+                local dpet = tbl.raw / max( 1, 1 + ( tbl.execute_time + tbl.delay )  * rate_time ) 
+                tbl.d_time = dpet - tbl.cost
+                tbl.d_cost = dpet / max( 1, 1 + tbl.cost )
+                                
                 local index = actionhash[ tbl.name ] or #actionlist+1
                 actionlist[ index ] = tbl
                 actionhash[ tbl.name ] = index
@@ -1117,6 +1124,11 @@ function(event, ...)
                             -- Target Auras
                             local temporary_amplifiers = global_modifier( action, action_delay ) * targetAuraEffect( action, action_delay )
                             
+                            -- Cache curent player amplifier
+                            if name == default_action then
+                                Player.action_modifier = temporary_amplifiers
+                            end
+                            
                             -- Add spawn delta
                             -- weight of holding expensive CDs for upcoming add phase
                             local spawn_delta = 1
@@ -1730,11 +1742,8 @@ function(event, ...)
             
             -- Sort and rank candidate actions
             -- -----------------------------------------------------------
-            local maximum_sequence = 5
-            local default_action = Player.default_action
-            
             local t = min( 5, aura_env.fight_remains )
-            local a = global_modifier( default_action, 0, false ) * targetAuraEffect( default_action, 0 )
+            local a = Player.action_modifier
             local c = ( spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"]  and Player.chi ) 
             or ( spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"]  and Player.mana / Player.eps ) 
             or Player.energy / Player.eps
@@ -1750,9 +1759,10 @@ function(event, ...)
                 local hashed = {}
                 local potential_d = 0
                 local potential_h = 0
-                local rate_time = ( aura_env.base_gm and a / aura_env.base_gm ) or 1
                 
                 local function sortActionList( list )
+                    local maximum_sequence = 5
+                    local minimum_step = 1
                     local pool = false
                     
                     o = global_modifier( default_action, t, false ) * targetAuraEffect( default_action, t ) 
@@ -1771,9 +1781,7 @@ function(event, ...)
                     if not pool then
                         -- Sort actions by time
                         sort( list, function( l, r )
-                                local l_dpet = l.raw / max( 1, 1 + ( l.execute_time + l.delay )  * rate_time ) 
-                                local r_dpet = r.raw / max( 1, 1 + ( r.execute_time + r.delay )  * rate_time ) 
-                                return ( l_dpet - l.cost > r_dpet - r.cost )
+                            return l.d_time > r.d_time
                         end)
                         
                         local validActions = {}
@@ -1791,23 +1799,31 @@ function(event, ...)
                         end
                         
                         local sequence_n = 0
-                        local last_s_floor = s
-                        for try = 1, 2 do
+                        local previous_s = s
+                        local non_op = false
+                        while true do
                             
-                            if s >= t or c <= 0 then
+                            local delta_s = s - previous_s
+                            if non_op or s >= t or c <= 0 or delta_s < minimum_step then
                                 break
                             end
+                            
+                            previous_s = s
                             
                             local n_actions = #validActions
                             if n_actions <= 1 then
                                 return list
                             end
                             
+                            non_op = true
+                            
                             for j, action in pairs( validActions ) do
                                 
                                 local cd_remaining = ( ow[ action.name ] or action.cd_remains ) - s
                                 
                                 if action.cost <= c and cd_remaining <= 0 and action.delay <= ( t - s ) then
+                                    
+                                    non_op = false
                                     
                                     sequence_n = sequence_n + 1
                                     
@@ -1817,7 +1833,7 @@ function(event, ...)
                                     potential_d = potential_d + ( action.damage or 0 )
                                     potential_h = potential_h + ( action.healing or 0 ) + ( action.group_healing or 0 )
                                     
-                                    if s >= t or action.execute_time == 0 or action.cost == 0 or sequence_n >= maximum_sequence then
+                                    if s >= t or action.execute_time == 0 or action.cost <= 0 or sequence_n >= maximum_sequence then
                                         return list
                                     end
                                     
@@ -1832,17 +1848,15 @@ function(event, ...)
                                             ow[ trigger.name ] = trigger.cooldown
                                         end
                                     end
+                                elseif cd_remaining > t or action.delay > t then
+                                    validActions[ j ] = nil
                                 end
                             end
                         end
                     end
                     -- Adjust by cost 
                     sort( list, function( l, r )
-                            local l_dpet = l.raw / max( 1, 1 + ( l.execute_time + l.delay )  * rate_time ) 
-                            local r_dpet = r.raw / max( 1, 1 + ( r.execute_time + r.delay )  * rate_time )                         
-                            local l_cost_adjusted = l_dpet / max( 1, 1 + l.cost )
-                            local r_cost_adjusted = r_dpet / max( 1, 1 + r.cost )
-                            return l_cost_adjusted > r_cost_adjusted
+                        return l.d_cost > r.d_cost
                     end )
                     return list
                 end
