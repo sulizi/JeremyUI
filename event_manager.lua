@@ -252,7 +252,7 @@ function(event, ...)
                 local dpet = tbl.raw / max( 1, 1 + ( tbl.execute_time + tbl.delay )  * rate_time ) 
                 tbl.d_time = dpet - tbl.cost
                 tbl.d_cost = dpet / max( 1, 1 + tbl.cost )
-                                
+                
                 local index = actionhash[ tbl.name ] or #actionlist+1
                 actionlist[ index ] = tbl
                 actionhash[ tbl.name ] = index
@@ -322,7 +322,7 @@ function(event, ...)
                 aura_env.tick_update = nil
             end
             
-            aura_env.pvp_mode = UnitIsPlayer( "target" ) and aura_env.validTarget(  "target" )
+            Player.is_pvp = UnitIsPlayer( "target" ) and aura_env.validTarget(  "target" )
             
             profilerEnd( "Update Unit Info" )
             
@@ -754,7 +754,7 @@ function(event, ...)
             
             aura_env.actionlist_update = frameTime
             
-            local serenity = Player.findAura( 152173 )
+            local serenity = ( spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ] and Player.findAura( 152173 ) ) or nil
             local brewmaster_dmg_ratio = max( 0.01, aura_env.config.brewmaster_ratio )
             local brewmaster_heal_ratio = max( 0.01, 1 - aura_env.config.brewmaster_ratio )
             
@@ -871,8 +871,23 @@ function(event, ...)
                         })
                         
                     elseif spellID ~= nil then
-                        local ap      = ( type( action.ap ) == "function" and action.ap() or action.ap ) or 0
-                        local sp      = ( type( action.sp ) == "function" and action.sp() or action.sp ) or 0
+                        
+                        -- Cache AP/SP values
+                        -- these sometimes change in PvP combat so we'll cache that as well
+                        if not action.pve_ap_value and not Player.is_pvp then
+                            action.pve_ap_value = ( type( action.ap ) == "function" and action.ap() or action.ap ) or 0
+                        elseif not action.pvp_ap_value and Player.is_pvp then
+                            action.pvp_ap_value = ( type( action.ap ) == "function" and action.ap() or action.ap ) or 0
+                        end
+                        
+                        if not action.pve_sp_value and not Player.is_pvp then
+                            action.pve_sp_value = ( type( action.sp ) == "function" and action.sp() or action.sp ) or 0
+                        elseif not action.pvp_sp_value and Player.is_pvp then
+                            action.pvp_sp_value = ( type( action.sp ) == "function" and action.sp() or action.sp ) or 0
+                        end
+                        
+                        local ap      = Player.is_pvp and action.pvp_ap_value or action.pve_ap_value
+                        local sp      = Player.is_pvp and action.pvp_sp_value or action.pve_sp_value
                         local ticks   = ( type( action.ticks ) == "function" and action.ticks() or action.ticks ) or 1
                         
                         local tooltip = 
@@ -910,8 +925,6 @@ function(event, ...)
                             ready = action.ready()
                         end
                         
-                        local ft_buff = Player.findAura( 213114 )
-                        local retouch_remains = ( ft_buff and ft_buff.remaining ) or 0 
                         local mastery = 1
                         local mastery_break = false
                         
@@ -920,13 +933,7 @@ function(event, ...)
                                 mastery = Player.mast_bonus
                             else
                                 mastery = 1
-                                
-                                -- Try to gain mastery for ToD but don't lose casts
-                                if ( name == "touch_of_death" and aura_env.target_ttd > 1.5 and retouch_remains > 1.5 ) then
-                                    ready = false
-                                else
-                                    mastery_break = true
-                                end
+                                mastery_break = true
                             end
                         end
                         
@@ -1019,30 +1026,32 @@ function(event, ...)
                             end
                             
                             -- Shuffle
-                            local shuffle = Player.findAura( 215479 )
                             local shuffle_time_granted = 0
-                            
-                            if action.grant_shuffle 
-                            and Player.talent.shuffle.ok 
-                            and ( not shuffle or ( shuffle.remaining - Player.gcd_remains ) <= 1 ) then
+                            if spec == aura_env.SPEC_INDEX[ "MONK_BREWMASTER" ] then
+                                local shuffle = Player.findAura( 215479 )
                                 
-                                shuffle_time_granted 
-                                = ( type( action.grant_shuffle ) == "function" and action.grant_shuffle() or action.grant_shuffle )
-                                
-                                if shuffle_time_granted > 0 then    
+                                if action.grant_shuffle 
+                                and Player.talent.shuffle.ok 
+                                and ( not shuffle or ( shuffle.remaining - Player.gcd_remains ) <= 1 ) then
                                     
-                                    local dtps = Player.recent_dtps
+                                    shuffle_time_granted 
+                                    = ( type( action.grant_shuffle ) == "function" and action.grant_shuffle() or action.grant_shuffle )
                                     
-                                    -- Add fake damage out of combat so that Brewmasters start pulls correctly
-                                    if not InCombatLockdown() then
-                                        dtps = UnitHealthMax( "player" ) * 0.1
+                                    if shuffle_time_granted > 0 then    
+                                        
+                                        local dtps = Player.recent_dtps
+                                        
+                                        -- Add fake damage out of combat so that Brewmasters start pulls correctly
+                                        if not InCombatLockdown() then
+                                            dtps = UnitHealthMax( "player" ) * 0.1
+                                        end
+                                        
+                                        local stagger_pct, stagger_target_pct = GetStaggerPercentage( "player" )
+                                        local shuffle_pct = ( stagger_target_pct or stagger_pct ) / 100 / ( shuffle and 2 or 1 )
+                                        local shuffle_dr = dtps * shuffle_time_granted * shuffle_pct
+                                        
+                                        mitigation = mitigation + shuffle_dr
                                     end
-                                    
-                                    local stagger_pct, stagger_target_pct = GetStaggerPercentage( "player" )
-                                    local shuffle_pct = ( stagger_target_pct or stagger_pct ) / 100 / ( shuffle and 2 or 1 )
-                                    local shuffle_dr = dtps * shuffle_time_granted * shuffle_pct
-                                    
-                                    mitigation = mitigation + shuffle_dr
                                 end
                             end
                             
@@ -1052,14 +1061,20 @@ function(event, ...)
                             -- Versatility
                             tooltip = tooltip * Player.vers_bonus
                             
-                            -- Spec auras
-                            local combined_aura = 1
-                            if action.auras then
-                                for _, effectN in pairs( action.auras ) do
-                                    combined_aura = combined_aura * aura_env.auraEffect( effectN )
+                            -- Cache spec auras
+                            -- these sometimes change in PvP so we will cache both
+                            if not action.aura_modifier_pve and not Player.is_pvp
+                            or not action.aura_modifier_pvp and Player.is_pvp then
+                                local total_aura_effect = aura_env.auraEffectForSpell( action.dotID or spellID )
+                                
+                                if Player.is_pvp then
+                                    action.aura_modifier_pvp = total_aura_effect
+                                else
+                                    action.aura_modifier_pve = total_aura_effect
                                 end
                             end
-                            tooltip = tooltip * combined_aura
+                            
+                            tooltip = tooltip * ( Player.is_pvp and action.aura_modifier_pvp or action.aura_modifier_pve )
                             
                             -- Bonus damage and healing not related to ap or sp modifier
                             local bonus_damage = action.bonus_da and action.bonus_da() or 0
@@ -1093,7 +1108,7 @@ function(event, ...)
                                     crit_rate = min( 1, crit_rate + aura_env.skyreach_modifier( action ) )
                                 end
                                 
-                                if aura_env.pvp_mode then
+                                if Player.is_pvp then
                                     local pvp_crit_modifier = Player.spell.pvp_enabled.effectN( 3 ).mod
                                     crit_mod = crit_mod * pvp_crit_modifier
                                 end
@@ -1137,7 +1152,7 @@ function(event, ...)
                             and action_type == "damage"
                             and not action.background 
                             and ( not Player.channel_id or Player.channel_id ~= spellID )
-                            and ( name ~= "touch_of_death" or not ft_buff ) then
+                            and name ~= "touch_of_death" then
                                 local cooldown = aura_env.actionBaseCooldown( action )
                                 if cooldown > 0 then
                                     for _, raid_event in pairs( aura_env.raid_events ) do
@@ -1198,21 +1213,26 @@ function(event, ...)
                                 end
                                 
                                 -- Thunderfist
-                                local thunderfist = Player.findAura( 242387 )
-                                
-                                if thunderfist then
-                                    local tf_stack_value = spellRaw( "thunderfist_single" )
-                                    mh_loss = mh_loss + ( min( swings_lost, thunderfist.stacks ) * tf_stack_value )
+                                if spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ] then
+                                    local thunderfist = Player.findAura( 242387 )
+                                    
+                                    if thunderfist then
+                                        local tf_stack_value = spellRaw( "thunderfist_single" )
+                                        mh_loss = mh_loss + ( min( swings_lost, thunderfist.stacks ) * tf_stack_value )
+                                    end
                                 end
                                 -- ----------------------
                                 
                                 -- Press the Advantage
-                                if Player.talent.press_the_advantage.ok then
-                                    local pta_value = spellRaw( "press_the_advantage" )
-                                    pta_value = pta_value + max( spellRaw( "pta_rising_sun_kick" ), spellRaw( "pta_keg_smash" ) / 10 )
-                                    
-                                    mh_loss = mh_loss + ( swings_lost * pta_value )
+                                if spec == aura_env.SPEC_INDEX[ "MONK_BREWMASTER" ] then
+                                    if Player.talent.press_the_advantage.ok then
+                                        local pta_value = spellRaw( "press_the_advantage" )
+                                        pta_value = pta_value + max( spellRaw( "pta_rising_sun_kick" ), spellRaw( "pta_keg_smash" ) / 10 )
+                                        
+                                        mh_loss = mh_loss + ( swings_lost * pta_value )
+                                    end
                                 end
+                                -- ----------------------
                                 
                                 local aa_loss = mh_loss + oh_loss
                                 
@@ -1781,7 +1801,7 @@ function(event, ...)
                     if not pool then
                         -- Sort actions by time
                         sort( list, function( l, r )
-                            return l.d_time > r.d_time
+                                return l.d_time > r.d_time
                         end)
                         
                         local validActions = {}
@@ -1856,7 +1876,7 @@ function(event, ...)
                     end
                     -- Adjust by cost 
                     sort( list, function( l, r )
-                        return l.d_cost > r.d_cost
+                            return l.d_cost > r.d_cost
                     end )
                     return list
                 end
@@ -1881,7 +1901,7 @@ function(event, ...)
                     and aura_env.fight_remains > 1
                     and v.name ~= "touch_of_death" 
                     and ( v.name ~= "spinning_crane_kick" or Player.bdb_targets == 0 ) then
-                        jeremy.rank[ v.name ] = 0    
+                        jeremy.rank[ v.name ] = 0 
                     else
                         jeremy.rank[ ( ( v.combo_base and not jeremy.rank[ v.combo_base ] ) and v.combo_base ) or v.name ] = k
                         if action_debug and k <= 5 then
@@ -1936,7 +1956,7 @@ function(event, ...)
                 jeremy.force_tod = false
             end
             
-            local woo_buff = Player.findAura( 387184 )
+            local woo_buff = ( spec == aura_env.SPEC_INDEX[ "MONK_BREWMASTER" ] and Player.findAura( 387184 ) ) or nil
             if woo_buff and woo_buff.remaining <= ( 0.25 + Player.gcd_duration ) * ( 4 - aura_env.woo_best ) then
                 jeremy.woo_prio = true
             else
@@ -2204,7 +2224,7 @@ function(event, ...)
             end
         else
             unitID = ...
-            unitGUID = unitID and UnitGUID( unitID ) or nil
+            unitGUID = ( unitID and UnitGUID( unitID ) ) or nil
         end
         
         if not unitGUID then
@@ -2550,9 +2570,10 @@ function(event, ...)
             end
         end
         
-        if InCombatLockdown() then          
-            LogDamage(CombatLogGetCurrentEventInfo())
-            LogDeath(CombatLogGetCurrentEventInfo())
+        if InCombatLockdown() then
+            local params = CombatLogGetCurrentEventInfo()
+            LogDamage( params )
+            LogDeath( params )
         end
         
         return false

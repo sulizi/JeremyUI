@@ -86,6 +86,7 @@ local UnitAttackSpeed = UnitAttackSpeed
 local UnitCanAttack = UnitCanAttack
 local UnitExists = UnitExists
 local UnitGUID = UnitGUID
+local UnitHealth = UnitHealth
 local UnitHealthMax = UnitHealthMax
 local UnitIsPlayer = UnitIsPlayer
 local UnitIsPVP = UnitIsPVP
@@ -103,7 +104,7 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 1.8
+local DBC_Version = 1.9
 local LibDBCache = LibStub("LibDBCache-1.0", true)
 
 if not LibDBCache then
@@ -1820,9 +1821,32 @@ local function generateCallbacks( spells )
     end
 end    
 
-local spec_auras = {}
-aura_env.auraEffect = function( n )
-    return spec_auras[ n ] or 1
+aura_env.auraEffectForSpell = function ( spellID )
+    
+    local total_aura_effect = 1
+    local spec_aura = Player.spec_aura
+    
+    if spec_aura and spec_aura.effectN then
+    
+        local it = 1
+        local effect = 0
+        while ( effect ~= nil ) do
+            effect = spec_aura.effectN( it )
+            if effect and effect.affected_spells then
+                if effect.affected_spells[ spellID ] then
+                    local properties = effect.properties
+                    if properties then
+                        if properties.add_percent_modifier and properties.spell_direct_amount  then
+                            total_aura_effect = total_aura_effect * ( effect.mod or 1 ) 
+                        end
+                    end
+                end
+            end
+            it = it + 1
+        end
+    end
+    
+    return total_aura_effect
 end
 
 -- --------- --
@@ -1866,12 +1890,12 @@ local ww_spells = {
         },
         
         spellID = 113656,
+        dotID = 117418,
         channeled = true,
         ap = function() 
             return spell.fists_of_fury.effectN( 5 ).ap_coefficient 
         end,
         ticks = 5,
-        auras = { 1, --[[2, PERIODIC]] 26 },
         interrupt_aa = true,
         may_crit = true,
         resonant_fists = true,
@@ -1938,6 +1962,7 @@ local ww_spells = {
         },
         
         spellID = 113656,
+        dotID = 117418,
         channeled = true,
         ap = function() 
             return spell.fists_of_fury.effectN( 5 ).ap_coefficient 
@@ -1948,7 +1973,6 @@ local ww_spells = {
             local ticks_gcd = 1 + ( gcd / tick_rate )
             return ticks_gcd 
         end,
-        auras = { 1, --[[2, PERIODIC]] 26 },
         interrupt_aa = true,
         may_crit = true,
         resonant_fists = true,
@@ -2017,10 +2041,10 @@ local ww_spells = {
         },
         
         spellID = 107428,
+        dotID = 185099, -- This spell is really weird and triggers 185099 for the damage event even though it's not channeled
         ap = function() 
             return spell.rising_sun_kick.effectN( 1 ).ap_coefficient 
         end,
-        auras = { 1, --[[2, PERIODIC]] 5, 9, 12, 17, 26, 30 },
         may_crit = true,
         generate_marks = 1,
         resonant_fists = true,        
@@ -2113,12 +2137,12 @@ local ww_spells = {
         },
         
         spellID = 101546,
+        dotID = 107270,
         channeled = true,
         ap = function() 
             return spell.sck_tick.effectN( 1 ).ap_coefficient 
         end,
         ticks = 4,
-        auras = { 1, --[[2, PERIODIC]] 8, 19, 28 },
         interrupt_aa = true,
         may_crit = true,
         resonant_fists = true,
@@ -2201,7 +2225,6 @@ local ww_spells = {
             return spell.blackout_kick.effectN( 1 ).ap_coefficient 
         end,
         background = true,
-        auras = { 1, --[[2, PERIODIC]] 5, 9, 12, 17, 25, 26, 29 },
         may_crit = true,
         copied_by_sef = true,
         trigger_etl = true,
@@ -2250,7 +2273,6 @@ local ww_spells = {
         ap = function() 
             return spell.blackout_kick.effectN( 1 ).ap_coefficient 
         end,
-        auras = { 1, --[[2, PERIODIC]] 5, 9, 12, 17, 25, 26, 29 },
         may_crit = true,
         usable_during_sck = true,       
         resonant_fists = true,        
@@ -2414,7 +2436,6 @@ local ww_spells = {
             return spell.wdp_tick.effectN( 1 ).ap_coefficient 
         end,
         ticks = 3,
-        auras = { 1, --[[2 PERIODIC]] },
         may_crit = true,
         ww_mastery = true,
         usable_during_sck = true,    
@@ -2479,7 +2500,6 @@ local ww_spells = {
         ap = function() 
             return spell.sotwl_mh.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2 PERIODIC,]] 15, 17 },
         background = true,
         may_crit = true,
         ww_mastery = true,
@@ -2516,10 +2536,10 @@ local ww_spells = {
         },
         
         spellID = 392983,
+        dotID = 395521, -- OH hit
         ap = function() 
             return spell.sotwl_oh.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2 PERIODIC,]] 15, 17 },
         may_crit = true,
         ww_mastery = true,
         usable_during_sck = true,   
@@ -2568,11 +2588,11 @@ local ww_spells = {
         },
         
         spellID = 116847,
+        dotID = 148187,
         ap = function() 
             return spell.rjw_tick.effectN( 1 ).ap_coefficient
         end,
         ticks = 9,
-        auras = { 1, --[[2, PERIODIC]] 6, 20 },
         may_crit = true,
         ww_mastery = true,
         usable_during_sck = true,     
@@ -2639,10 +2659,10 @@ local ww_spells = {
     },
     ["jadefire_stomp"] = {
         spellID = 388193,
+        dotID = 388201, 
         ap = function()
             return spell.jadefire_stomp.effectN( 1 ).ap_coefficient + spell.jadefire_stomp_ww.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2 PERIODIC]] },
         may_crit = true,
         usable_during_sck = true,       
         resonant_fists = true,
@@ -2685,7 +2705,6 @@ local ww_spells = {
         ap = function()
             return spell.tiger_palm.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2, PERIODIC]] 4, 5, 12, 15, 17, 27 },
         may_crit = true,
         chi_gain = function() return ( Player.findAura( buff.power_strikes ) and 3 or 2 ) end,
         generate_marks = 1,
@@ -2716,6 +2735,7 @@ local ww_spells = {
     },
     ["chi_burst"] = {
         spellID = 123986,
+        dotID = 148135,
         ap = function()
             return spell.chi_burst.effectN( 1 ).ap_coefficient
         end,
@@ -2748,6 +2768,7 @@ local ww_spells = {
     },
     ["chi_wave"] = {
         spellID = 115098,
+        dotID = 132467,
         ap = function()
             return spell.chi_wave.effectN( 1 ).ap_coefficient
         end,        
@@ -2772,7 +2793,6 @@ local ww_spells = {
         sp = function()
             return spell.expel_harm.effectN( 1 ).sp_coefficient
         end,
-        auras = { 23 },
         may_crit = true,
         trigger_etl = true,
         ww_mastery = true,
@@ -2825,10 +2845,10 @@ local ww_spells = {
     },
     ["flying_serpent_kick"] = {
         spellID = 101545,
+        dotID = 123586,
         ap = function()
             return spell.fsk_damage.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2 PERIODIC]] },
         may_crit = true,
         ww_mastery = true,
         chi = function()
@@ -2874,7 +2894,6 @@ local ww_spells = {
         ap = function()
             return spell.chi_explosion.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2, PERIODIC]] },
         background = true,
         may_crit = true,
         trigger_etl = true,
@@ -2934,7 +2953,6 @@ local ww_spells = {
             return spell.cj_lightning.effectN( 1 ).ap_coefficient
         end,
         ticks = 4,
-        auras = { 1, --[[2, PERIODIC]] 12 },
         interrupt_aa = true,
         may_crit = true,
         ignore_armor = true,
@@ -2964,7 +2982,6 @@ local ww_spells = {
         ap = function()
             return spell.gotd_proc.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2 PERIODIC]] },
         background = true,
         may_crit = true,
         trigger_etl = true,
@@ -3015,7 +3032,6 @@ local ww_spells = {
             return spell.resonant_fists.effectN( 1 ).ap_coefficient
         end,
         icd = 1.0,
-        auras = { 1, --[[2 PERIODIC]] },
         background = true,
         may_crit = true,
         trigger_etl = true,
@@ -3101,8 +3117,21 @@ local ww_spells = {
         usable_during_sck = true,
         trigger_etl = true,
         ww_mastery = true,
-        callback_ready = function()
-            return Player.talent.forbidden_technique.ok
+        callback_ready = function( callback )
+            
+            if Player.talent.forbidden_technique.okay then
+                local fatal_touch = Player.findAura( 213114 )
+                
+                if fatal_touch then
+                    local callback_execute_time = aura_env.spells[ callback ].base_execute_time or 0
+                    if ( fatal_touch.remaining - callback_execute_time ) < 0.250 
+                    or ( aura_env.target_ttd - callback_execute_time ) < 0.250 then
+                        return false
+                    end
+                end
+            end
+            
+            return true
         end,
         bonus_da = function()
             local da_mod = 1
@@ -3117,6 +3146,10 @@ local ww_spells = {
             
             da_mod = da_mod * Player.talent.forbidden_technique.effectN( 2 ).mod
             
+            if Player.last_combo_strike ~= 322109 then
+                da_mod = da_mod * Player.mast_bonus
+            end
+            
             local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" ) 
             
             if is_execute then
@@ -3127,31 +3160,12 @@ local ww_spells = {
             
         end,
         ready = function()
-            if not IsUsableSpell( 322109 ) then
-                return false
-            end
-            
-            local damage_pct = spell.touch_of_death.effectN( 3 ).pct
-            local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" )
-            
-            if is_execute then 
-                return true
-            end
-            
-            local da_mod = 1
-            
-            da_mod = da_mod * Player.mast_bonus
-            
-            da_mod = da_mod * Player.talent.meridian_strikes.effectN( 1 ).mod
-            
-            da_mod = da_mod * Player.talent.forbidden_technique.effectN( 2 ).mod
-            
-            local cd = 90
-            return aura_env.target_ttd > ( da_mod * damage_pct * cd ) 
+            return IsUsableSpell( 322109 )
         end,
     },
     ["white_tiger_statue"] = {
-        spellID = 388686, -- Actual damage event is 389541 (Claw of the White Tiger)
+        spellID = 388686,
+        dotID = 389541, -- (Claw of the White Tiger)
         ap = function()
             return spell.catue_claw.effectN( 1 ).ap_coefficient
         end,
@@ -3359,11 +3373,10 @@ local brm_spells = {
         end,
     },
     ["pta_rising_sun_kick"] = {
-        spellID = 107428,
+        spellID = 185099,
         ap = function() 
             return spell.rising_sun_kick.effectN( 1 ).ap_coefficient 
         end,
-        auras = { 1, --[[2, PERIODIC]] 14, 28 },
         may_crit = true,
         resonant_fists = true,
         background = true,
@@ -3409,10 +3422,10 @@ local brm_spells = {
     },
     ["rising_sun_kick"] = {
         spellID = 107428,
+        dotID = 185099, -- This spell is weird and triggers a secondary damage event even though it is not channeled
         ap = function() 
             return spell.rising_sun_kick.effectN( 1 ).ap_coefficient 
         end,
-        auras = { 1, --[[2, PERIODIC]] 14, 28 },
         may_crit = true,
         resonant_fists = true,
         usable_during_sck = true,
@@ -3502,7 +3515,6 @@ local brm_spells = {
         ap = function() 
             return spell.blackout_kick.effectN( 1 ).ap_coefficient 
         end,
-        auras = { 1, --[[2, PERIODIC]] 14, 16, 30 },
         may_crit = true,
         resonant_fists = true,
         usable_during_sck = true, 
@@ -3568,12 +3580,12 @@ local brm_spells = {
         
         replaces = 101546,
         spellID = 322729,
+        dotID = 107270,
         channeled = true,
         ap = function() 
             return spell.sck_tick.effectN( 1 ).ap_coefficient 
         end,
         ticks = 4,
-        auras = { 1, --[[2, PERIODIC]] 24 },
         interrupt_aa = true,
         may_crit = true,
         resonant_fists = true,
@@ -3631,11 +3643,11 @@ local brm_spells = {
     },
     ["rushing_jade_wind"] = {
         spellID = 116847,
+        dotID = 148187,
         ap = function() 
             return spell.rjw_tick.effectN( 1 ).ap_coefficient
         end,
         ticks = 9,
-        auras = { 1, --[[2, PERIODIC]] 6, 16 },
         may_crit = true,
         resonant_fists = true,
         usable_during_sck = true,
@@ -3674,7 +3686,6 @@ local brm_spells = {
         ap = function()
             return spell.tiger_palm.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2, PERIODIC]] 7, 14, 17 },
         may_crit = true,
         resonant_fists = true,
         usable_during_sck = true,  
@@ -3709,11 +3720,11 @@ local brm_spells = {
         },
     },
     ["chi_burst"] = {
-        spellID = 123986, -- actual hit: 148135
+        spellID = 123986,
+        dotID = 148135,
         ap = function()
             return spell.chi_burst.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2, PERIODIC]] 14, 29 },
         may_crit = true,
         interrupt_aa = true,
         resonant_fists = true,
@@ -3728,11 +3739,11 @@ local brm_spells = {
         },
     },
     ["chi_wave"] = {
-        spellID = 115098, -- actual hit: 132467
+        spellID = 115098,
+        dotID = 132467,
         ap = function()
             return spell.chi_wave.effectN( 1 ).ap_coefficient
         end, 
-        auras = { 1, --[[2, PERIODIC]] 29 },
         ticks = 4, -- 4 Bounces
         may_crit = true,
         resonant_fists = true,
@@ -3775,7 +3786,8 @@ local brm_spells = {
         end,
     },
     ["white_tiger_statue"] = {
-        spellID = 388686, -- Actual damage event is 389541 (Claw of the White Tiger)
+        spellID = 388686,
+        dotID = 389541, -- (Claw of the White Tiger)
         ap = function()
             return spell.catue_claw.effectN( 1 ).ap_coefficient
         end,
@@ -3823,7 +3835,6 @@ local brm_spells = {
         ap = function()
             return spell.resonant_fists.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2, PERIODIC]] 23 },
         icd = 1.0, 
         may_crit = true,
         ignore_armor = true,
@@ -3849,7 +3860,6 @@ local brm_spells = {
             return spell.chi_surge_dot.effectN( 1 ).ap_coefficient
         end,
         ticks = 4,
-        auras = { 1, --[[2 PERIODIC]] },
         background = true,
         may_crit = true,
         resonant_fists = true,
@@ -3869,7 +3879,6 @@ local brm_spells = {
         ap = function()
             return spell.keg_smash.effectN( 2 ).ap_coefficient
         end,
-        auras = { 1, --[[2 PERIODIC]] },
         may_crit = true,
         resonant_fists = true,
         background = true,
@@ -3948,7 +3957,6 @@ local brm_spells = {
         ap = function()
             return spell.keg_smash.effectN( 2 ).ap_coefficient
         end,
-        auras = { 1, --[[2 PERIODIC]] },
         may_crit = true,
         resonant_fists = true,
         usable_during_sck = true,
@@ -4039,7 +4047,6 @@ local brm_spells = {
         ap = function()
             return Player.talent.exploding_keg.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2 PERIODIC]] },
         may_crit = true,
         ignore_armor = true, -- fire       
         resonant_fists = true,
@@ -4070,7 +4077,6 @@ local brm_spells = {
         ap = function()
             return Player.talent.exploding_keg.effectN( 4 ).ap_coefficient
         end,
-        auras = { 1, 2 },
         may_crit = true,
         ignore_armor = true, -- fire       
         resonant_fists = true,
@@ -4090,7 +4096,6 @@ local brm_spells = {
         
         spellID = 115181,
         ap = 0.48,
-        auras = { 1, --[[2, PERIODIC]] 16 },
         may_crit = true,
         ignore_armor = true, -- fire
         resonant_fists = true,
@@ -4174,7 +4179,6 @@ local brm_spells = {
         ticks = function() 
             return bof_duration / 2 
         end,
-        auras = { --[[1, DIRECT]] 2, 16 },
         may_crit = true,
         ignore_armor = true, -- fire
         background = true,
@@ -4372,7 +4376,6 @@ local brm_spells = {
         ap = function()
             return spell.special_delivery.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2 PERIODIC]] },
         may_crit = true,
         resonant_fists = true,
         background = true,
@@ -4392,7 +4395,6 @@ local brm_spells = {
         ap = function()
             return spell.pta_melee.effectN( 1 ).ap_coefficient
         end,
-        auras = { 1, --[[2 PERIODIC]] },
         may_crit = true,
         ignore_armor = true, -- Nature
         resonant_fists = true,
@@ -4617,49 +4619,11 @@ aura_env.initSpecialization = function()
     
     -- Initialize Spec Auras
     if Player.spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"] then
-        
-        for a = 1, 40 do 
-            local effect = spell.windwalker_monk.effectN( a )
-            if effect then
-                local properties = effect.properties
-                if properties.add_percent_modifier 
-                and ( properties.spell_direct_amount --[[or properties.spell_periodic_amount]] ) then
-                    spec_auras[ a ] = effect.mod 
-                end
-            else
-                break
-            end
-        end
-        
+        Player.spec_aura = spell.windwalker_monk
     elseif Player.spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"] then -- MW
-        
-        for a = 1, 40 do 
-            local effect = spell.mistweaver_monk.effectN( a )
-            if effect then
-                local properties = effect.properties
-                if properties.add_percent_modifier 
-                and ( properties.spell_direct_amount --[[or properties.spell_periodic_amount]] ) then
-                    spec_auras[ a ] = effect.mod 
-                end
-            else
-                break
-            end
-        end       
-        
+        Player.spec_aura = spell.mistweaver_monk
     elseif Player.spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"] then -- BrM
-        
-        for a = 1, 40 do 
-            local effect = spell.brewmaster_monk.effectN( a )
-            if effect then
-                local properties = effect.properties
-                if properties.add_percent_modifier 
-                and ( properties.spell_direct_amount --[[or properties.spell_periodic_amount]] ) then
-                    spec_auras[ a ] = effect.mod 
-                end
-            else
-                break
-            end
-        end
+        Player.spec_aura = spell.brewmaster_monk
     end
     
     -- Initialize Spell List
