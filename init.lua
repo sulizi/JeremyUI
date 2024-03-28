@@ -458,6 +458,7 @@ aura_env.CURRENT_MARKERS = {}
 aura_env.CPlayer = {
     ability_power = 1,
     action_modifier = 1,
+    action_sequence = {},
     auraDataByInstance = {},
     auraExclusions = {},    
     auraInstancesByID = {},
@@ -496,8 +497,6 @@ aura_env.CPlayer = {
     moving = false,
     needsFullUpdate = true,    
     oh_wdps = 0,
-    potential_dps = 0,
-    potential_hps = 0,
     primary_stat = 0,
     recent_dtps = 0,
     set_pieces = {},
@@ -2396,7 +2395,7 @@ local ww_spells = {
             ["ancient_lava"] = true,  
             ["blackout_kick_totm"] = function( driver )
                 local totm_stacks = 0
-                
+
                 if Player.talent.teachings_of_the_monastery.ok then
                     local totm = Player.findAura( buff.teachings_of_the_monastery )
                     totm_stacks = min( 3, ( totm and totm.stacks or 0 ) + ( driver == "tiger_palm" and 1 or 0 ) )
@@ -3118,6 +3117,10 @@ local ww_spells = {
         trigger_etl = true,
         ww_mastery = true,
         callback_ready = function( callback )
+            
+            if not IsUsableSpell( 322109 ) then
+                return false
+            end
             
             if Player.talent.forbidden_technique.okay then
                 local fatal_touch = Player.findAura( 213114 )
@@ -3850,9 +3853,6 @@ local brm_spells = {
         ready = function()
             return Player.talent.resonant_fists.ok
         end,
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,            
-        },
     },
     ["chi_surge"] = {
         spellID = 393786,
@@ -4079,7 +4079,7 @@ local brm_spells = {
         end,
         may_crit = true,
         ignore_armor = true, -- fire       
-        resonant_fists = true,
+        resonant_fists = false,
         background = true,
         ready = function()
             return Player.findAura( buff.exploding_keg )
