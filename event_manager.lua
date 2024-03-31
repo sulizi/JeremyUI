@@ -224,11 +224,14 @@ function(event, ...)
         end
         jeremy.raw = jeremy.raw or {}
         jeremy.rank = {}
+        jeremy.scale = {}
         local spells = aura_env.spells
         local actionlist = {}
         local actionhash = {}
         local default_action = Player.default_action
-        local rate_time = ( aura_env.base_gm and Player.action_modifier / aura_env.base_gm ) or 1
+        local rate_time = function()
+            return ( aura_env.base_gm and Player.action_modifier / aura_env.base_gm ) or 1
+        end
         aura_env.action_cache = aura_env.action_cache or {}
         local action_set = function( tbl )
             if not tbl.name then return end
@@ -249,7 +252,7 @@ function(event, ...)
             local raw_comp = tbl.raw / compression_value
             jeremy.raw[ tbl.name ] = raw_comp > 1 and floor( raw_comp ) or raw_comp 
             if not tbl.background then
-                local dpet = tbl.raw / max( 1, 1 + ( tbl.execute_time + tbl.delay )  * rate_time ) 
+                local dpet = tbl.raw / max( 1, 1 + ( tbl.execute_time + tbl.delay )  * rate_time() ) 
                 tbl.d_time = dpet - tbl.cost
                 tbl.d_cost = dpet / max( 1, 1 + tbl.cost )
                 
@@ -771,7 +774,7 @@ function(event, ...)
             if aura_env.action_cpu_average then
                 process_trees = max( 1, floor( cpu_target / aura_env.action_cpu_average ) )
             end
-            
+
             if not InCombatLockdown() then
                 -- limited to 5 out of combat
                 process_trees = min( process_trees, 5 )
@@ -990,7 +993,11 @@ function(event, ...)
                                     energy_cost = energy_cost,
                                     mana_cost = mana_cost,                            
                             } )
-                            action.result = nil
+                        
+                            action.result = {
+                                damage = 1,
+                                healing = 1,
+                            }
                         elseif ready then 
                             
                             -- Check if we're channeling and add channel latency
@@ -1159,26 +1166,27 @@ function(event, ...)
                             -- Add spawn delta
                             -- weight of holding expensive CDs for upcoming add phase
                             local spawn_delta = 1
-                            
-                            if action.target_multiplier 
-                            and action_type == "damage"
-                            and not action.background 
-                            and ( not Player.channel_id or Player.channel_id ~= spellID )
-                            and name ~= "touch_of_death" then
-                                local cooldown = aura_env.actionBaseCooldown( action )
-                                if cooldown > 0 then
-                                    for _, raid_event in pairs( aura_env.raid_events ) do
-                                        local error = ( 1 - aura_env.error_margin )
-                                        local count = raid_event.count
-                                        local t = max( 1, floor( raid_event.adds_in - Player.gcd_remains ) )
-                                        if count > action_targets and cooldown > t and t > action_delay then
-                                            local delta_tm 
-                                            = action.target_multiplier( count ) / action.target_multiplier( action_targets )
-                                            local delta_fm 
-                                            = aura_env.forwardModifier( spells[name], t ) / aura_env.forwardModifier( spells[name] )
-                                            local delta_cm 
-                                            = t / cooldown
-                                            spawn_delta = min( spawn_delta, 1 / ( delta_tm / delta_fm / delta_cm / error ) )
+                            if damage > 1 then
+                                if action.target_multiplier 
+                                and action_type == "damage"
+                                and not action.background 
+                                and ( not Player.channel_id or Player.channel_id ~= spellID )
+                                and name ~= "touch_of_death" then
+                                    local cooldown = aura_env.actionBaseCooldown( action )
+                                    if cooldown > 0 then
+                                        for _, raid_event in pairs( aura_env.raid_events ) do
+                                            local error = ( 1 - aura_env.error_margin )
+                                            local count = raid_event.count
+                                            local t = max( 1, floor( raid_event.adds_in - Player.gcd_remains ) )
+                                            if count > action_targets and cooldown > t and t > action_delay then
+                                                local delta_tm 
+                                                = action.target_multiplier( count ) / action.target_multiplier( action_targets )
+                                                local delta_fm 
+                                                = aura_env.forwardModifier( spells[name], t ) / aura_env.forwardModifier( spells[name] )
+                                                local delta_cm 
+                                                = t / cooldown
+                                                spawn_delta = min( spawn_delta, 1 / ( delta_tm / delta_fm / delta_cm / error ) )
+                                            end
                                         end
                                     end
                                 end
@@ -1266,7 +1274,8 @@ function(event, ...)
                                 critical_damage         = crit_damage,
                                 critical_healing        = crit_healing,
                                 critical_group_healing  = crit_group_healing,
-                                execute_time            = execute_time
+                                execute_time            = execute_time,
+                                delay                   = action_delay,
                             }
                             
                             -- Cache result
@@ -1294,10 +1303,6 @@ function(event, ...)
                                 
                                 if driver.ww_mastery then
                                     driver.trigger["hit_combo"] = ( not mastery_break )
-                                end
-                                
-                                if driver.resonant_fists then
-                                    driver.tick_trigger["resonant_fists"] = true
                                 end
                                 
                                 if driver.grant_shuffle then
@@ -1351,7 +1356,7 @@ function(event, ...)
                                 
                                 -- Recursive triggers
                                 local do_recursion = true
-                                    while ( do_recursion ) do
+                                while ( do_recursion ) do
                                     do_recursion = false
                                     for _, trigger in pairs( trigger_spells ) do
                                         local spell = spells[ trigger.spell ]
@@ -1380,164 +1385,173 @@ function(event, ...)
                                     local driverName = trigger.state.callback_name
                                     local result = trigger.state.result
                                     
-                                    local tick_damage = result.damage or 0
-                                    local tick_healing = result.healing or 0 
-                                    local tick_group_heal = result.group_healing or 0
-                                    
-                                    local total_ticks = ( result.ticks or 1 ) * ( result.target_count or 1 )
-                                    local duration = result.execute_time 
-                                    local tick_count = ( trigger.icd > 0 and min( total_ticks, trigger.rate * floor( duration / trigger.icd ) ) ) or ( trigger.rate * total_ticks )
-                                    
-                                    if not trigger.onTick then
-                                        tick_count = trigger.rate
-                                    end
-                                    
                                     local spell = spells[ trigger.spell ]
+                                    local spell_result = spell.result
                                     
-                                    -- Spec options
-                                    if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  then
-                                        if driver.spellID == 100784 then -- Blackout Kick
-                                            trigger.state.blackout_combo = true
-                                        end        
+                                    if spell and spell_result then
+                                    
+                                        local total_ticks = ( spell_result.ticks or 1 ) * ( spell_result.target_count or 1 )
+                                        local tick_damage = spell_result.damage or 0 / total_ticks
+                                        local tick_healing = spell_result.healing or 0  / total_ticks
+                                        local tick_group_heal = spell_result.group_healing or 0 / total_ticks
                                         
-                                        if trigger.spell == "quick_sip_1s" then
-                                            tick_damage = tick_damage * shuffle_time_granted
-                                            tick_healing = tick_healing * shuffle_time_granted
-                                            tick_group_heal = tick_group_heal * shuffle_time_granted       
-                                        end 
-                                    end
-                                    
-                                    -- Trigger is non-background action with execute time
-                                    local trigger_et = spell.time_total or spell.base_execute_time or 0
-                                    if trigger_et > 0 and not spell.background then
-                                        execute_time = execute_time + trigger_et
-                                    end
-                                    
-                                    -- Trigger has cost
-                                    local trigger_cost = spell.cost_total or spell.base_cost or 0
-                                    if trigger_cost > 0 then
-                                        cost = cost + trigger_cost
-                                    end                                
-                                    
-                                    -- set init trigger CD
-                                    local trigger_cd_remains = aura_env.getCooldown( spell.spellID )
-                                    
-                                    if not spell.background then
-                                        -- Trigger is a non-background action with a cooldown
-                                        if trigger_cd_remains > 0 then
-                                            -- Driver reduces cooldown of trigger
-                                            local driver_cdr = driver.reduces_cd and driver.reduces_cd[ trigger.spell ]
-                                            if driver_cdr then
-                                                if type( driver_cdr ) == "function" then
-                                                    driver_cdr = driver_cdr()
-                                                end
-                                            end
-                                            trigger_cd_remains = trigger_cd_remains - max( 0, ( driver_cdr or 0 ) )
+                                        local result_ticks = ( result.ticks or 1 ) * ( result.target_count or 1 )
+                                        local duration = result.execute_time 
+                                        local tick_count = ( trigger.icd > 0 and min( result_ticks, trigger.rate * floor( duration / trigger.icd ) ) ) or ( trigger.rate * result_ticks )
+                                        
+                                        if not trigger.onTick then
+                                            tick_count = trigger.rate
                                         end
                                         
-                                        if not IsSpellKnown( spell.replaces or spell.spellID ) or trigger_cd_remains > 0 then
-                                            tick_damage = 0
-                                            tick_healing = 0
-                                            tick_group_heal = 0       
-                                        end
-                                    end
-                                    
-                                    if tick_damage > 0 then
-                                        -- Use future trigger state
-                                        if spell.action_multiplier then
-                                            local spell_am = spell.action_multiplier()
-                                            local am_delta = spell.action_multiplier( trigger.state )
-                                            if spell_am > 0 then
-                                                am_delta = am_delta / spell_am
-                                            end
+                                        trigger.state.tick_count = tick_count
+                                        
+                                        -- Spec options
+                                        if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  then
+                                            if driver.spellID == 100784 then -- Blackout Kick
+                                                trigger.state.blackout_combo = true
+                                            end        
                                             
-                                            tick_damage = tick_damage * am_delta
+                                            if trigger.spell == "quick_sip_1s" then
+                                                tick_damage = tick_damage * shuffle_time_granted
+                                                tick_healing = tick_healing * shuffle_time_granted
+                                                tick_group_heal = tick_group_heal * shuffle_time_granted       
+                                            end 
                                         end
                                         
-                                        -- Reevaluate mastery
-                                        if spell.ww_mastery and Player.last_combo_strike == spell.spellID then
-                                            tick_damage = tick_damage * Player.mast_bonus
+                                        -- Trigger is non-background action with execute time
+                                        local trigger_et = spell.time_total or spell.base_execute_time or 0
+                                        if trigger_et > 0 and not spell.background then
+                                            execute_time = execute_time + trigger_et
                                         end
                                         
-                                        -- Because this is a background ability that triggers from another action
-                                        -- we need to modify the spawn delta here
-                                        if spell.background and spell.target_multiplier then
-                                            local t_spawn_delta = 1
-                                            local cooldown = aura_env.actionBaseCooldown( driver )
-                                            if cooldown > 0 then
-                                                for _, raid_event in pairs( aura_env.raid_events ) do
-                                                    local error = ( 1 - aura_env.error_margin )
-                                                    local count = raid_event.count
-                                                    local t = max( 1, floor( raid_event.adds_in - Player.gcd_remains ) )
-                                                    if count > action_targets and cooldown > t and t > action_delay then
-                                                        local delta_tm 
-                                                        = spell.target_multiplier( count ) / spell.target_multiplier( action_targets )
-                                                        local delta_fm 
-                                                        = aura_env.forwardModifier( spell, t ) / aura_env.forwardModifier( spell )
-                                                        local delta_cm 
-                                                        = t / cooldown
-                                                        t_spawn_delta = min( t_spawn_delta, 1 / ( delta_tm / delta_fm / delta_cm / error ) )
+                                        -- Trigger has cost
+                                        local trigger_cost = spell.cost_total or spell.base_cost or 0
+                                        if trigger_cost > 0 then
+                                            cost = cost + trigger_cost
+                                        end                                
+                                        
+                                        -- set init trigger CD
+                                        local trigger_cd_remains = aura_env.getCooldown( spell.spellID )
+                                        
+                                        if not spell.background then
+                                            -- Trigger is a non-background action with a cooldown
+                                            if trigger_cd_remains > 0 then
+                                                -- Driver reduces cooldown of trigger
+                                                local driver_cdr = driver.reduces_cd and driver.reduces_cd[ trigger.spell ]
+                                                if driver_cdr then
+                                                    if type( driver_cdr ) == "function" then
+                                                        driver_cdr = driver_cdr()
                                                     end
                                                 end
+                                                trigger_cd_remains = trigger_cd_remains - max( 0, ( driver_cdr or 0 ) )
                                             end
-                                            tick_damage = tick_damage * t_spawn_delta
-                                        end
-                                    end
-                                    
-                                    -- Driver is a channeled ability and trigger is not background action
-                                    if driver.channeled and not spell.background then
-                                        local latency = Player.channel_latency or 0
-                                        local use_during_channel = driver.spellID == 101546 and spell.usable_during_sck 
-                                        if use_during_channel then
-                                            latency = 0
-                                            local gcd     = aura_env.gcd( driver.spellID )
-                                            local base_et = driver.execute_time and driver.execute_time() or aura_env.base_execute_time( driver.spellID )
-                                            execute_time = execute_time - ( base_et - gcd )
-                                        end                            
-                                        action_delay = max( action_delay, latency )
-                                    end
-                                    
-                                    
-                                    -- Trigger reduces cooldown of non-background driver spell
-                                    if not driver.background and spell.reduces_cd and spell.reduces_cd[ driverName ] then
-                                        local cdr = spell.reduces_cd[ driverName ] 
-                                        local cd = aura_env.actionBaseCooldown( driver )
-                                        
-                                        if type( cdr ) == "function" then
-                                            cdr = cdr( trigger.state )
+                                            
+                                            if not IsSpellKnown( spell.replaces or spell.spellID ) or trigger_cd_remains > 0 then
+                                                tick_damage = 0
+                                                tick_healing = 0
+                                                tick_group_heal = 0       
+                                            end
                                         end
                                         
-                                        if cd > 0 and cdr > 0 then
-                                            local total_cdr = min( cdr, cd - duration )
-                                            local mod_rate =  aura_env.actionModRate( driver )
-                                            if mod_rate < 1 then
-                                                total_cdr = total_cdr * ( 1 - mod_rate )
+                                        if tick_damage > 0 then
+                                            -- Use future trigger state
+                                            if spell.action_multiplier then
+                                                local spell_am = spell.action_multiplier()
+                                                local am_delta = spell.action_multiplier( trigger.state )
+                                                if spell_am > 0 then
+                                                    am_delta = am_delta / spell_am
+                                                end
+                                                
+                                                tick_damage = tick_damage * am_delta
                                             end
-                                            if total_cdr > 0 then
-                                                local spell_raw = spellRaw( driverName )
-                                                local trigger_raw = spellRaw( trigger.spell )
-                                                if spell_raw > trigger_raw then
-                                                    tick_damage = tick_damage + ( total_cdr / cd * max( 0, ( damage - tick_damage * tick_count ) ) )
-                                                    tick_healing = tick_healing + ( total_cdr / cd * max( 0, ( healing - tick_healing * tick_count ) ) )
-                                                    tick_group_heal = tick_group_heal + ( total_cdr / cd * max( 0 , ( group_healing - tick_group_heal * tick_count ) ) )
-                                                    trigger_chi_gain = trigger_chi_gain - ( ( chi or 0 ) * total_cdr / cd )
-                                                end                                                
+                                            
+                                            -- Reevaluate mastery
+                                            if spell.ww_mastery and Player.last_combo_strike == spell.spellID then
+                                                tick_damage = tick_damage * Player.mast_bonus
+                                            end
+                                            
+                                            -- Because this is a background ability that triggers from another action
+                                            -- we need to modify the spawn delta here
+                                            if tick_damage > 1 and spell.background and spell.target_multiplier then
+                                                local t_spawn_delta = 1
+                                                local cooldown = aura_env.actionBaseCooldown( driver )
+                                                if cooldown > 0 then
+                                                    for _, raid_event in pairs( aura_env.raid_events ) do
+                                                        local error = ( 1 - aura_env.error_margin )
+                                                        local count = raid_event.count
+                                                        local t = max( 1, floor( raid_event.adds_in - Player.gcd_remains ) )
+                                                        if count > action_targets and cooldown > t and t > action_delay then
+                                                            local delta_tm 
+                                                            = spell.target_multiplier( count ) / spell.target_multiplier( action_targets )
+                                                            local delta_fm 
+                                                            = aura_env.forwardModifier( spell, t ) / aura_env.forwardModifier( spell )
+                                                            local delta_cm 
+                                                            = t / cooldown
+                                                            t_spawn_delta = min( t_spawn_delta, 1 / ( delta_tm / delta_fm / delta_cm / error ) )
+                                                        end
+                                                    end
+                                                end
+                                                tick_damage = tick_damage * t_spawn_delta
                                             end
                                         end
+                                        
+                                        -- Driver is a channeled ability and trigger is not background action
+                                        if driver.channeled and not spell.background then
+                                            local latency = Player.channel_latency or 0
+                                            local use_during_channel = driver.spellID == 101546 and spell.usable_during_sck 
+                                            if use_during_channel then
+                                                latency = 0
+                                                local gcd     = aura_env.gcd( driver.spellID )
+                                                local base_et = driver.execute_time and driver.execute_time() or aura_env.base_execute_time( driver.spellID )
+                                                execute_time = execute_time - ( base_et - gcd )
+                                            end                            
+                                            action_delay = max( action_delay, latency )
+                                        end
+                                        
+                                        
+                                        -- Trigger reduces cooldown of non-background driver spell
+                                        if not driver.background and spell.reduces_cd and spell.reduces_cd[ driverName ] then
+                                            local cdr = spell.reduces_cd[ driverName ] 
+                                            local cd = aura_env.actionBaseCooldown( driver )
+                                            
+                                            if type( cdr ) == "function" then
+                                                cdr = cdr( trigger.state )
+                                            end
+                                            
+                                            if cd > 0 and cdr > 0 then
+                                                local total_cdr = min( cdr, cd - duration )
+                                                local mod_rate =  aura_env.actionModRate( driver )
+                                                if mod_rate < 1 then
+                                                    total_cdr = total_cdr * ( 1 - mod_rate )
+                                                end
+                                                if total_cdr > 0 then
+                                                    local spell_raw = spellRaw( driverName )
+                                                    local trigger_raw = spellRaw( trigger.spell )
+                                                    if spell_raw > trigger_raw then
+                                                        tick_damage = tick_damage + ( total_cdr / cd * max( 0, ( damage - tick_damage * tick_count ) ) )
+                                                        tick_healing = tick_healing + ( total_cdr / cd * max( 0, ( healing - tick_healing * tick_count ) ) )
+                                                        tick_group_heal = tick_group_heal + ( total_cdr / cd * max( 0 , ( group_healing - tick_group_heal * tick_count ) ) )
+                                                        trigger_chi_gain = trigger_chi_gain - ( ( chi or 0 ) * total_cdr / cd )
+                                                    end                                                
+                                                end
+                                            end
+                                        end
+                                        
+                                        -- Update cooldown information for chained abilities
+                                        if action.combo and not spell.background then 
+                                            local trigger_cd  = aura_env.actionBaseCooldown( spell )
+                                            action_cooldown   = max( action_cooldown, trigger_cd )
+                                            action_cd_remains = max ( action_cd_remains, trigger_cd_remains )
+                                            action_delay      = max( action_delay, action_cd_remains )
+                                            start_cooldown[ #start_cooldown + 1] = trigger.spell
+                                        end
+                                        
+                                        damage_out     = damage_out + ( tick_damage * tick_count )
+                                        healing_out    = healing_out + ( tick_healing * tick_count ) 
+                                        group_heal_out = group_heal_out + ( tick_group_heal * tick_count ) 
+                                        trigger_chi_gain = trigger_chi_gain + ( tick_count * ( spell.chi_gain and spell.chi_gain() or 0 ) )
+                                        
                                     end
-                                    
-                                    -- Update cooldown information for chained abilities
-                                    if action.combo and not spell.background then 
-                                        local trigger_cd  = aura_env.actionBaseCooldown( spell )
-                                        action_cooldown   = max( action_cooldown, trigger_cd )
-                                        action_cd_remains = max ( action_cd_remains, trigger_cd_remains ) 
-                                        start_cooldown[ #start_cooldown + 1] = trigger.spell
-                                    end
-                                    
-                                    damage_out     = damage_out + ( tick_damage * tick_count )
-                                    healing_out    = healing_out + ( tick_healing * tick_count ) 
-                                    group_heal_out = group_heal_out + ( tick_group_heal * tick_count ) 
-                                    trigger_chi_gain = trigger_chi_gain + ( tick_count * ( spell.chi_gain and spell.chi_gain() or 0 ) )
                                     
                                 end
                                 
@@ -1547,7 +1561,9 @@ function(event, ...)
                                 group_healing = group_healing + group_heal_out
                             end
                             --
-                            applyTriggerSpells( )
+                            if not action.background then
+                                applyTriggerSpells( )
+                            end
                             --
                             
                              -- Healing Caps
@@ -1822,6 +1838,7 @@ function(event, ...)
                 
                 debugprofilestart()
                 
+                local scale_mode = 1
                 local hashed = {}
                 local potential_d = 0
                 local potential_h = 0
@@ -1871,7 +1888,7 @@ function(event, ...)
                         while true do
                             
                             local delta_s = s - previous_s
-                            if non_op or s >= t or c <= 0 or delta_s < minimum_step then
+                            if non_op or s >= t or c <= 0 or ( delta_s > 0 and delta_s < minimum_step ) then
                                 break
                             end
                             
@@ -1920,12 +1937,16 @@ function(event, ...)
                             end
                         end
                     end
+                    
                     -- Adjust by cost 
                     sort( list, function( l, r )
                             return l.d_cost > r.d_cost
                     end )
+                    
                     local _, start = next( list )
                     Player.action_sequence = next( sequence_t ) ~= nil and sequence_t or { start.name }
+                    scale_mode = 0
+           
                     return list
                 end
                 
@@ -1948,7 +1969,11 @@ function(event, ...)
                         jeremy.rank[ v.name ] = 0                         
                     else
                         local action_name = v.combo_base and v.combo_base or v.name
-                        jeremy.rank [ action_name ] = jeremy.rank [ action_name ] or k
+                        if action_name == "fists_of_fury_cancel" then
+                            action_name = "fists_of_fury"
+                        end
+                        jeremy.rank[ action_name ] = jeremy.rank[ action_name ] or k
+                        jeremy.scale[ action_name ] = jeremy.scale[ action_name ] or ( scale_mode == 1 and v.d_time or v.d_cost )
                         if action_debug and k <= 5 then
                             debug_out[ k ] = {
                                 name = v.name,
@@ -1963,14 +1988,6 @@ function(event, ...)
                 end
                 if next( debug_out ) ~= nil then
                     ScanEvents( "JEREMY_DEBUG_PRIORITY", debug_out )
-                end
-                
-                -- FoF Initial execute action
-                -- after cast it will be handled by fof_remaining
-                if jeremy.rank["fist_of_fury"] and jeremy.rank["fists_of_fury_cancel"] then
-                    if jeremy.rank["fists_of_fury_cancel"] < jeremy.rank["fists_of_fury"] and jeremy.rank["fists_of_fury_cancel"] > 0 then
-                        jeremy.rank["fists_of_fury"] = jeremy.rank["fists_of_fury_cancel"]
-                    end
                 end
                 
                 local rank_cpu_time = debugprofilestop()
@@ -2029,6 +2046,7 @@ function(event, ...)
             -- Passed Configuration Options
             jeremy.options = {}        
             jeremy.options.limit = aura_env.config.limit or 5
+            jeremy.options.scaling = aura_env.config.scaling_option or 1
             jeremy.options.inverse = ( aura_env.config.inverse == 2 ) or false
             jeremy.options.hold_sef = aura_env.config.hold_sef or 1
             

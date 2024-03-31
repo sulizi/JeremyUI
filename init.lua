@@ -104,7 +104,7 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 1.9
+local DBC_Version = 2.0
 local LibDBCache = LibStub("LibDBCache-1.0", true)
 
 if not LibDBCache then
@@ -128,6 +128,9 @@ local spell = {
     t31_brm_4pc = LibDBCache:find_spell( 422887 ),
     t31_ww_2pc  = LibDBCache:find_spell( 422891 ),
     t31_ww_4pc  = LibDBCache:find_spell( 422892 ),
+
+    kicks_of_flowing_momentum = LibDBCache:find_spell( 394944 ), -- WW DF Season 1/4 Tier 2PC
+    fists_of_flowing_momentum = LibDBCache:find_spell( 394949), -- WW DF Season 1/4 Tier 4PC
     
     -- Actions
     blackout_kick       = LibDBCache:find_spell( 100784 ),
@@ -191,8 +194,6 @@ local spell = {
 -- ------------------------------------------------------------------------------
 
 -- sets
-local t29_2pc_value = 0.3
-local t29_4pc_value = 0.05
 local t30_2pc_ww_bonus = 0.10
 local t30_4pc_ww_bonus = 0.30
 local t30_2pc_brm_bonus = 0.2
@@ -239,7 +240,7 @@ buff.save_them_all = 390105
 buff.chi_energy = 337571
 buff.dance_of_chiji = 325202
 buff.the_emperors_capacitor = 393039
-buff.fists_of_flowing_momentum_fof = 394951
+buff.fists_of_flowing_momentum_fof = 394949
 buff.hit_combo = 196741
 buff.kicks_of_flowing_momentum = 394944
 buff.pressure_point = 337482
@@ -1432,7 +1433,7 @@ aura_env.targetAuraEffect = function( callback, future )
                     end
                 end
                 
-                for _, aura in pairs( targets ) do
+                for name, aura in pairs( targets ) do
                     local remaining = aura.expire - GetTime() - future
                     if aura.amp > 0 and remaining > 0 then
                         target_amp = target_amp * ( 1 + ( ( aura.amp - 1 ) * ( execute_time > 1 and min( 1, remaining / execute_time ) or 1 ) ) )
@@ -1863,7 +1864,7 @@ local ww_spells = {
         bonus_da = function()
             -- actual scaling isn't quite linear but this should be close
             local itemLevel = GetDetailedItemLevelInfo( GetInventoryItemLink( "player", 16 ) )
-            local damage = 17838 - 215 * ( 450 - itemLevel )
+            local damage = itemLevel < 500 and 17838 - 215 * ( 450 - itemLevel ) or 50835 - 215 * ( 528 - itemLevel )
             local split = damage / aura_env.target_count
             return split
         end,
@@ -1897,7 +1898,6 @@ local ww_spells = {
         ticks = 5,
         interrupt_aa = true,
         may_crit = true,
-        resonant_fists = true,
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
@@ -1917,7 +1917,7 @@ local ww_spells = {
             
             local fists_of_flowing_momentum_fof = Player.findAura( buff.fists_of_flowing_momentum_fof )
             if fists_of_flowing_momentum_fof then
-                am = am * ( 1 + fists_of_flowing_momentum_fof.stacks * t29_4pc_value )
+                am = am * ( 1 + fists_of_flowing_momentum_fof.stacks * spell.fists_of_flowing_momentum.effectN( 1 ).pct )
             end
             
             if Player.set_pieces[ 31 ] >= 4 then
@@ -1948,6 +1948,7 @@ local ww_spells = {
         tick_trigger = {
             ["open_palm_strikes"] = true,
             ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
         },
     },
     ["fists_of_fury_cancel"] = {
@@ -1974,7 +1975,6 @@ local ww_spells = {
         end,
         interrupt_aa = true,
         may_crit = true,
-        resonant_fists = true,
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
@@ -1994,7 +1994,7 @@ local ww_spells = {
             
             local fists_of_flowing_momentum_fof = Player.findAura( buff.fists_of_flowing_momentum_fof )
             if fists_of_flowing_momentum_fof then
-                am = am * ( 1 + fists_of_flowing_momentum_fof.stacks * t29_4pc_value )
+                am = am * ( 1 + fists_of_flowing_momentum_fof.stacks * spell.fists_of_flowing_momentum.effectN( 1 ).pct )
             end
             
             if Player.set_pieces[ 31 ] >= 4 then
@@ -2024,7 +2024,8 @@ local ww_spells = {
         end,
         tick_trigger = {
             ["open_palm_strikes"] = true,
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
         },      
     },
     ["rising_sun_kick"] = {
@@ -2035,8 +2036,8 @@ local ww_spells = {
             "chi_burst",
             
             "blackout_kick", -- CDR
-            "fists_of_fury", -- Pressure Point
-            "fists_of_fury_cancel", -- Pressure Point
+            "fists_of_fury", -- Pressure Point / T29 + T32 Set
+            "fists_of_fury_cancel", -- Pressure Point / T29 + T32 Set
         },
         
         spellID = 107428,
@@ -2046,7 +2047,6 @@ local ww_spells = {
         end,
         may_crit = true,
         generate_marks = 1,
-        resonant_fists = true,        
         usable_during_sck = true,
         copied_by_sef = true,
         affected_by_serenity = true,
@@ -2079,11 +2079,11 @@ local ww_spells = {
             
             am = am * Player.talent.rising_star.effectN( 1 ).mod
             
-            if Player.set_pieces[29] >= 2 then
+            if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
                 local kicks_of_flowing_momentum = Player.findAura( buff.kicks_of_flowing_momentum )
                 if kicks_of_flowing_momentum 
                 or ( trigger_state and trigger_state.callback.spellID == 113656 ) then
-                    am = am * ( 1 + t29_2pc_value )
+                    am = am * spell.kicks_of_flowing_momentum.effectN( 1 ).mod
                 end
             end
             
@@ -2111,7 +2111,8 @@ local ww_spells = {
             end,
         },
         tick_trigger = {
-            ["ancient_lava"] = true,    
+            ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
         },
         reduces_cd = {
             ["fists_of_fury"] = function() 
@@ -2126,8 +2127,8 @@ local ww_spells = {
             "expel_harm", -- also Mastery eval.
             "chi_burst",
             
-            "fists_of_fury", -- Tier 29   
-            "fists_of_fury_cancel", -- Tier 29
+            "fists_of_fury", -- Tier 29 / Tier 32
+            "fists_of_fury_cancel", -- Tier 29 / Tier 32
             "blackout_kick", -- MotC and Mastery eval.
             "strike_of_the_windlord", -- Mastery eval.
             "whirling_dragon_punch", -- Mastery eval.
@@ -2144,7 +2145,6 @@ local ww_spells = {
         ticks = 4,
         interrupt_aa = true,
         may_crit = true,
-        resonant_fists = true,
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
@@ -2186,11 +2186,11 @@ local ww_spells = {
             
             am = am * Player.talent.crane_vortex.effectN( 1 ).mod
             
-            if Player.set_pieces[29] >= 2 then
+            if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2  then
                 local kicks_of_flowing_momentum = Player.findAura( buff.kicks_of_flowing_momentum )
                 if kicks_of_flowing_momentum 
                 or ( trigger_state and trigger_state.callback.spellID == 113656 ) then
-                    am = am * ( 1 + t29_2pc_value )
+                    am = am * spell.kicks_of_flowing_momentum.effectN( 1 ).mod
                 end
             end
             
@@ -2215,7 +2215,8 @@ local ww_spells = {
             ["chi_explosion"] = true,
         },
         tick_trigger = {
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true,
+            ["resonant_fists"] = true,            
         },
     },
     ["blackout_kick_totm"] = {
@@ -2274,7 +2275,6 @@ local ww_spells = {
         end,
         may_crit = true,
         usable_during_sck = true,       
-        resonant_fists = true,        
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
@@ -2422,7 +2422,8 @@ local ww_spells = {
                 end
                 
                 return totm_stacks > 2
-            end,           
+            end,
+            ["resonant_fists"] = true,
         },    
     },
     ["whirling_dragon_punch"] = {
@@ -2438,7 +2439,6 @@ local ww_spells = {
         may_crit = true,
         ww_mastery = true,
         usable_during_sck = true,    
-        resonant_fists = true,      
         copied_by_sef = true,
         trigger_etl = true,
         hasted_cooldown = true,
@@ -2491,7 +2491,8 @@ local ww_spells = {
             return aura_env.gcd( 152175 )
         end,
         tick_trigger = {
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true,  
+            ["resonant_fists"] = true,
         },        
     },
     ["strike_of_the_windlord_mh"] = {
@@ -2502,7 +2503,6 @@ local ww_spells = {
         background = true,
         may_crit = true,
         ww_mastery = true,
-        resonant_fists = true, 
         trigger_etl = true,
         copied_by_sef = true,
         affected_by_serenity = true,
@@ -2521,7 +2521,8 @@ local ww_spells = {
             return ( 1 + 1 / target_count * ( target_count - 1 ) )
         end,
         tick_trigger = {
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true, 
+            ["resonant_fists"] = true,
         },    
     },
     ["strike_of_the_windlord"] = {
@@ -2542,7 +2543,6 @@ local ww_spells = {
         may_crit = true,
         ww_mastery = true,
         usable_during_sck = true,   
-        resonant_fists = true, 
         trigger_etl = true,
         copied_by_sef = true,
         affected_by_serenity = true,
@@ -2571,7 +2571,8 @@ local ww_spells = {
             ["strike_of_the_windlord_mh"] = true,
         },
         tick_trigger = {
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true, 
+            ["resonant_fists"] = true,
         },    
         ready = function()
             local cd_xuen = aura_env.getCooldown( 123904 )
@@ -2595,7 +2596,6 @@ local ww_spells = {
         may_crit = true,
         ww_mastery = true,
         usable_during_sck = true,     
-        resonant_fists = true,
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
@@ -2628,7 +2628,8 @@ local ww_spells = {
             return aura_env.gcd( 116847 )
         end,
         tick_trigger = {
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
         },        
     },
     ["jadefire_brand"] = {
@@ -2664,7 +2665,6 @@ local ww_spells = {
         end,
         may_crit = true,
         usable_during_sck = true,       
-        resonant_fists = true,
         trigger_etl = true,
         ignore_armor = true,
         ww_mastery = true,
@@ -2692,7 +2692,8 @@ local ww_spells = {
             ["jadefire_brand"] = true,    
         },
         tick_trigger = {
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
         },        
     },
     ["tiger_palm"] = {
@@ -2708,7 +2709,6 @@ local ww_spells = {
         chi_gain = function() return ( Player.findAura( buff.power_strikes ) and 3 or 2 ) end,
         generate_marks = 1,
         usable_during_sck = true,     
-        resonant_fists = true,
         trigger_etl = true,
         copied_by_sef = true,        
         skyreach = true,
@@ -2729,7 +2729,8 @@ local ww_spells = {
             return aura_env.gcd( 100780 )
         end,
         tick_trigger = {
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
         },    
     },
     ["chi_burst"] = {
@@ -2740,7 +2741,6 @@ local ww_spells = {
         end,
         may_crit = true,
         interrupt_aa = true,
-        resonant_fists = true,
         trigger_etl = true,
         copied_by_sef = true,        
         chi_gain = function() return min( 2, aura_env.target_count ) end,
@@ -2763,7 +2763,10 @@ local ww_spells = {
                 -- CB is a guaranteed reset chance on FLS as long as you're within jadefire
                 return aura_env.getCooldown( 388193 )
             end,
-        },       
+        },
+        tick_trigger = {
+            ["resonant_fists"] = true,
+        },
     },
     ["chi_wave"] = {
         spellID = 115098,
@@ -2775,7 +2778,6 @@ local ww_spells = {
         may_crit = true,
         ww_mastery = true,
         usable_during_sck = true,        
-        resonant_fists = true,
         trigger_etl = true,
         copied_by_sef = true,
         skyreach = true,
@@ -2785,6 +2787,9 @@ local ww_spells = {
         execute_time = function()
             return aura_env.gcd( 115098 )
         end,
+        tick_trigger = {
+            ["resonant_fists"] = true,
+        },        
     },
     ["expel_harm"] = {
         type = "self_heal",
@@ -2955,7 +2960,6 @@ local ww_spells = {
         interrupt_aa = true,
         may_crit = true,
         ignore_armor = true,
-        resonant_fists = true,
         copied_by_sef = true,    
         skyreach = true,
         action_multiplier = function()
@@ -2974,7 +2978,10 @@ local ww_spells = {
         end,
         execute_time = function()
             return 4 / Player.haste
-        end
+        end,
+        tick_trigger = {
+            ["resonant_fists"] = true,
+        },
     },
     ["glory_of_the_dawn"] = {
         spellID = 392959,
@@ -3177,7 +3184,6 @@ local ww_spells = {
         end,
         may_crit = true,
         ignore_armor = true, -- Nature
-        resonant_fists = true,
         trigger_etl = false,
         usable_during_sck = true,
         ready = function()
@@ -3193,6 +3199,9 @@ local ww_spells = {
         execute_time = function()
             return min( aura_env.fight_remains, 30 )
         end,
+        tick_trigger = {
+            ["resonant_fists"] = true,
+        },
     },
     ["storm_earth_and_fire_fixate"] = {
         spellID = 221771,
@@ -3248,7 +3257,6 @@ local mw_spells = {
         ticks = 4,
         interrupt_aa = true,
         may_crit = true,
-        resonant_fists = true,
         target_count = function()
             return aura_env.target_count
         end,
@@ -3273,7 +3281,7 @@ local brm_spells = {
         bonus_da = function()
             -- actual scaling isn't quite linear but this should be close
             local itemLevel = GetDetailedItemLevelInfo( GetInventoryItemLink( "player", 16 ) )
-            local damage = 17838 - 215 * ( 450 - itemLevel )
+            local damage = itemLevel < 500 and 17838 - 215 * ( 450 - itemLevel ) or 50835 - 215 * ( 528 - itemLevel )
             local split = damage / aura_env.target_count
             return split
         end,
@@ -3381,7 +3389,6 @@ local brm_spells = {
             return spell.rising_sun_kick.effectN( 1 ).ap_coefficient 
         end,
         may_crit = true,
-        resonant_fists = true,
         background = true,
         action_multiplier = function( trigger_state )
             local am = spell.press_the_advantage.effectN( 2 ).mod
@@ -3408,6 +3415,7 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
         },
         trigger = {
             ["chi_surge"] = true,
@@ -3430,7 +3438,6 @@ local brm_spells = {
             return spell.rising_sun_kick.effectN( 1 ).ap_coefficient 
         end,
         may_crit = true,
-        resonant_fists = true,
         usable_during_sck = true,
         hasted_cooldown = true,
         critical_rate = function()
@@ -3458,6 +3465,7 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
         },
         trigger = {
             ["pta_rising_sun_kick"] = function()
@@ -3485,13 +3493,14 @@ local brm_spells = {
         may_crit = false,
         ignore_armor = true, -- Fire
         background = true,
+        skip_calcs = true,
         action_multiplier = function( trigger_state )
             local am = Player.talent.charred_passions.effectN( 1 ).pct
             if trigger_state then
                 local result = trigger_state.result
                 
                 if result and result.damage > 0 then
-                    local tick_value = ( result.damage / result.ticks / result.target_count )
+                    local tick_value = result.damage / trigger_state.tick_count
                     
                     am = am * tick_value
                 end
@@ -3519,7 +3528,6 @@ local brm_spells = {
             return spell.blackout_kick.effectN( 1 ).ap_coefficient 
         end,
         may_crit = true,
-        resonant_fists = true,
         usable_during_sck = true, 
         grant_shuffle = 3,
         action_multiplier = function()
@@ -3573,7 +3581,8 @@ local brm_spells = {
                     end
                 end
                 return false
-            end,            
+            end,     
+            ["resonant_fists"] = true,
         },
     },
     ["spinning_crane_kick"] = {
@@ -3591,7 +3600,6 @@ local brm_spells = {
         ticks = 4,
         interrupt_aa = true,
         may_crit = true,
-        resonant_fists = true,
         grant_shuffle = 1,
         critical_rate = function()
             local cr = Player.crit_bonus
@@ -3639,6 +3647,7 @@ local brm_spells = {
                 end
                 return false
             end,
+            ["resonant_fists"] = true,
         },        
         trigger = {
             ["healing_spheres"] = true,    
@@ -3652,7 +3661,6 @@ local brm_spells = {
         end,
         ticks = 9,
         may_crit = true,
-        resonant_fists = true,
         usable_during_sck = true,
         hasted_cooldown = true,
         action_multiplier = function()
@@ -3677,7 +3685,8 @@ local brm_spells = {
         end,
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true,      
+            ["resonant_fists"] = true,
         },
     },
     ["tiger_palm"] = {
@@ -3690,7 +3699,6 @@ local brm_spells = {
             return spell.tiger_palm.effectN( 1 ).ap_coefficient
         end,
         may_crit = true,
-        resonant_fists = true,
         usable_during_sck = true,  
         ready = function()
             return not ( Player.talent.press_the_advantage.ok )
@@ -3719,7 +3727,8 @@ local brm_spells = {
         end,
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true,   
+            ["resonant_fists"] = true,
         },
     },
     ["chi_burst"] = {
@@ -3730,7 +3739,6 @@ local brm_spells = {
         end,
         may_crit = true,
         interrupt_aa = true,
-        resonant_fists = true,
         target_count = function()
             return aura_env.target_count
         end,
@@ -3738,7 +3746,8 @@ local brm_spells = {
             return target_count
         end,
         tick_trigger = {
-            ["exploding_keg_proc"] = true,            
+            ["exploding_keg_proc"] = true,   
+            ["resonant_fists"] = true,
         },
     },
     ["chi_wave"] = {
@@ -3749,10 +3758,10 @@ local brm_spells = {
         end, 
         ticks = 4, -- 4 Bounces
         may_crit = true,
-        resonant_fists = true,
         usable_during_sck = true,   
         tick_trigger = {
-            ["exploding_keg_proc"] = true,            
+            ["exploding_keg_proc"] = true,  
+            ["resonant_fists"] = true,
         },
     },
     ["touch_of_death"] = {
@@ -3799,7 +3808,6 @@ local brm_spells = {
         end,        
         may_crit = true,
         ignore_armor = true, -- Nature
-        resonant_fists = true,
         usable_during_sck = true,        
         ready = function()
             return InCombatLockdown() and aura_env.fight_remains > 3 
@@ -3812,7 +3820,8 @@ local brm_spells = {
             return min( aura_env.fight_remains, 30 )
         end,
         tick_trigger = {
-            ["exploding_keg_proc"] = true,            
+            ["exploding_keg_proc"] = true,
+            ["resonant_fists"] = true,
         },
     },
     ["diffuse_magic"] = {
@@ -3862,7 +3871,6 @@ local brm_spells = {
         ticks = 4,
         background = true,
         may_crit = true,
-        resonant_fists = true,
         ignore_armor = true,
         action_multiplier = function()
             return Player.talent.press_the_advantage.effectN( 4 ).mod
@@ -3873,6 +3881,9 @@ local brm_spells = {
         ready = function()
             return Player.talent.chi_surge.ok
         end,
+        tick_trigger = {
+            ["resonant_fists"] = true,
+        },
     },
     ["pta_keg_smash"] = {
         spellID = 121253,
@@ -3880,7 +3891,6 @@ local brm_spells = {
             return spell.keg_smash.effectN( 2 ).ap_coefficient
         end,
         may_crit = true,
-        resonant_fists = true,
         background = true,
         grant_shuffle = 5,
         action_multiplier = function( trigger_state )
@@ -3942,7 +3952,8 @@ local brm_spells = {
         },
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true,  
+            ["resonant_fists"] = true,
         },    
         trigger = {
             ["chi_surge"] = true,
@@ -3958,7 +3969,6 @@ local brm_spells = {
             return spell.keg_smash.effectN( 2 ).ap_coefficient
         end,
         may_crit = true,
-        resonant_fists = true,
         usable_during_sck = true,
         hasted_cooldown = true,
         grant_shuffle = 5,
@@ -4029,7 +4039,8 @@ local brm_spells = {
         },
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,            
+            ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
         },    
         trigger = {
             ["pta_keg_smash"] = function()
@@ -4049,7 +4060,6 @@ local brm_spells = {
         end,
         may_crit = true,
         ignore_armor = true, -- fire       
-        resonant_fists = true,
         usable_during_sck = true,        
         target_count = function()
             return aura_env.target_count
@@ -4069,7 +4079,8 @@ local brm_spells = {
             return true
         end,
         tick_trigger = {
-            ["charred_dreams_heal"] = true,      
+            ["charred_dreams_heal"] = true,   
+            ["resonant_fists"] = true,
         },
     },
     ["exploding_keg_proc"] = {
@@ -4077,15 +4088,31 @@ local brm_spells = {
         ap = function()
             return Player.talent.exploding_keg.effectN( 4 ).ap_coefficient
         end,
+        action_modifer = function( trigger_state )
+            local result = trigger_state.result
+            local ek_buff = Player.findAura( buff.exploding_keg )
+            local remaining = ek_buff.remmaining
+            
+            if result.delay >= remaining then
+                return 0
+            end
+            
+            local time_total = result.delay + result.execute_time
+            if time_total > remaining then
+                return remaining / time_total
+            end
+            
+            return 1
+        end,
         may_crit = true,
         ignore_armor = true, -- fire       
-        resonant_fists = false,
         background = true,
         ready = function()
             return Player.findAura( buff.exploding_keg )
         end,
         tick_trigger = {
-            ["charred_dreams_heal"] = true,      
+            ["charred_dreams_heal"] = true, 
+            ["resonant_fists"] = true,
         },
     },
     ["breath_of_fire"] = {
@@ -4095,10 +4122,11 @@ local brm_spells = {
         },
         
         spellID = 115181,
-        ap = 0.48,
+        ap = function()
+            return Player.talent.breath_of_fire.effectN( 1 ).ap_coefficient
+        end,
         may_crit = true,
         ignore_armor = true, -- fire
-        resonant_fists = true,
         usable_during_sck = true,        
         action_multiplier = function( trigger_state )
             local am = 1
@@ -4137,7 +4165,8 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,    
             ["charred_dreams_heal"] = true,
-            ["charred_dreams_damage"] = true,        
+            ["charred_dreams_damage"] = true,       
+            ["resonant_fists"] = true,
         },        
         trigger = {
             ["breath_of_fire_periodic"] = function( driver ) 
@@ -4215,6 +4244,10 @@ local brm_spells = {
             
             return dr * bof_duration * ratio * Player.recent_dtps
         end,
+        tick_trigger = {
+            ["charred_dreams_heal"] = true,  
+            ["charred_dreams_damage"] = true,      
+        },        
     },
     ["gai_plins_imperial_brew"] = {
         type = "self_heal",
@@ -4377,7 +4410,6 @@ local brm_spells = {
             return spell.special_delivery.effectN( 1 ).ap_coefficient
         end,
         may_crit = true,
-        resonant_fists = true,
         background = true,
         target_count = function()
             return aura_env.target_count
@@ -4387,7 +4419,7 @@ local brm_spells = {
         end,      
         ready = function()
             return Player.talent.special_delivery.ok
-        end
+        end,
     },
     ["press_the_advantage"] = {
         -- Melee swing damage event that replaces TP
@@ -4397,7 +4429,6 @@ local brm_spells = {
         end,
         may_crit = true,
         ignore_armor = true, -- Nature
-        resonant_fists = true,
         background = true,
         ready = function()
             return Player.talent.press_the_advantage.ok
@@ -4405,6 +4436,9 @@ local brm_spells = {
         brew_cdr = function()
             return Player.talent.press_the_advantage.effectN( 1 ).seconds
         end,
+        tick_trigger = {
+            ["resonant_fists"] = true,
+        },
     },
     ["weapons_of_order_debuff"] = {
         type = "damage_buff",
@@ -4437,13 +4471,15 @@ local brm_spells = {
         may_crit = false,
         ignore_armor = true, -- Shadowflame
         background = true,
+        skip_calcs = true,
         action_multiplier = function( trigger_state )
             local am = spell.t31_brm_2pc.effectN( 1 ).pct
+
             if trigger_state then
                 local result = trigger_state.result
                 
                 if result and result.damage > 0 then
-                    local tick_value = ( result.damage / result.ticks / result.target_count )
+                    local tick_value = result.damage / trigger_state.tick_count 
                     
                     am = am * tick_value
                 end
@@ -4451,7 +4487,7 @@ local brm_spells = {
             return am
         end,
         ready = function()
-            return ( Player.set_pieces[ 31 ] >= 2 )
+            return ( Player.set_pieces[ 31 ] >= 2 or Player.set_pieces[ 32 ] >= 2 )
         end,
     },
     ["charred_dreams_heal"] = {
@@ -4459,13 +4495,14 @@ local brm_spells = {
         spellID = 425298,
         may_crit = false,
         background = true,
+        skip_calcs = true,
         action_multiplier = function( trigger_state )
             local am = spell.t31_brm_2pc.effectN( 2 ).pct
             if trigger_state then
                 local result = trigger_state.result
                 
                 if result and result.damage > 0 then
-                    local tick_value = ( result.damage / result.ticks / result.target_count )
+                    local tick_value = result.damage / trigger_state.tick_count
                     
                     am = am * tick_value
                 end
@@ -4473,13 +4510,14 @@ local brm_spells = {
             return am
         end,
         ready = function()
-            return ( Player.set_pieces[ 31 ] >= 2 )
+            return ( Player.set_pieces[ 31 ] >= 2 or Player.set_pieces[ 32 ] >= 2  )
         end,
     },
 }
 
 -- Blackout Kick -> Celestial Brew
 brm_spells["bok_cb_combo"] = deepcopy( brm_spells["blackout_kick"] )
+brm_spells["bok_cb_combo"].callbacks = {}
 brm_spells["bok_cb_combo"].trigger["special_delivery-2"] = true
 brm_spells["bok_cb_combo"].execute_time = function()
     return aura_env.gcd( 100784  ) + aura_env.gcd( 322507 )    
@@ -4535,6 +4573,7 @@ end
 
 -- Purifiyng Brew -> Celestial Brew ( for purified Chi gain )
 brm_spells["purify_cb_combo"] = deepcopy( brm_spells["purifying_brew"] )
+brm_spells["purify_cb_combo"].callbacks = {}
 brm_spells["purify_cb_combo"].trigger["special_delivery-2"] = true
 brm_spells["purify_cb_combo"].execute_time = function()
     return aura_env.gcd( 119582 ) + aura_env.gcd( 322507 )
@@ -4673,27 +4712,34 @@ aura_env.initGear = function()
     
     local tier_slots = { 1, 3, 5, 7, 10 }
     local tier_ids = { 
-        [29] = {
-            ["200360"] = true, -- Chest
-            ["200362"] = true, -- Hands
-            ["200363"] = true, -- Head
-            ["200364"] = true, -- Legs
-            ["200365"] = true, -- Shoulder
+        [ 29 ] = {
+            [ "200360" ] = true, -- Chest
+            [ "200362" ] = true, -- Hands
+            [ "200363" ] = true, -- Head
+            [ "200364" ] = true, -- Legs
+            [ "200365" ] = true, -- Shoulder
         },
-        [30] = {
-            ["202509"] = true, -- Chest
-            ["202507"] = true, -- Hands
-            ["202506"] = true, -- Head
-            ["202505"] = true, -- Legs
-            ["202504"] = true, -- Shoulder
+        [ 30 ] = {
+            [ "202509" ] = true, -- Chest
+            [ "202507" ] = true, -- Hands
+            [ "202506" ] = true, -- Head
+            [ "202505" ] = true, -- Legs
+            [ "202504" ] = true, -- Shoulder
         },
-        [31] = {
-            ["207248"] = true, -- Chest
-            ["207246"] = true, -- Hands
-            ["207245"] = true, -- Head
-            ["207244"] = true, -- Legs
-            ["207243"] = true, -- Shoulder
-        },    
+        [ 31 ] = {
+            [ "207248" ] = true, -- Chest
+            [ "207246" ] = true, -- Hands
+            [ "207245" ] = true, -- Head
+            [ "207244" ] = true, -- Legs
+            [ "207243" ] = true, -- Shoulder
+        },
+        [ 32 ] = {
+            [ "217186" ] = true, -- Chest
+            [ "217187" ] = true, -- Hands
+            [ "217188" ] = true, -- Head
+            [ "217189" ] = true, -- Legs
+            [ "217190" ] = true, -- Shoulder
+        },
     } 
     
     local set_pieces = {}
