@@ -8,6 +8,8 @@ local ForEachAura = AuraUtil.ForEachAura
 local BigWigs = BigWigs
 local BigWigsLoader = BigWigsLoader
 local BW_RegisterMessage = ( BigWigsLoader and BigWigsLoader.RegisterMessage ) or nil
+local C_PaperDollInfo = C_PaperDollInfo
+local GetStaggerPercentage = C_PaperDollInfo.GetStaggerPercentage
 local GetCombatRatingBonus = GetCombatRatingBonus
 local GetCritChance = GetCritChance
 local GetDetailedItemLevelInfo = GetDetailedItemLevelInfo
@@ -209,8 +211,6 @@ local exploding_keg_duration = 3
 local hot_trub_amount = 0.2
 local incendiary_breath_amp = 0.3
 local pretense_duration = 5
-local accumulating_mist_amp = 0.25
-local font_of_life_amp = 0.25
 
 -- these PtA modifiers are not in spell data
 local press_the_advantage_cs_mod = 0.5
@@ -575,6 +575,7 @@ aura_env.CPlayer = {
             auraData.name = ( cached and cached.data and cached.data.name ) or gsub( lower( auraData.name ), "%s+", "_" )
             auraData.stacks = auraData.applications or 0            
             auraData.remaining = ( auraData.expirationTime and auraData.expirationTime - time ) or 0
+            auraData.duratoin = auraData.duration or 0
         end
         
         self.findAuraCache[ spellID ] = {
@@ -1433,7 +1434,7 @@ aura_env.targetAuraEffect = function( callback, future )
                     end
                 end
                 
-                for name, aura in pairs( targets ) do
+                for _, aura in pairs( targets ) do
                     local remaining = aura.expire - GetTime() - future
                     if aura.amp > 0 and remaining > 0 then
                         target_amp = target_amp * ( 1 + ( ( aura.amp - 1 ) * ( execute_time > 1 and min( 1, remaining / execute_time ) or 1 ) ) )
@@ -1847,6 +1848,18 @@ aura_env.auraEffectForSpell = function ( spellID )
     end
     
     return total_aura_effect
+end
+
+------------------------------------------------
+-- Class Helper Functions
+------------------------------------------------
+
+local IsBlackoutCombo = function( state )
+    if not state then
+        return Player.findAura( buff.blackout_combo ) 
+    else
+        return state.blackout_combo or false
+    end
 end
 
 -- --------- --
@@ -2592,7 +2605,15 @@ local ww_spells = {
         ap = function() 
             return spell.rjw_tick.effectN( 1 ).ap_coefficient
         end,
-        ticks = 9,
+        ticks = function()
+            local ticks = 9 -- TODO: Use DBC Pointer
+            local rjw = Player.findAura( 116847 )
+            if rjw and rjw.duration and rjw.duration > 0 then
+                local ticks_remaining = ( rjw.remaining / rjw.duration ) * ticks
+                ticks = ticks - ticks_remaining
+            end
+            return ticks
+        end,
         may_crit = true,
         ww_mastery = true,
         usable_during_sck = true,     
@@ -2601,20 +2622,6 @@ local ww_spells = {
         trigger_etl = true,
         hasted_cooldown = true,
         skyreach = true,
-        action_multiplier = function()
-            local am = 1
-            local rjw = Player.findAura( 116847 )
-            
-            -- Overwriting buff is a loss
-            if rjw and rjw.remaining then
-                local remains = max( 0, rjw.remaining - 1 )
-                if remains > 0 then -- RJW does not pandemic
-                    am = am * ( 1 - ( remains / 9 ) )
-                end
-            end
-            
-            return am
-        end,           
         chi = function()
             return aura_env.chi_base_cost( 116847 )
         end,
@@ -3366,16 +3373,6 @@ local brm_spells = {
             return 0
         end,            
     },
-    ["quick_sip_1s"] = {
-        spellID = 388505,
-        background = true,
-        reduce_stagger = function()
-            return ( Player.talent.quick_sip.effectN( 1 ).pct / Player.talent.quick_sip.effectN( 2 ).base_value ) * Player.stagger
-        end,
-        ready = function()
-            return Player.stagger > 0 and Player.talent.quick_sip.ok
-        end,
-    },
     ["healing_elixir"] = {
         type = "self_heal",
         spellID = 122281,
@@ -3396,8 +3393,7 @@ local brm_spells = {
             am = am * Player.talent.fast_feet.effectN( 1 ).mod
             
             -- TP Modifiers
-            if Player.findAura( buff.blackout_combo ) 
-            or ( trigger_state and trigger_state.blackout_combo ) then
+            if IsBlackoutCombo( trigger_state ) then
                 am = am * ( 1 + ( spell.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
             end           
             
@@ -3529,7 +3525,6 @@ local brm_spells = {
         end,
         may_crit = true,
         usable_during_sck = true, 
-        grant_shuffle = 3,
         action_multiplier = function()
             local am = 1
             
@@ -3571,6 +3566,9 @@ local brm_spells = {
             -- physical damage mitigated from one second of Elusive Brawler
             return dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
         end,
+        trigger = {
+            ["shuffle"] = true,
+        },
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
@@ -3600,7 +3598,6 @@ local brm_spells = {
         ticks = 4,
         interrupt_aa = true,
         may_crit = true,
-        grant_shuffle = 1,
         critical_rate = function()
             local cr = Player.crit_bonus
             
@@ -3650,7 +3647,8 @@ local brm_spells = {
             ["resonant_fists"] = true,
         },        
         trigger = {
-            ["healing_spheres"] = true,    
+            ["healing_spheres"] = true,   
+            ["shuffle"] = true,
         },
     },
     ["rushing_jade_wind"] = {
@@ -3659,24 +3657,18 @@ local brm_spells = {
         ap = function() 
             return spell.rjw_tick.effectN( 1 ).ap_coefficient
         end,
-        ticks = 9,
+        ticks = function()
+            local ticks = 9 -- TODO: Use DBC Pointer
+            local rjw = Player.findAura( 116847 )
+            if rjw and rjw.duration and rjw.duration > 0 then
+                local ticks_remaining = ( rjw.remaining / rjw.duration ) * ticks
+                ticks = ticks - ticks_remaining
+            end
+            return ticks
+        end,
         may_crit = true,
         usable_during_sck = true,
         hasted_cooldown = true,
-        action_multiplier = function()
-            local am = 1
-            local rjw = Player.findAura( 116847 )
-            
-            -- Overwriting buff is a loss
-            if rjw and rjw.remaining then
-                local remains = max( 0, rjw.remaining - 1 )
-                if remains > 0 then -- RJW does not pandemic
-                    am = am * ( 1 - ( remains / 9 ) )
-                end
-            end
-            
-            return am
-        end,        
         target_count = function()
             return aura_env.target_count
         end,
@@ -3706,8 +3698,7 @@ local brm_spells = {
         action_multiplier = function( trigger_state )
             local am = 1
             
-            if Player.findAura( buff.blackout_combo ) 
-            or ( trigger_state and trigger_state.blackout_combo ) then
+            if IsBlackoutCombo( trigger_state ) then
                 am = am * Player.talent.blackout_combo.effectN( 1 ).mod
             end
             
@@ -3892,7 +3883,6 @@ local brm_spells = {
         end,
         may_crit = true,
         background = true,
-        grant_shuffle = 5,
         action_multiplier = function( trigger_state )
             local am = spell.press_the_advantage.effectN( 2 ).mod
             
@@ -3912,8 +3902,7 @@ local brm_spells = {
             end]]
             
             -- TP Modifiers
-            if Player.findAura( buff.blackout_combo ) 
-            or ( trigger_state and trigger_state.blackout_combo ) then
+            if IsBlackoutCombo( trigger_state ) then
                 am = am * ( 1 + ( spell.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
             end     
             
@@ -3957,6 +3946,7 @@ local brm_spells = {
         },    
         trigger = {
             ["chi_surge"] = true,
+            ["shuffle"] = true,
         },
     },
     ["keg_smash"] = {
@@ -3971,7 +3961,6 @@ local brm_spells = {
         may_crit = true,
         usable_during_sck = true,
         hasted_cooldown = true,
-        grant_shuffle = 5,
         action_multiplier = function()
             local am = 1
             
@@ -4002,7 +3991,7 @@ local brm_spells = {
         brew_cdr = function()
             local cdr = 3
             
-            if Player.findAura( buff.blackout_combo ) then
+            if IsBlackoutCombo( trigger_state ) then
                 cdr = cdr + Player.talent.blackout_combo.effectN( 3 ).base_value
             end
             
@@ -4051,9 +4040,14 @@ local brm_spells = {
                 return false
             end,
             ["weapons_of_order_debuff"] = true,
+            ["shuffle"] = true,
         },
     },
     ["exploding_keg"] = {
+        callbacks = {
+            "rushing_jade_wind", --  EK ticks from buff
+        },
+    
         spellID = 325153,
         ap = function()
             return Player.talent.exploding_keg.effectN( 1 ).ap_coefficient
@@ -4071,6 +4065,21 @@ local brm_spells = {
             -- same as 100% dodge
             return dodgeMitigation( 1.0, exploding_keg_duration )
         end,   
+        callback_ready = function( callback )
+            
+            if Player.talent.bountiful_brew.ok and Player.bdb_targets == 0 then
+                return false
+            end
+            
+            if callback == "rushing_jade_wind" then
+                local rjw = Player.findAura( 116847 )
+                if not rjw or ( rjw.remaining and rjw.remaining < 3 ) then
+                    return true
+                end
+            end
+            
+            return false
+        end,
         ready = function()
             if Player.talent.bountiful_brew.ok and Player.bdb_targets == 0 then
                 return false
@@ -4081,6 +4090,10 @@ local brm_spells = {
         tick_trigger = {
             ["charred_dreams_heal"] = true,   
             ["resonant_fists"] = true,
+            ["exploding_keg_proc"] = function( driver )
+                -- Force this until I have better handling of DoT effects triggered from buffs
+                return driver == "rushing_jade_wind"
+            end,
         },
     },
     ["exploding_keg_proc"] = {
@@ -4088,10 +4101,46 @@ local brm_spells = {
         ap = function()
             return Player.talent.exploding_keg.effectN( 4 ).ap_coefficient
         end,
-        action_modifer = function( trigger_state )
-            local result = trigger_state.result
+        action_multiplier = function( trigger_state )
+            
+            if not trigger_state then
+                return 1
+            end
+            
+            if trigger_state.callback_name == "exploding_keg" then
+                
+                for _, cb in ipairs( trigger_state.callback_stack ) do
+                    if cb.name == "exploding_keg" then
+                        break
+                    end
+                    
+                    -- Once again forcing ticks here until I have better handling of DoT effects triggered from buffs
+                    if cb.name == "rushing_jade_wind" then
+                        local rjw_ticks = cb.result.ticks
+                        local rjw_duration = 9 / Player.haste
+                        local ek_ticks = rjw_ticks / rjw_duration * 3
+                        
+                        -- return ticks to simulate the increase in damage
+                        return ek_ticks
+                    end
+                end
+            
+                return 0
+            end
+
+            local result = trigger_state.result or nil
+            
+            if not result then
+                return 0
+            end
+
             local ek_buff = Player.findAura( buff.exploding_keg )
-            local remaining = ek_buff.remmaining
+        
+            if not ek_buff then
+                return 0
+            end
+            
+            local remaining = ek_buff.remaining
             
             if result.delay >= remaining then
                 return 0
@@ -4101,15 +4150,12 @@ local brm_spells = {
             if time_total > remaining then
                 return remaining / time_total
             end
-            
+
             return 1
         end,
         may_crit = true,
         ignore_armor = true, -- fire       
         background = true,
-        ready = function()
-            return Player.findAura( buff.exploding_keg )
-        end,
         tick_trigger = {
             ["charred_dreams_heal"] = true, 
             ["resonant_fists"] = true,
@@ -4132,8 +4178,7 @@ local brm_spells = {
             local am = 1
             
             -- BUG: BoC buffs the initial hit as well as the periodic
-            if Player.findAura( buff.blackout_combo ) 
-            or ( trigger_state and trigger_state.blackout_combo ) then
+            if IsBlackoutCombo( trigger_state ) then
                 am = am * spell.blackout_combo.effectN( 5 ).mod
             end            
             
@@ -4214,7 +4259,7 @@ local brm_spells = {
         action_multiplier = function( trigger_state )
             local am = 1
             
-            if Player.findAura( buff.blackout_combo ) then
+            if IsBlackoutCombo( trigger_state ) then
                 am = am * spell.blackout_combo.effectN( 5 ).mod
             end         
             
@@ -4230,7 +4275,7 @@ local brm_spells = {
         target_multiplier = function( target_count )
             return target_count
         end,    
-        mitigate = function()
+        mitigate = function( trigger_state )
             local ratio = min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets ) / aura_env.target_count 
             local dr = spell.breath_of_fire_dot.effectN( 2 ).pct
             
@@ -4238,7 +4283,7 @@ local brm_spells = {
                 dr = dr + Player.talent.celestial_flames.effectN( 2 ).pct
             end
             
-            if Player.findAura( buff.blackout_combo ) then
+            if IsBlackoutCombo( trigger_state ) then
                 dr = dr + spell.blackout_combo.effectN( 2 ).pct
             end
             
@@ -4257,6 +4302,90 @@ local brm_spells = {
         bonus_heal = function()
             return Player.stagger * 0.5 * ( Player.talent.gai_plins_imperial_brew.effectN( 1 ).pct )
         end,        
+    },
+    ["shuffle"] = {
+        spellID = 215479,
+        background = true,
+        skip_calcs = true,
+        ready = function()
+            return Player.talent.shuffle.ok
+        end,
+        reduce_stagger = function( trigger_state )
+            if not trigger_state then
+                return 0
+            end
+            
+            if Player.stagger == 0 then
+                return 0
+            end
+            
+            if Player.talent.quick_sip.ok then
+                local driver = trigger_state.callback
+                local shuffle_granted = 0
+                
+                -- TODO: Use DBC
+                if driver.spellID == 205523 then
+                    shuffle_granted = 3 -- Blackout Kick
+                elseif driver.spellID == 322729 then
+                    shuffle_granted = 1 -- Spinning Crane Kick
+                elseif driver.spellID == 121253 then
+                    shuffle_granted = 5 -- Keg Smash
+                end
+                
+                if shuffle_granted == 0 then
+                    return 0
+                end            
+            
+                return ( Player.talent.quick_sip.effectN( 1 ).pct / Player.talent.quick_sip.effectN( 2 ).base_value ) * Player.stagger * shuffle_granted
+            end
+            
+            return 0
+        end,
+        mitigate = function( trigger_state )
+
+            if not trigger_state then
+                return 0
+            end
+
+            local driver = trigger_state.callback
+            local shuffle_granted = 0
+            
+            -- TODO: Use DBC
+            if driver.spellID == 205523 then
+                shuffle_granted = 3 -- Blackout Kick
+            elseif driver.spellID == 322729 then
+                shuffle_granted = 1 -- Spinning Crane Kick
+            elseif driver.spellID == 121253 then
+                shuffle_granted = 5 -- Keg Smash
+            end
+            
+            if shuffle_granted == 0 then
+                return 0
+            end
+            
+            local m = 0
+            
+            local shuffle = Player.findAura( 215479 )
+            local shuffle_remaining = shuffle and ( shuffle.remaining - Player.gcd_remains ) or 0
+            
+            if shuffle_remaining <= 1 then
+
+                local dtps = Player.recent_dtps
+                
+                -- Add fake damage out of combat so that Brewmasters start pulls correctly
+                if not InCombatLockdown() then
+                    dtps = UnitHealthMax( "player" ) * 0.1
+                end
+                
+                local stagger_pct, stagger_target_pct = GetStaggerPercentage( "player" )
+                local shuffle_pct = ( stagger_target_pct or stagger_pct ) / 100 
+                
+                m = dtps * shuffle_granted * shuffle_pct
+                
+            end
+            
+            return m
+        end,
     },
     ["purifying_brew"] = {
         spellID = 119582,
@@ -4318,11 +4447,13 @@ local brm_spells = {
         end,
     },
     ["celestial_brew"] = {
+        callbacks = {
+            "purifying_brew", -- Purified Chi
+            "blackout_kick", -- Blackout Combo
+        },
+    
         spellID = 322507,
         usable_during_sck = true,
-        trigger = {
-            ["special_delivery"] = true,
-        },
         ready = function()
             -- Hold for next tank buster if applicable
             if aura_env.danger_next and ( aura_env.danger_next < 40 and aura_env.danger_next > 8 ) then
@@ -4331,7 +4462,7 @@ local brm_spells = {
             
             return not Player.findAura( 322507 ) -- never overwrite current CB
         end,
-        mitigate = function()
+        mitigate = function( trigger_state )
             
             local tooltip_array = aura_env.parseTooltip( 322507 )
             local n = tooltip_array[1]
@@ -4344,8 +4475,20 @@ local brm_spells = {
             end
             
             local purified_chi_count = 0
+            local driver = trigger_state and trigger_state.callback_name
             
-            if Player.findAura( buff.blackout_combo ) then
+            if driver and driver == "purifying_brew" then
+                -- TODO: Use DBC Value
+                purified_chi_count = 1
+                if Player.findAura( buff.moderate_stagger ) then
+                    purified_chi_count = 3
+                elseif Player.findAura( buff.heavy_stagger ) then
+                    purified_chi_count = 5
+                end
+            end
+            
+            if IsBlackoutCombo( trigger_state ) then
+                -- TODO: Use DBC Value
                 purified_chi_count = purified_chi_count + 3
             end
             
@@ -4376,6 +4519,9 @@ local brm_spells = {
             
             return m
         end,
+        trigger = {
+            ["special_delivery"] = true,
+        },        
     },
     ["black_ox_brew"] = {
         spellID = 115399,
@@ -4515,124 +4661,6 @@ local brm_spells = {
     },
 }
 
--- Blackout Kick -> Celestial Brew
-brm_spells["bok_cb_combo"] = deepcopy( brm_spells["blackout_kick"] )
-brm_spells["bok_cb_combo"].callbacks = {}
-brm_spells["bok_cb_combo"].trigger["special_delivery-2"] = true
-brm_spells["bok_cb_combo"].execute_time = function()
-    return aura_env.gcd( 100784  ) + aura_env.gcd( 322507 )    
-end
-brm_spells["bok_cb_combo"].ready = function()
-    return not Player.findAura( 322507 ) -- never overwrite current CB
-end
-brm_spells["bok_cb_combo"].mitigate = function()
-    
-    local tooltip_array = aura_env.parseTooltip( 322507 )
-    local n = tooltip_array[1]
-    local m = Player.ability_power * cb_apmod * Player.vers_bonus
-    
-    if n then
-        -- We can use the tooltip to parse for healing reduction effects
-        -- since not all healing reduction auras apply to CB
-        m = n
-    end
-    
-    local purified_chi_count = Player.talent.blackout_combo.effectN( 6 ).base_value
-    
-    local purified_chi = Player.findAura( buff.purified_chi )
-    if purified_chi then
-        purified_chi_count = purified_chi_count + purified_chi.stacks
-    end
-    
-    m = m * ( 1 + ( min( 10, purified_chi_count ) * spell.purified_chi.effectN( 1 ).pct ) )
-    
-    -- Celestial Brew can benefit from Celestial Fortune
-    m = m * aura_env.celestialFortune()
-    
-    -- Celestial Brew expires after 8 seconds
-    local dtps = Player.recent_dtps
-    local maximum = ( dtps * 8 )
-    m = min( maximum, m )    
-    
-    if Player.talent.pretense_of_instability.ok then
-        local pretenseGain = pretense_duration
-        local activePretense = Player.findAura( buff.pretense_of_instability )
-        if activePretense then
-            pretenseGain = pretenseGain - activePretense.remaining
-        end
-        
-        m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
-    end
-    
-    return m
-end
-brm_spells["bok_cb_combo"].ready = function()
-    -- We don't care about this combo without blackout combo
-    return Player.talent.blackout_combo.ok and aura_env.getCooldown( 322507 ) < 10
-end
-
--- Purifiyng Brew -> Celestial Brew ( for purified Chi gain )
-brm_spells["purify_cb_combo"] = deepcopy( brm_spells["purifying_brew"] )
-brm_spells["purify_cb_combo"].callbacks = {}
-brm_spells["purify_cb_combo"].trigger["special_delivery-2"] = true
-brm_spells["purify_cb_combo"].execute_time = function()
-    return aura_env.gcd( 119582 ) + aura_env.gcd( 322507 )
-end
-brm_spells["purify_cb_combo"].ready = function()
-    return not Player.findAura( 322507 ) -- never overwrite current CB
-end
-brm_spells["purify_cb_combo"].mitigate = function()
-    
-    local tooltip_array = aura_env.parseTooltip( 322507 )
-    local n = tooltip_array[1]
-    local m = Player.ability_power * cb_apmod * Player.vers_bonus
-    
-    if n then
-        -- We can use the tooltip to parse for healing reduction effects
-        -- since not all healing reduction auras apply to CB
-        m = n
-    end
-    
-    local purified_chi_count = 1
-    if Player.findAura( buff.moderate_stagger ) then
-        purified_chi_count = 3
-    elseif Player.findAura( buff.heavy_stagger ) then
-        purified_chi_count = 5
-    end
-    
-    -- No blackout Combo here because we lost it on PB
-    
-    local purified_chi = Player.findAura( buff.purified_chi )
-    if purified_chi then
-        purified_chi_count = purified_chi_count + purified_chi.stacks
-    end
-    
-    m = m * ( 1 + ( min( 10, purified_chi_count ) * spell.purified_chi.effectN( 1 ).pct ) )
-    
-    -- Celestial Brew can benefit from Celestial Fortune
-    m = m * ( 1 + ( Player.crit_bonus * 0.65 ) ) 
-    
-    -- Celestial Brew expires after 8 seconds
-    local dtps = Player.recent_dtps
-    local maximum = ( dtps * 8 )
-    m = min( maximum, m )
-    
-    if Player.talent.pretense_of_instability.ok then
-        local pretenseGain = pretense_duration
-        local activePretense = Player.findAura( buff.pretense_of_instability )
-        if activePretense then
-            pretenseGain = pretenseGain - activePretense.remaining
-        end
-        
-        m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
-    end
-    
-    return m
-end
-brm_spells["purify_cb_combo"].ready = function()
-    return Player.stagger > 0 and Player.talent.improved_celestial_brew.ok and aura_env.getCooldown( 322507 ) < 10
-end
-
 -- Generate action callbacks for spell tables
 generateCallbacks( ww_spells )
 generateCallbacks( mw_spells )
@@ -4688,20 +4716,6 @@ aura_env.initSpecialization = function()
                     end
                 end
             end
-        end
-    end
-    
-    -- Need to remove these at some point
-    if Player.spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"]  then
-    elseif Player.spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"] then
-    elseif Player.spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  then
-        aura_env.combo_list["blackout_kick"] = aura_env.combo_list["blackout_kick"] or {}
-        if not aura_env.combo_list["blackout_kick"]["bok_cb_combo"] then
-            insert( aura_env.combo_list["blackout_kick"], "bok_cb_combo" )
-        end
-        aura_env.combo_list["purifying_brew"] = aura_env.combo_list["purifying_brew"] or {}
-        if not aura_env.combo_list["purifying_brew"]["purify_cb_combo"] then
-            insert( aura_env.combo_list["purifying_brew"], "purify_cb_combo" )
         end
     end
 end

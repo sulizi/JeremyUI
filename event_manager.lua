@@ -36,8 +36,6 @@ function(event, ...)
     local C_NamePlate = C_NamePlate
     local GetNamePlateForUnit = C_NamePlate.GetNamePlateForUnit
     local GetNamePlates = C_NamePlate.GetNamePlates
-    local C_PaperDollInfo = C_PaperDollInfo
-    local GetStaggerPercentage = C_PaperDollInfo.GetStaggerPercentage
     local C_Scenario = C_Scenario
     local GetCriteriaInfo = C_Scenario.GetCriteriaInfo
     local GetInfo = C_Scenario.GetInfo
@@ -1031,48 +1029,30 @@ function(event, ...)
                                 
                             end
                             
-                            -- Stagger
-                            local stagger_reduction = 0
-                            if action.reduce_stagger and type( action.reduce_stagger ) == "function" then
-                                stagger_reduction = action.reduce_stagger()
-                                stagger_reduction = min( stagger_reduction, Player.stagger ) -- Limited to current stagger
-                            end
-                            
-                            -- Mitigation
-                            local mitigation = 0
-                            if action.mitigate and type( action.mitigate ) == "function" then
-                                mitigation = action.mitigate()
-                            end
-                            
-                            -- Shuffle
-                            local shuffle_time_granted = 0
-                            if spec == aura_env.SPEC_INDEX[ "MONK_BREWMASTER" ] then
-                                local shuffle = Player.findAura( 215479 )
+                            -- Calculate total mitigation from action
+                            local actionMitigation = function( action, state )
                                 
-                                if action.grant_shuffle 
-                                and Player.talent.shuffle.ok 
-                                and ( not shuffle or ( shuffle.remaining - Player.gcd_remains ) <= 1 ) then
-                                    
-                                    shuffle_time_granted 
-                                    = ( type( action.grant_shuffle ) == "function" and action.grant_shuffle() or action.grant_shuffle )
-                                    
-                                    if shuffle_time_granted > 0 then    
-                                        
-                                        local dtps = Player.recent_dtps
-                                        
-                                        -- Add fake damage out of combat so that Brewmasters start pulls correctly
-                                        if not InCombatLockdown() then
-                                            dtps = UnitHealthMax( "player" ) * 0.1
-                                        end
-                                        
-                                        local stagger_pct, stagger_target_pct = GetStaggerPercentage( "player" )
-                                        local shuffle_pct = ( stagger_target_pct or stagger_pct ) / 100 / ( shuffle and 2 or 1 )
-                                        local shuffle_dr = dtps * shuffle_time_granted * shuffle_pct
-                                        
-                                        mitigation = mitigation + shuffle_dr
-                                    end
+                                local state = state or nil
+                                local mitigation = 0
+                                
+                                 -- Stagger
+                                local stagger_reduction = 0
+                                if action.reduce_stagger and type( action.reduce_stagger ) == "function" then
+                                    stagger_reduction = action.reduce_stagger( state )
+                                    stagger_reduction = min( stagger_reduction, Player.stagger ) -- Limited to current stagger
                                 end
+                                
+                                -- Mitigation
+                                local mitigation = stagger_reduction
+                                if action.mitigate and type( action.mitigate ) == "function" then
+                                    mitigation = mitigation + action.mitigate( state )
+                                end
+                                
+                                return mitigation
                             end
+                            -- --------------
+                            local mitigation = actionMitigation( action, nil )
+                            -- --------------
                             
                             -- Action Multiplier
                             tooltip = tooltip * ( action.action_multiplier and action.action_multiplier() or 1 )
@@ -1237,7 +1217,8 @@ function(event, ...)
                                     local thunderfist = Player.findAura( 242387 )
                                     
                                     if thunderfist then
-                                        local tf_stack_value = spellRaw( "thunderfist_single" )
+                                        local tf_spell = spells[ "thunderfist_single" ]
+                                        local tf_stack_value = tf_spell.result and tf_spell.result.damage or 0
                                         mh_loss = mh_loss + ( min( swings_lost, thunderfist.stacks ) * tf_stack_value )
                                     end
                                 end
@@ -1246,8 +1227,13 @@ function(event, ...)
                                 -- Press the Advantage
                                 if spec == aura_env.SPEC_INDEX[ "MONK_BREWMASTER" ] then
                                     if Player.talent.press_the_advantage.ok then
-                                        local pta_value = spellRaw( "press_the_advantage" )
-                                        pta_value = pta_value + max( spellRaw( "pta_rising_sun_kick" ), spellRaw( "pta_keg_smash" ) / 10 )
+                                        local pta_swing = spells[ "press_the_advantage" ]
+                                        local pta_rsk = spells[ "pta_rising_sun_kick" ]
+                                        local pta_ks = spells[ "pta_keg_smash" ]
+                                        
+                                        local pta_value_swing = pta_swing.result and pta_swing.result.damage or 0
+                                        local pta_value_spend = max(  pta_rsk.result and pta_rsk.result.damage or 0,  pta_ks.result and pta_ks.result.damage or 0  ) / 10
+                                        local pta_value = pta_value_swing + pta_value_spend
                                         
                                         mh_loss = mh_loss + ( swings_lost * pta_value )
                                     end
@@ -1293,7 +1279,7 @@ function(event, ...)
                             
                             -- Ability triggers ( GotD, Resonant Fists, etc., also used for combos )
                             local applyTriggerSpells = function( )
-                                local damage_out, healing_out, group_heal_out = 0, 0, 0
+                                local damage_out, healing_out, group_heal_out, mitigate_out = 0, 0, 0, 0
                                 local trigger_chi_gain = 0
                                 local driver = action
                                 local driverName = combo_base or name
@@ -1305,16 +1291,15 @@ function(event, ...)
                                     driver.trigger["hit_combo"] = ( not mastery_break )
                                 end
                                 
-                                if driver.grant_shuffle then
-                                    driver.trigger["quick_sip_1s"] = ( shuffle_time_granted > 0 )
-                                end
                                 
                                 local trigger_spells = {}
                                 local trigger_exists = {}
-                                local trigger_pushback = function( spell, enabled, periodic, recursive_callback )
+
+                                local trigger_pushback = function( spell, enabled, periodic, recursive_callback, stack )
                                     
                                     local _driver = recursive_callback and spells[ recursive_callback ] or driver
                                     local _driverName = recursive_callback or driverName
+                                    local _stack = ( stack or _driverName ) .. " -> " .. spell
                                     
                                     trigger_exists[ spell.."-".._driverName ] = true
                                     
@@ -1330,14 +1315,30 @@ function(event, ...)
                                         if enabled 
                                         and spells[ spell ] 
                                         and spellRaw( spell ) > 0 then
-                                            local _this = {}
                                             
+                                            local callback_stack = {}
+                                            local stack_driver = nil
+                                            for cb in gsub( _stack .. "->", "%s+", "" ):gmatch( "(.-)->" ) do
+                                                insert( callback_stack, {
+                                                   name = cb,
+                                                   spell = spells[ cb ] or nil,
+                                                   driverName = stack_driver,
+                                                   result = spells[ cb ] and spells[ cb ].result or nil,
+                                                } )
+                                                stack_driver = cb
+                                            end
+                                            
+                                            local _this = {}
+
                                             _this.state = {
                                                 -- Pass driver callbacks to trigger
+                                                callback_stack = callback_stack,
                                                 callback_name = _driverName,
                                                 callback = _driver,
                                                 result = _driver.result,
                                             }
+                                            
+                                            _this.stack = _stack
                                             
                                             _this.spell = spell
                                             _this.onTick = periodic
@@ -1363,7 +1364,7 @@ function(event, ...)
                                         if spell.trigger then
                                             for recursive_trigger, enabled in pairs( spell.trigger ) do
                                                 if not trigger_exists[ recursive_trigger.."-"..trigger.spell ] then    
-                                                    trigger_pushback( recursive_trigger, enabled, false, trigger.spell )
+                                                    trigger_pushback( recursive_trigger, enabled, false, trigger.spell, trigger.stack )
                                                     do_recursion = true
                                                 end
                                             end
@@ -1371,7 +1372,7 @@ function(event, ...)
                                         if spell.tick_trigger then
                                             for recursive_trigger, enabled in pairs( spell.tick_trigger ) do
                                                 if not trigger_exists[ recursive_trigger.."-"..trigger.spell ] then
-                                                    trigger_pushback( recursive_trigger, enabled, true, trigger.spell )
+                                                    trigger_pushback( recursive_trigger, enabled, true, trigger.spell, trigger.stack )
                                                     do_recursion = true
                                                 end
                                             end     
@@ -1381,6 +1382,9 @@ function(event, ...)
                                 
                                 for _, trigger in pairs( trigger_spells ) do
                                     
+                                    -- TODO:  - Rename shadowed variables
+                                    --        - Callback stack -> enabled()
+                                    
                                     local driver = trigger.state.callback
                                     local driverName = trigger.state.callback_name
                                     local result = trigger.state.result
@@ -1389,7 +1393,7 @@ function(event, ...)
                                     local spell_result = spell.result
                                     
                                     if spell and spell_result then
-                                    
+                                        
                                         local total_ticks = ( spell_result.ticks or 1 ) * ( spell_result.target_count or 1 )
                                         local tick_damage = spell_result.damage or 0 / total_ticks
                                         local tick_healing = spell_result.healing or 0  / total_ticks
@@ -1405,18 +1409,41 @@ function(event, ...)
                                         
                                         trigger.state.tick_count = tick_count
                                         
+                                        
                                         -- Spec options
+                                        -- TODO: Move this to a Player class function
                                         if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  then
-                                            if driver.spellID == 100784 then -- Blackout Kick
-                                                trigger.state.blackout_combo = true
-                                            end        
                                             
-                                            if trigger.spell == "quick_sip_1s" then
-                                                tick_damage = tick_damage * shuffle_time_granted
-                                                tick_healing = tick_healing * shuffle_time_granted
-                                                tick_group_heal = tick_group_heal * shuffle_time_granted       
-                                            end 
+                                            -- Blackout Combo
+                                            local blackout_combo = false
+                                            if Player.talent.blackout_combo.ok then
+                                                local consume_boc = { 
+                                                    ["tiger_palm"] = true, 
+                                                    ["pta_keg_smash"] = true, 
+                                                    ["pta_rising_sun_kick"] = true, 
+                                                    ["breath_of_fire"] = true, 
+                                                    ["keg_smash"] = true, 
+                                                    ["celestial_brew"] = true, 
+                                                    ["purifying_brew"] = true, 
+                                                }
+                                                
+                                                for cb_idx, cb in ipairs( trigger.state.callback_stack ) do
+                                                    if cb_idx == #trigger.state.callback_stack then
+                                                        break
+                                                    end
+                                                    
+                                                    if cb.name == "blackout_kick" then
+                                                        blackout_combo = true
+                                                    elseif consume_boc[ cb.name ] then
+                                                        blackout_combo = false
+                                                    end
+                                                end
+                                            end
+                                            trigger.state.blackout_combo = blackout_combo
                                         end
+                                        
+                                        -- Mitigation, use trigger state
+                                        local tick_mitigate = actionMitigation( spell, trigger.state )
                                         
                                         -- Trigger is non-background action with execute time
                                         local trigger_et = spell.time_total or spell.base_execute_time or 0
@@ -1531,6 +1558,7 @@ function(event, ...)
                                                         tick_damage = tick_damage + ( total_cdr / cd * max( 0, ( damage - tick_damage * tick_count ) ) )
                                                         tick_healing = tick_healing + ( total_cdr / cd * max( 0, ( healing - tick_healing * tick_count ) ) )
                                                         tick_group_heal = tick_group_heal + ( total_cdr / cd * max( 0 , ( group_healing - tick_group_heal * tick_count ) ) )
+                                                        tick_mitigate = tick_mitigate + ( total_cdr / cd * max( 0 , ( mitigation - tick_mitigate * tick_count ) ) )
                                                         trigger_chi_gain = trigger_chi_gain - ( ( chi or 0 ) * total_cdr / cd )
                                                     end                                                
                                                 end
@@ -1549,6 +1577,7 @@ function(event, ...)
                                         damage_out     = damage_out + ( tick_damage * tick_count )
                                         healing_out    = healing_out + ( tick_healing * tick_count ) 
                                         group_heal_out = group_heal_out + ( tick_group_heal * tick_count ) 
+                                        mitigate_out   = mitigate_out + ( tick_mitigate * tick_count )
                                         trigger_chi_gain = trigger_chi_gain + ( tick_count * ( spell.chi_gain and spell.chi_gain() or 0 ) )
                                         
                                     end
@@ -1558,6 +1587,7 @@ function(event, ...)
                                 cost          = cost - trigger_chi_gain
                                 damage        = damage + damage_out
                                 healing       = healing + healing_out
+                                mitigation    = mitigation + mitigate_out
                                 group_healing = group_healing + group_heal_out
                             end
                             --
@@ -1594,7 +1624,7 @@ function(event, ...)
                             
                             if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  then
                                 adjusted = ( adjusted * brewmaster_dmg_ratio ) 
-                                + ( ( healing + stagger_reduction + mitigation ) * brewmaster_heal_ratio )
+                                + ( ( healing + mitigation ) * brewmaster_heal_ratio )
                                 
                                 -- Exploding Keg         
                                 if Player.findAura( 325153 ) then 
@@ -1840,8 +1870,6 @@ function(event, ...)
                 
                 local scale_mode = 1
                 local hashed = {}
-                local potential_d = 0
-                local potential_h = 0
                 
                 local function sortActionList( list )
                     local maximum_sequence = 5
@@ -2392,6 +2420,7 @@ function(event, ...)
             local parseAuraData = function( auraData )
                 auraData.name = gsub( lower( auraData.name ), "%s+", "_" )
                 auraData.stacks = auraData.applications or 0
+                auraData.duration = auraData.duration or 0
                 return auraData
             end
             
