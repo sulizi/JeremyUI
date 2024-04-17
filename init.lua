@@ -1266,6 +1266,7 @@ aura_env.unmarked_targets = function( )
     local motcCount = GetSpellCount(101546)
     local unmarkedTargets = aura_env.target_count - Player.motc_targets
     
+    -- TODO: DBC Value
     if motcCount < 5 and unmarkedTargets > 0 then
         return unmarkedTargets
     else
@@ -1865,11 +1866,129 @@ end
 -- Class Helper Functions
 ------------------------------------------------
 
+local CurrentCraneStacks = function( state )
+    
+    if not Player.talent.mark_of_the_crane.ok then
+        return 0
+    end
+    
+    local motc_stacks = GetSpellCount( 101546 )
+    
+    if not state then
+        return motc_stacks
+    else
+        local unmarked = aura_env.unmarked_targets()
+        if unmarked > 0 then
+            
+            for cb_idx, cb in ipairs( state.callback_stack ) do
+                if cb_idx == #state.callback_stack then
+                    break
+                end
+                
+                local motc_gain = cb.spell and cb.spell.generate_marks
+                
+                motc_gain = ( type( motc_gain ) == "function" and motc_gain() or motc_gain ) or 0
+                
+                if motc_gain > 0 then
+
+                    if Player.findAura( buff.storm_earth_and_fire ) and not aura_env.sef_fixate then
+                        motc_gain = motc_gain * 3
+                    end
+                    
+                    motc_gain = min( unmarked, motc_gain )
+                    motc_stacks = motc_stacks + motc_gain
+                    unmarked = unmarked - motc_gain
+                end
+                
+                if unmarked <= 0 then
+                    break
+                end
+            end
+        end
+        
+        return motc_stacks
+    end
+end
+
 local IsBlackoutCombo = function( state )
     if not state then
         return Player.findAura( buff.blackout_combo ) 
     else
-        return state.blackout_combo or false
+        local blackout_combo = false
+        if Player.talent.blackout_combo.ok then
+            local consume_boc = { 
+                ["tiger_palm"] = true, 
+                ["pta_keg_smash"] = true, 
+                ["pta_rising_sun_kick"] = true, 
+                ["breath_of_fire"] = true, 
+                ["keg_smash"] = true, 
+                ["celestial_brew"] = true, 
+                ["purifying_brew"] = true, 
+            }
+            
+            for cb_idx, cb in ipairs( state.callback_stack ) do
+                if cb_idx == #state.callback_stack then
+                    break
+                end
+                
+                if cb.name == "blackout_kick" then
+                    blackout_combo = true
+                elseif consume_boc[ cb.name ] then
+                    blackout_combo = false
+                end
+            end
+        end        
+        return blackout_combo
+    end
+end
+
+local IsBlackoutReinforcement = function( state )
+    
+    if Player.set_pieces[ 31 ] < 2 then
+        return false
+    end
+    
+    if not state then
+        return Player.findAura( buff.blackout_reinforcement )
+    else
+        local blackout_reinforcement = false
+        for cb_idx, cb in ipairs( state.callback_stack ) do
+            if cb_idx == #state.callback_stack then
+                break
+            end
+
+            if cb.name == "spinning_crane_kick" and cb.spell and cb.spell.base_cost == 0 then
+                blackout_reinforcement = true
+            elseif cb.name == "blackout_kick" then
+                blackout_reinforcement = false
+            end
+        end
+        return blackout_reinforcement
+    end    
+end
+
+local IsFlowingMomentumKicks = function( state )
+    
+    if Player.set_pieces[ 29 ] < 2 and Player.set_pieces[ 32 ] < 2 then
+        return false
+    end
+    
+    if not state then
+        return Player.findAura( buff.kicks_of_flowing_momentum )
+    else
+        local flowing_momentum = false
+        for cb_idx, cb in ipairs( state.callback_stack ) do
+            if cb_idx == #state.callback_stack then
+                break
+            end
+            
+            if cb.name == "fists_of_fury" then
+                flowing_momentum = true
+            elseif cb.name == "rising_sun_kick" then
+                flowing_momentum = false
+            end
+        end
+        return flowing_momentum
     end
 end
 
@@ -2096,19 +2215,15 @@ local ww_spells = {
             
             return cm
         end,        
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = 1
             
             am = am * Player.talent.fast_feet.effectN( 1 ).mod
             
             am = am * Player.talent.rising_star.effectN( 1 ).mod
             
-            if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
-                local kicks_of_flowing_momentum = Player.findAura( buff.kicks_of_flowing_momentum )
-                if kicks_of_flowing_momentum 
-                or ( trigger_state and trigger_state.callback.spellID == 113656 ) then
-                    am = am * spell.kicks_of_flowing_momentum.effectN( 1 ).mod
-                end
+            if IsFlowingMomentumKicks( state ) then
+                am = am * spell.kicks_of_flowing_momentum.effectN( 1 ).mod
             end
             
             if Player.set_pieces[30] >= 2 then
@@ -2180,27 +2295,12 @@ local ww_spells = {
             
             return 0
         end,
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = 1
             
-            local motc_stacks = GetSpellCount( 101546 )
-            local unmarked = aura_env.unmarked_targets()
+            local motc_stacks = CurrentCraneStacks( state )
             
-            if unmarked > 0 and trigger_state and trigger_state.callback.generate_marks then
-                local motc_gain = trigger_state.callback.generate_marks
-                motc_gain = ( type( motc_gain ) == "function" and motc_gain() or motc_gain ) or 0
-                
-                if motc_gain > 0 then
-                    local potential_gain = min( unmarked, motc_gain )
-                    
-                    if Player.findAura( buff.storm_earth_and_fire ) and not aura_env.sef_fixate then
-                        potential_gain = potential_gain * 3
-                    end    
-                    motc_stacks = min( 5, motc_stacks + potential_gain )
-                end
-            end
-            
-            if motc_stacks > 0 and Player.talent.mark_of_the_crane.ok then
+            if motc_stacks > 0 then
                 am = am * ( 1 + ( motc_stacks * spell.cyclone_strikes.effectN( 1 ).pct ) )
             end
             
@@ -2210,12 +2310,8 @@ local ww_spells = {
             
             am = am * Player.talent.crane_vortex.effectN( 1 ).mod
             
-            if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2  then
-                local kicks_of_flowing_momentum = Player.findAura( buff.kicks_of_flowing_momentum )
-                if kicks_of_flowing_momentum 
-                or ( trigger_state and trigger_state.callback.spellID == 113656 ) then
-                    am = am * spell.kicks_of_flowing_momentum.effectN( 1 ).mod
-                end
+            if IsFlowingMomentumKicks( state ) then
+                am = am * spell.kicks_of_flowing_momentum.effectN( 1 ).mod
             end
             
             am = am * Player.talent.fast_feet.effectN( 2 ).mod
@@ -2320,16 +2416,13 @@ local ww_spells = {
             
             return cm
         end,        
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = 1
             
             am = am * Player.talent.shadowboxing_treads.effectN( 2 ).mod
             
-            if Player.set_pieces[ 31 ] >= 2 then
-                if ( trigger_state and trigger_state.callback.spellID == 101546 and aura_env.chi_base_cost( 101546 ) == 0 ) 
-                or Player.findAura( buff.blackout_reinforcement ) then
-                    am = am * spell.blackout_reinforcement.effectN( 1 ).mod
-                end
+            if IsBlackoutReinforcement( state ) then
+                am = am * spell.blackout_reinforcement.effectN( 1 ).mod
             end
             
             return am
@@ -2348,7 +2441,7 @@ local ww_spells = {
             return aura_env.gcd( 100784 )
         end,
         reduces_cd = {
-            ["rising_sun_kick"] = function( trigger_state ) 
+            ["rising_sun_kick"] = function( state ) 
                 local cdr = spell.blackout_kick.effectN( 3 ).seconds 
                 
                 if Player.talent.teachings_of_the_monastery.ok then
@@ -2358,7 +2451,7 @@ local ww_spells = {
                         local totm = Player.findAura( buff.teachings_of_the_monastery )
                         local totm_stacks = ( totm and totm.stacks or 0 )
                         
-                        if ( trigger_state and trigger_state.callback.spellID == 100780 ) then
+                        if ( state and state.callback.spellID == 100780 ) then
                             totm_stacks = min( 3, totm_stacks + 1 )
                         end
                         
@@ -2366,51 +2459,39 @@ local ww_spells = {
                     end
                 end
                 
-                if Player.set_pieces[ 31 ] >= 2 then
-                    if ( trigger_state and trigger_state.callback.spellID == 101546 and aura_env.chi_base_cost( 101546 ) == 0 ) 
-                    or Player.findAura( buff.blackout_reinforcement ) then
-                        cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
-                    end
+                if IsBlackoutReinforcement( state ) then
+                    cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end
                 
                 return cdr
             end,
             
-            ["fists_of_fury"] = function( trigger_state )
+            ["fists_of_fury"] = function( state )
                 local cdr = spell.blackout_kick.effectN( 3 ).seconds
                 
-                if Player.set_pieces[ 31 ] >= 2 then
-                    if ( trigger_state and trigger_state.callback.spellID == 101546 and aura_env.chi_base_cost( 101546 ) == 0 ) 
-                    or Player.findAura( buff.blackout_reinforcement ) then
-                        cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
-                    end
+                if IsBlackoutReinforcement( state ) then
+                    cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end                
                 
                 return cdr
             end,
             
-            ["strike_of_the_windlord"] = function( trigger_state )
+            ["strike_of_the_windlord"] = function( state )
                 local cdr = 0
                 
-                if Player.set_pieces[ 31 ] >= 2 then
-                    if ( trigger_state and trigger_state.callback.spellID == 101546 and aura_env.chi_base_cost( 101546 ) == 0 ) 
-                    or Player.findAura( buff.blackout_reinforcement ) then
-                        cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
-                    end
+                if IsBlackoutReinforcement( state ) then
+                    cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end                
                 
                 return cdr
             end,
             
-            ["whirling_dragon_punch"] = function( trigger_state )
+            ["whirling_dragon_punch"] = function( state )
                 local cdr = 0
                 
-                if Player.set_pieces[ 31 ] >= 2 then
-                    if ( trigger_state and trigger_state.callback.spellID == 101546 and aura_env.chi_base_cost( 101546 ) == 0 ) 
-                    or Player.findAura( buff.blackout_reinforcement ) then
-                        cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
-                    end
-                end                
+                if IsBlackoutReinforcement( state ) then
+                    cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
+                end             
                 
                 return cdr
             end,            
@@ -3030,11 +3111,11 @@ local ww_spells = {
         may_crit = true,
         trigger_etl = false,
         ignore_armor = true,
-        action_multiplier = function(  trigger_state )
+        action_multiplier = function(  state )
             
-            if trigger_state and trigger_state.sfv_targets then
+            if state and state.sfv_targets then
                 -- Triggering from fof_rsk_combo ONLY this is net gain as the initial sfv_targets are included in the RSK Trigger
-                return ( ( trigger_state.sfv_targets - Player.sfv_targets ) / trigger_state.sfv_targets * shadowflame_vulnerability_amp )
+                return ( ( state.sfv_targets - Player.sfv_targets ) / state.sfv_targets * shadowflame_vulnerability_amp )
             end
             
             if Player.sfv_targets == 0 then
@@ -3398,13 +3479,13 @@ local brm_spells = {
         end,
         may_crit = true,
         background = true,
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = spell.press_the_advantage.effectN( 2 ).mod
             
             am = am * Player.talent.fast_feet.effectN( 1 ).mod
             
             -- TP Modifiers
-            if IsBlackoutCombo( trigger_state ) then
+            if IsBlackoutCombo( state ) then
                 am = am * ( 1 + ( spell.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
             end           
             
@@ -3457,7 +3538,7 @@ local brm_spells = {
             
             return min( 1, cr )
         end,        
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = 1
             
             am = am * Player.talent.fast_feet.effectN( 1 ).mod
@@ -3501,13 +3582,13 @@ local brm_spells = {
         ignore_armor = true, -- Fire
         background = true,
         skip_calcs = true,
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = Player.talent.charred_passions.effectN( 1 ).pct
-            if trigger_state then
-                local result = trigger_state.result
+            if state then
+                local result = state.result
                 
                 if result and result.damage > 0 then
-                    local tick_value = result.damage / trigger_state.tick_count
+                    local tick_value = result.damage / state.tick_count
                     
                     am = am * tick_value
                 end
@@ -3619,7 +3700,7 @@ local brm_spells = {
             
             return min( 1, cr )
         end,          
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = 1
             
             am = am * Player.talent.fast_feet.effectN( 2 ).mod
@@ -3706,10 +3787,10 @@ local brm_spells = {
         ready = function()
             return not ( Player.talent.press_the_advantage.ok )
         end,
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = 1
             
-            if IsBlackoutCombo( trigger_state ) then
+            if IsBlackoutCombo( state ) then
                 am = am * Player.talent.blackout_combo.effectN( 1 ).mod
             end
             
@@ -3894,7 +3975,7 @@ local brm_spells = {
         end,
         may_crit = true,
         background = true,
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = spell.press_the_advantage.effectN( 2 ).mod
             
             am = am * Player.talent.stormstouts_last_keg.effectN( 1 ).mod
@@ -3913,7 +3994,7 @@ local brm_spells = {
             end]]
             
             -- TP Modifiers
-            if IsBlackoutCombo( trigger_state ) then
+            if IsBlackoutCombo( state ) then
                 am = am * ( 1 + ( spell.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
             end     
             
@@ -4002,7 +4083,7 @@ local brm_spells = {
         brew_cdr = function()
             local cdr = 3
             
-            if IsBlackoutCombo( trigger_state ) then
+            if IsBlackoutCombo( state ) then
                 cdr = cdr + Player.talent.blackout_combo.effectN( 3 ).base_value
             end
             
@@ -4112,15 +4193,15 @@ local brm_spells = {
         ap = function()
             return Player.talent.exploding_keg.effectN( 4 ).ap_coefficient
         end,
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             
-            if not trigger_state then
+            if not state then
                 return 1
             end
             
-            if trigger_state.callback_name == "exploding_keg" then
+            if state.callback_name == "exploding_keg" then
                 
-                for _, cb in ipairs( trigger_state.callback_stack ) do
+                for _, cb in ipairs( state.callback_stack ) do
                     if cb.name == "exploding_keg" then
                         break
                     end
@@ -4139,7 +4220,7 @@ local brm_spells = {
                 return 0
             end
 
-            local result = trigger_state.result or nil
+            local result = state.result or nil
             
             if not result then
                 return 0
@@ -4185,11 +4266,11 @@ local brm_spells = {
         may_crit = true,
         ignore_armor = true, -- fire
         usable_during_sck = true,        
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = 1
             
             -- BUG: BoC buffs the initial hit as well as the periodic
-            if IsBlackoutCombo( trigger_state ) then
+            if IsBlackoutCombo( state ) then
                 am = am * spell.blackout_combo.effectN( 5 ).mod
             end            
             
@@ -4267,10 +4348,10 @@ local brm_spells = {
         may_crit = true,
         ignore_armor = true, -- fire
         background = true,
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = 1
             
-            if IsBlackoutCombo( trigger_state ) then
+            if IsBlackoutCombo( state ) then
                 am = am * spell.blackout_combo.effectN( 5 ).mod
             end         
             
@@ -4286,7 +4367,7 @@ local brm_spells = {
         target_multiplier = function( target_count )
             return target_count
         end,    
-        mitigate = function( trigger_state )
+        mitigate = function( state )
             local ratio = min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets ) / aura_env.target_count 
             local dr = spell.breath_of_fire_dot.effectN( 2 ).pct
             
@@ -4294,7 +4375,7 @@ local brm_spells = {
                 dr = dr + Player.talent.celestial_flames.effectN( 2 ).pct
             end
             
-            if IsBlackoutCombo( trigger_state ) then
+            if IsBlackoutCombo( state ) then
                 dr = dr + spell.blackout_combo.effectN( 2 ).pct
             end
             
@@ -4321,8 +4402,8 @@ local brm_spells = {
         ready = function()
             return Player.talent.shuffle.ok
         end,
-        reduce_stagger = function( trigger_state )
-            if not trigger_state then
+        reduce_stagger = function( state )
+            if not state then
                 return 0
             end
             
@@ -4331,7 +4412,7 @@ local brm_spells = {
             end
             
             if Player.talent.quick_sip.ok then
-                local driver = trigger_state.callback
+                local driver = state.callback
                 local shuffle_granted = 0
                 
                 -- TODO: Use DBC
@@ -4352,13 +4433,13 @@ local brm_spells = {
             
             return 0
         end,
-        mitigate = function( trigger_state )
+        mitigate = function( state )
 
-            if not trigger_state then
+            if not state then
                 return 0
             end
 
-            local driver = trigger_state.callback
+            local driver = state.callback
             local shuffle_granted = 0
             
             -- TODO: Use DBC
@@ -4473,7 +4554,7 @@ local brm_spells = {
             
             return not Player.findAura( 322507 ) -- never overwrite current CB
         end,
-        mitigate = function( trigger_state )
+        mitigate = function( state )
             
             -- We can use the tooltip to parse for healing reduction effects
             -- since not all healing reduction auras apply to CB
@@ -4488,7 +4569,7 @@ local brm_spells = {
                 -- Purified Chi
                 -- --------------------------
                 local purified_chi_count = 0
-                local driver = trigger_state and trigger_state.callback_name
+                local driver = state and state.callback_name
                 
                 -- check state
                 
@@ -4502,7 +4583,7 @@ local brm_spells = {
                     end
                 end
                 
-                if IsBlackoutCombo( trigger_state ) then
+                if IsBlackoutCombo( state ) then
                     -- TODO: Use DBC Value
                     purified_chi_count = purified_chi_count + 3
                 end
@@ -4642,14 +4723,14 @@ local brm_spells = {
         ignore_armor = true, -- Shadowflame
         background = true,
         skip_calcs = true,
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = spell.t31_brm_2pc.effectN( 1 ).pct
 
-            if trigger_state then
-                local result = trigger_state.result
+            if state then
+                local result = state.result
                 
                 if result and result.damage > 0 then
-                    local tick_value = result.damage / trigger_state.tick_count 
+                    local tick_value = result.damage / state.tick_count 
                     
                     am = am * tick_value
                 end
@@ -4666,13 +4747,13 @@ local brm_spells = {
         may_crit = false,
         background = true,
         skip_calcs = true,
-        action_multiplier = function( trigger_state )
+        action_multiplier = function( state )
             local am = spell.t31_brm_2pc.effectN( 2 ).pct
-            if trigger_state then
-                local result = trigger_state.result
+            if state then
+                local result = state.result
                 
                 if result and result.damage > 0 then
-                    local tick_value = result.damage / trigger_state.tick_count
+                    local tick_value = result.damage / state.tick_count
                     
                     am = am * tick_value
                 end

@@ -1452,39 +1452,6 @@ function(event, ...)
                                         
                                         trigger.state.tick_count = tick_count
                                         
-                                        
-                                        -- Spec options
-                                        -- TODO: Move this to a Player class function
-                                        if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  then
-                                            
-                                            -- Blackout Combo
-                                            local blackout_combo = false
-                                            if Player.talent.blackout_combo.ok then
-                                                local consume_boc = { 
-                                                    ["tiger_palm"] = true, 
-                                                    ["pta_keg_smash"] = true, 
-                                                    ["pta_rising_sun_kick"] = true, 
-                                                    ["breath_of_fire"] = true, 
-                                                    ["keg_smash"] = true, 
-                                                    ["celestial_brew"] = true, 
-                                                    ["purifying_brew"] = true, 
-                                                }
-                                                
-                                                for cb_idx, cb in ipairs( trigger.state.callback_stack ) do
-                                                    if cb_idx == #trigger.state.callback_stack then
-                                                        break
-                                                    end
-                                                    
-                                                    if cb.name == "blackout_kick" then
-                                                        blackout_combo = true
-                                                    elseif consume_boc[ cb.name ] then
-                                                        blackout_combo = false
-                                                    end
-                                                end
-                                            end
-                                            trigger.state.blackout_combo = blackout_combo
-                                        end
-                                        
                                         -- Mitigation, use trigger state
                                         local tick_mitigate = actionMitigation( spell, trigger.state )
                                         
