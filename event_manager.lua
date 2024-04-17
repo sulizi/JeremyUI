@@ -233,8 +233,10 @@ function(event, ...)
         aura_env.action_cache = aura_env.action_cache or {}
         local action_set = function( tbl )
             if not tbl.name then return end
+            
             tbl.cb            = tbl.cb or spells[ tbl.name ]
             tbl.raw           = tbl.raw or 0
+            tbl.ticks         = tbl.ticks or 1
             tbl.damage        = tbl.damage or 0
             tbl.healing       = tbl.healing or 0
             tbl.group_healing = tbl.group_healing or 0 
@@ -244,9 +246,19 @@ function(event, ...)
             tbl.execute_time  = max( 0, tbl.execute_time or 0 )
             tbl.cost          = tbl.cost or 0
             tbl.chi_cost      = tbl.chi_cost or 0
+            tbl.energy_cost   = tbl.energy_cost or 0
+            tbl.mana_cost     = tbl.mana_cost or 0
             tbl.t_amp         = tbl.t_amp or 1.0
             tbl.delay         = max( 0, tbl.delay or 0 )
-            tbl.mastery_break = tbl.mastery_break or false            
+            tbl.mastery_break = tbl.mastery_break or false 
+            
+            -- Snapshot Channel Information
+            if tbl.cb and tbl.raw > 0 and Player.channel.spellID and Player.channel.spellID == tbl.cb.spellID then
+                Player.channel.action = tbl.cb
+                Player.channel.raw = tbl.raw
+                Player.channel.ticks = tbl.ticks
+            end
+            
             local raw_comp = tbl.raw / compression_value
             jeremy.raw[ tbl.name ] = raw_comp > 1 and floor( raw_comp ) or raw_comp 
             if not tbl.background then
@@ -313,14 +325,45 @@ function(event, ...)
             jeremy.monk_chi         = Player.chi
             jeremy.monk_chi_max     = Player.chi_max
             
+            -- Update Channel Information
             local _, _, _, channel_start, channel_end, _, _, channelID = UnitChannelInfo( "player" )
             
-            Player.channel_start = channel_start
-            Player.channel_end = channel_end
-            Player.channel_id = channelID
+            Player.channel.start = channel_start
+            Player.channel.finish = channel_end
+            Player.channel.spellID = channelID
             
-            if not channelID then
+            if not Player.channel.spellID then
                 aura_env.tick_update = nil
+                
+                Player.channel.raw = 0
+                Player.channel.ticks = 1
+                Player.channel.action = nil
+                Player.channel.remaining = nil
+                Player.channel.length = nil
+                Player.channel.tick_rate = nil
+                Player.channel.ticks_remaining = nil
+            else
+                
+                Player.channel.remaining = max( 0, ( Player.channel.finish / 1000 ) - frameTime - Player.gcd_remains )
+                Player.channel.length = ( Player.channel.finish - Player.channel.start ) / 1000
+                Player.channel.tick_rate = Player.channel.length / ( Player.channel.ticks or 1 )
+                Player.channel.ticks_remaining = 1 + floor( Player.channel.remaining / Player.channel.tick_rate )
+                
+                if Player.channel.remaining > 0 then 
+                    
+                    if Player.gcd_remains == 0 then
+                        aura_env.tick_update = frameTime + ( Player.channel.remaining % Player.channel.tick_rate )
+                    end
+                    
+                    action_set( {
+                            type         = "channel",
+                            name         = "channel_remaining",
+                            raw          = Player.channel.raw or 0,
+                            execute_time = Player.channel.remaining,
+                            cb           = Player.channel.action,
+                    })
+                end
+
             end
             
             Player.is_pvp = UnitIsPlayer( "target" ) and aura_env.validTarget(  "target" )
@@ -999,9 +1042,9 @@ function(event, ...)
                         elseif ready then 
                             
                             -- Check if we're channeling and add channel latency
-                            if Player.channel_id and not action.background then
-                                local latency = Player.channel_latency or 0
-                                if Player.channel_id == 101546 and action.usable_during_sck then
+                            if Player.channel.spellID and not action.background then
+                                local latency = Player.channel.latency or 0
+                                if Player.channel.spellID == 101546 and action.usable_during_sck then
                                     latency = 0
                                 end                            
                                 action_delay = max( action_delay, latency )
@@ -1150,7 +1193,7 @@ function(event, ...)
                                 if action.target_multiplier 
                                 and action_type == "damage"
                                 and not action.background 
-                                and ( not Player.channel_id or Player.channel_id ~= spellID )
+                                and ( not Player.channel.spellID or Player.channel.spellID ~= spellID )
                                 and name ~= "touch_of_death" then
                                     local cooldown = aura_env.actionBaseCooldown( action )
                                     if cooldown > 0 then
@@ -1524,7 +1567,7 @@ function(event, ...)
                                         
                                         -- Driver is a channeled ability and trigger is not background action
                                         if driver.channeled and not spell.background then
-                                            local latency = Player.channel_latency or 0
+                                            local latency = Player.channel.latency or 0
                                             local use_during_channel = driver.spellID == 101546 and spell.usable_during_sck 
                                             if use_during_channel then
                                                 latency = 0
@@ -1762,47 +1805,28 @@ function(event, ...)
                                     end
                                 end
                                 
-                                -- FoF Canceling Logic
-                                local fof_action = spells["fists_of_fury"]
-                                
-                                if Player.channel_id 
-                                and fof_action
-                                and Player.channel_id == fof_action.spellID then
-                                    local remaining = ( Player.channel_end / 1000 ) - frameTime - Player.gcd_remains - action_delay
-                                    local length = ( Player.channel_end - Player.channel_start ) / 1000
-                                    if remaining > 0 then 
-                                        local tick_time = length / 4
-                                        local ticks_remaining = 1 + floor( remaining / tick_time )
+                                -- Storm, Earth, and Fire while channeling
+                                -- If you use an action that isn't copied by SEF, while channeling an ability copied by SEF
+                                -- the images will continue to channel
+                                if Player.channel.spellID and Player.channel.action then
+                                    if not action.background and not action.copied_by_sef and Player.channel.action.copied_by_sef then
+                                        local SEF = Player.findAura( 137639 ) 
                                         
-                                        if Player.gcd_remains == 0 then
-                                            aura_env.tick_update = frameTime + ( remaining % tick_time )
-                                        end
-                                        
-                                        local fof_tick_raw = ( aura_env.snapshot_fof or 0 ) / fof_action.ticks
-                                        * global_modifier( fof_action ) * targetAuraEffect( fof_action )
-                                        local fof_total = ( fof_tick_raw * ticks_remaining ) * ( 1 + aura_env.error_margin )
-                                        
-                                        if not action.background and not action.copied_by_sef then
-                                            if Player.findAura( 137639 ) then -- Storm, Earth, and Fire
-                                                local sef_ticks = 1 + floor( min( remaining, 1 ) / tick_time )
-                                                local sef_gain = fof_tick_raw * 0.84 * sef_ticks * ( 1 + aura_env.error_margin )
+                                        if SEF and SEF.remaining > 1 then 
+                                            -- TODO: DBC Value
+                                            -- The contribution is SEF value * ( 3 / 2 ) because the player themselves stops channeling
+                                            local tick_value = Player.channel.raw / Player.channel.ticks * 0.84
+                                            local time_remaining = math.min( SEF.remaining, Player.channel.remaining ) - action_delay
+                                            if time_remaining > 0 then
+                                                local ticks_remaining = 1 + floor( time_remaining / Player.channel.tick_rate )
+                                                local sef_gain = tick_value * ticks_remaining * ( 1 + aura_env.error_margin )
+                                                
                                                 adjusted = adjusted + sef_gain
                                             end
                                         end
-                                        
-                                        action_set( {
-                                                type         = "damage",
-                                                name         = "fof_remaining",
-                                                raw          = fof_total,
-                                                execute_time = remaining,
-                                                cb           = fof_action,
-                                        })
-                                    end
-                                else
-                                    if name == "fists_of_fury" then
-                                        aura_env.snapshot_fof = adjusted / temporary_amplifiers
                                     end
                                 end
+                                
                             end
                             
                             action.cost_total = cost
@@ -1812,6 +1836,7 @@ function(event, ...)
                                     type = action_type,
                                     name = name,
                                     raw = adjusted,
+                                    ticks = ticks,
                                     cost = cost,
                                     damage = damage,
                                     healing = healing,

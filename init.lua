@@ -473,10 +473,19 @@ aura_env.CPlayer = {
         damage_taken_unavoidable = 0,
         recent_damage = {},                
     },
-    channel_end = nil,
-    channel_id = nil,
-    channel_start = nil,
-    channel_latency = 0.2, -- Players experience about 200ms of channel latency on average from ingame testing 
+    channel = {
+        action = nil,
+        finish = nil,
+        latency = 0.2, -- Players experience about 200ms of channel latency on average from ingame testing
+        length = nil,
+        raw = 0,
+        remaining = nil,
+        spellID = nil,
+        start = nil,
+        tick_rate = nil,
+        ticks = 1,
+        ticks_remaining = nil,
+    },
     crit_bonus = 1,
     default_action = "spinning_crane_kick",
     dps = 0,
@@ -1179,8 +1188,10 @@ aura_env.parseTooltip = function( spellID )
     tooltip = gsub( tooltip, ",", "" )
     
     if tooltip then
-        for i in gmatch( tooltip , "%d+") do  
-            t[#t + 1] = i
+        for i in gmatch( tooltip , "%d+") do
+            if type( i ) == "number" then
+                t[#t + 1] = i
+            end
         end 
     end
     
@@ -2070,7 +2081,7 @@ local ww_spells = {
             local cr = Player.crit_bonus
             
             -- Buff isn't gained until channel ends but still affects RSK if you break the channel with it
-            if ( Player.channel_id and Player.channel_id == 113656 and Player.talent.xuens_battlegear.ok )
+            if ( Player.channel.spellID and Player.channel.spellID == 113656 and Player.talent.xuens_battlegear.ok )
             -- 
             or Player.findAura ( buff.pressure_point ) then
                 cr = cr + spell.pressure_point.effectN( 1 ).roll
@@ -4464,49 +4475,61 @@ local brm_spells = {
         end,
         mitigate = function( trigger_state )
             
+            -- We can use the tooltip to parse for healing reduction effects
+            -- since not all healing reduction auras apply to CB
             local tooltip_array = aura_env.parseTooltip( 322507 )
-            local n = tooltip_array[1]
-            local m = Player.ability_power * cb_apmod * Player.vers_bonus
             
-            if n then
-                -- We can use the tooltip to parse for healing reduction effects
-                -- since not all healing reduction auras apply to CB
-                m = n
-            end
+            local m = tooltip_array[ 1 ] 
+                -- Fallback to AP formula if tooltip is unavailable
+                or ( Player.ability_power * cb_apmod * Player.vers_bonus )
             
-            local purified_chi_count = 0
-            local driver = trigger_state and trigger_state.callback_name
+            if m > 0 then
             
-            if driver and driver == "purifying_brew" then
-                -- TODO: Use DBC Value
-                purified_chi_count = 1
-                if Player.findAura( buff.moderate_stagger ) then
-                    purified_chi_count = 3
-                elseif Player.findAura( buff.heavy_stagger ) then
-                    purified_chi_count = 5
+                -- Purified Chi
+                -- --------------------------
+                local purified_chi_count = 0
+                local driver = trigger_state and trigger_state.callback_name
+                
+                -- check state
+                
+                if driver and driver == "purifying_brew" then
+                    -- TODO: Use DBC Value
+                    purified_chi_count = 1
+                    if Player.findAura( buff.moderate_stagger ) then
+                        purified_chi_count = 3
+                    elseif Player.findAura( buff.heavy_stagger ) then
+                        purified_chi_count = 5
+                    end
                 end
+                
+                if IsBlackoutCombo( trigger_state ) then
+                    -- TODO: Use DBC Value
+                    purified_chi_count = purified_chi_count + 3
+                end
+                
+                -- current buff
+                
+                local purified_chi = Player.findAura( buff.purified_chi )
+                if purified_chi then
+                    purified_chi_count = purified_chi_count + purified_chi.stacks
+                end
+                
+                m = m * ( 1 + ( min( 10, purified_chi_count ) * spell.purified_chi.effectN( 1 ).pct ) )
+
+                -- --------------------------
+            
+                -- Celestial Brew can benefit from Celestial Fortune
+                m = m * aura_env.celestialFortune()
+                
+                -- Celestial Brew expires after 8 seconds
+                -- TODO: Duration from DBC
+                local dtps = Player.recent_dtps
+                local maximum = max( 0, ( dtps * 8 ) - UnitGetTotalAbsorbs( "player" ) )
+                
+                m = min( maximum, m )
             end
             
-            if IsBlackoutCombo( trigger_state ) then
-                -- TODO: Use DBC Value
-                purified_chi_count = purified_chi_count + 3
-            end
-            
-            local purified_chi = Player.findAura( buff.purified_chi )
-            if purified_chi then
-                purified_chi_count = purified_chi_count + purified_chi.stacks
-            end
-            
-            m = m * ( 1 + ( min( 10, purified_chi_count ) * spell.purified_chi.effectN( 1 ).pct ) )
-            
-            -- Celestial Brew can benefit from Celestial Fortune
-            m = m * aura_env.celestialFortune()
-            
-            -- Celestial Brew expires after 8 seconds
-            local dtps = Player.recent_dtps
-            local maximum = ( dtps * 8 )
-            m = min( maximum, m )
-            
+            -- Pretense of Instability
             if Player.talent.pretense_of_instability.ok then
                 local pretenseGain = pretense_duration
                 local activePretense = Player.findAura( buff.pretense_of_instability )
@@ -4517,6 +4540,7 @@ local brm_spells = {
                 m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
             end
             
+            -- return
             return m
         end,
         trigger = {
