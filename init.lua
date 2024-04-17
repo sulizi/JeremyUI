@@ -1916,25 +1916,37 @@ local IsBlackoutCombo = function( state )
     else
         local blackout_combo = false
         if Player.talent.blackout_combo.ok then
+            
+            local _next = nil
             local consume_boc = { 
                 ["tiger_palm"] = true, 
                 ["pta_keg_smash"] = true, 
                 ["pta_rising_sun_kick"] = true, 
-                ["breath_of_fire"] = true, 
-                ["keg_smash"] = true, 
+                ["breath_of_fire"] = function() return ( _next.name ~= "breath_of_fire_periodic" ) end,
+                ["breath_of_fire_periodic"] = true,
+                ["keg_smash"] = function() return ( _next.name ~= "pta_keg_smash" ) end, 
                 ["celestial_brew"] = true, 
                 ["purifying_brew"] = true, 
             }
             
-            for cb_idx, cb in ipairs( state.callback_stack ) do
-                if cb_idx == #state.callback_stack then
+            local _, stack = ipairs( state.callback_stack )
+            local cb_idx = 1
+            
+            for cb_idx = 1, #stack do
+                if cb_idx == #stack then
                     break
                 end
                 
+                local cb = stack[ cb_idx ] 
+                _next = stack [ cb_idx + 1 ]
+                
                 if cb.name == "blackout_kick" then
                     blackout_combo = true
-                elseif consume_boc[ cb.name ] then
-                    blackout_combo = false
+                else
+                    local consume = consume_boc[ cb.name ]
+                    if type( consume ) == "function" and consume() or consume == true then
+                        blackout_combo = false
+                    end
                 end
             end
         end        
