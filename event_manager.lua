@@ -956,21 +956,6 @@ function(event, ...)
                         local start_cooldown    = action.start_cooldown or {}
                         local combo_base        = action.combo_base
                         
-                        if action.combo and not action.combo_base then
-                            for base_action, combos in pairs( aura_env.combo_list ) do 
-                                for _, combo in pairs( combos ) do 
-                                    if combo == name then
-                                        combo_base = base_action
-                                        break
-                                    end
-                                end
-                                if combo_base then
-                                    break
-                                end
-                            end
-                            action.combo_base = combo_base
-                        end
-                        
                         if combo_base and not start_cooldown[ combo_base ] then
                             start_cooldown[ #start_cooldown + 1 ] = combo_base
                         end
@@ -1107,7 +1092,7 @@ function(event, ...)
                             -- these sometimes change in PvP so we will cache both
                             if not action.aura_modifier_pve and not Player.is_pvp
                             or not action.aura_modifier_pvp and Player.is_pvp then
-                                local total_aura_effect = aura_env.auraEffectForSpell( action.dotID or spellID )
+                                local total_aura_effect = aura_env.auraEffectForSpell( action.damageID or spellID )
                                 
                                 if Player.is_pvp then
                                     action.aura_modifier_pvp = total_aura_effect
@@ -1982,16 +1967,8 @@ function(event, ...)
                     or ( spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"]  and v.mana_cost > Player.mana )
                     or ( spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  and v.energy_cost > Player.energy ) then
                         jeremy.rank[ v.name ] = 0
-                    elseif v.mastery_break
-                    and aura_env.fight_remains > 1
-                    and v.name ~= "touch_of_death" 
-                    and ( v.name ~= "spinning_crane_kick" or Player.bdb_targets == 0 ) then
-                        jeremy.rank[ v.name ] = 0                         
                     else
-                        local action_name = v.combo_base and v.combo_base or v.name
-                        if action_name == "fists_of_fury_cancel" then
-                            action_name = "fists_of_fury"
-                        end
+                        local action_name = gsub( v.combo_base and v.combo_base or v.name, "_cancel", "" )
                         jeremy.rank[ action_name ] = jeremy.rank[ action_name ] or k
                         jeremy.scale[ action_name ] = jeremy.scale[ action_name ] or ( scale_mode == 1 and v.d_time or v.d_cost )
                         if action_debug and k <= 5 then
@@ -2332,7 +2309,6 @@ function(event, ...)
             
             Enemy.marker    = GetRaidTargetIndex( unitID )
             Enemy.level     = UnitLevel( unitID )
-            
             Enemy.priority_modifier = aura_env.npc_priority[ Enemy.npcid ] or 1.0
             
             local am_level = aura_env.config.automarker_enable 
@@ -2625,7 +2601,6 @@ function(event, ...)
                     Combat.damage_by_level = Combat.damage_by_level + ( Enemy.level * amount )
                     Combat.damage_taken = Combat.damage_taken + amount
                     Combat.avg_level = Combat.damage_by_level / Combat.damage_taken;
-                    
                     Combat.recent_damage[ #Combat.recent_damage + 1 ] = {
                         amount = amount,
                         expire = frameTime + aura_env.RECENT_DURATION
@@ -2655,9 +2630,8 @@ function(event, ...)
         end
         
         if InCombatLockdown() then
-            local params = CombatLogGetCurrentEventInfo()
-            LogDamage( params )
-            LogDeath( params )
+            LogDamage( CombatLogGetCurrentEventInfo() )
+            LogDeath( CombatLogGetCurrentEventInfo() )
         end
         
         return false

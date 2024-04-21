@@ -463,6 +463,7 @@ aura_env.CPlayer = {
     auraDataByInstance = {},
     auraExclusions = {},    
     auraInstancesByID = {},
+    buff = {}, -- populated by makeBuff
     chi = 0,
     chi_max = 0,
     combat = {
@@ -532,6 +533,16 @@ aura_env.CPlayer = {
     woo_dur_total = 0,
     woo_targets = 0,
     
+    --
+    
+    is_beta = function()
+        local beta = 11.0 -- The War Within
+        local build_version = select( 4, GetBuildInfo() ) / 10000
+        return build_version >= beta
+    end,
+    
+    -- 
+    
     auraExists = function ( spellId, callback )
         -- if found return callback function or true
         -- otherwise false
@@ -564,6 +575,136 @@ aura_env.CPlayer = {
         return ret
     end, 
     
+    createAction = function( spellID, init )
+        local Player = aura_env.CPlayer
+        local action = init or {}
+        local data          = LibDBCache:find_spell( spellID )
+        local trigger_data  = LibDBCache:find_spell( action.damageID )
+        
+        if not data.found then
+            print( "JeremyUI: No data found for " .. spellID .. " while creating action." )
+        end
+        
+        if not trigger_data.found then
+            trigger_data = nil
+            if action.damageID then
+                print( "JeremyUI: No data found for " .. action.damageID .. " while creating action." )
+            end
+        end
+        
+        action.data         = data
+        action.trigger_data = trigger_data
+        
+        local _damage_data = trigger_data or data
+        
+        action.spellID      = spellID
+        action.replaces     = action.replaces or data.replaces
+        action.background   = action.background or false
+        action.channeled    = action.channeled or data.channeled
+        
+        action.icd              = action.icd or data.icd
+        action.duration         = action.duration or data.duration
+        action.duration_hasted  = action.duration_hasted or data.duration_hasted
+        action.trigger_rate     = action.trigger_rate or data.trigger_rate
+        action.tick_zero        = action.tick_zero or data.tick_zero
+        action.dot_hasted       = action.dot_hasted or data.dot_hasted
+        
+        -- Use triggered spell data
+        action.ignore_armor     = action.ignore_armor or _damage_data.ignores_armor
+        action.may_miss         = action.may_miss or _damage_data.may_miss
+        action.may_crit         = action.may_crit or _damage_data.may_crit
+        
+        if not action.ap then
+            local iter = 1
+            local effect = 0
+            while ( effect ~= nil ) do
+                effect = _damage_data.effectN( iter )
+                if effect and effect.ap_coefficient then
+                    action.ap = effect.ap_coefficient
+                    break
+                end
+                iter = iter + 1
+            end
+        end
+        
+        if not action.ap and not action.sp then
+            local iter = 1
+            local effect = 0
+            while ( effect ~= nil ) do
+                effect = _damage_data.effectN( iter )
+                if effect and effect.sp_coefficient then
+                    action.sp = effect.sp_coefficient
+                    break
+                end
+                iter = iter + 1
+            end            
+        end
+        
+        if not action.ticks and action.duration and action.base_tick_rate then
+            action.ticks = action.duration / action.base_tick_rate
+        end
+        
+        local _ticks = action.ticks or 1
+        if type( _ticks ) ~= "function" then
+            action.ticks = function()
+                local ticks = _ticks
+                if action.channeled and action.canceled then
+                    local ticks_gcd = 0
+                    local ticks_on_cast = ( action.tick_zero and 1 or 0 )
+                    local ticks_remaining = ticks - ticks_on_cast
+                    
+                    if ticks_remaining > 0 then
+                        local gcd = aura_env.gcd( action.spellID )
+                        local duration = action.duration
+                        
+                        if action.duration_hasted then
+                            duration = duration / Player.haste
+                        end                
+                        
+                        local tick_rate = duration / ticks_remaining
+                        ticks_gcd = ( gcd / tick_rate )
+                    end
+                    
+                    return ticks_on_cast + ticks_gcd
+                end
+                
+                return ticks
+            end
+        end
+        action.ticks = action.ticks or 1
+        
+        -- Cast Time / Execute Time functions
+        
+        action.cast_time = action.cast_time or function()
+            if action.background then 
+                return 0
+            end
+            
+            local cast_time_ms = select( 4, GetSpellInfo( action.spellID ) ) or 0
+            return cast_time_ms / 1000
+        end
+        
+        action.execute_time = action.execute_time or function()
+            if action.background then
+                return 0
+            end
+            
+            local gcd = aura_env.gcd( action.spellID )
+
+            if action.channeled and not action.canceled then
+                local duration = action.duration
+                if action.duration_hasted then
+                    duration = duration / Player.haste
+                end
+                return max( duration, gcd )
+            end
+            
+            return max( gcd, action.cast_time() )
+        end
+        
+        return action
+    end,
+    
     -- Simple helper function if you only need to know if one instance of a spellID exists
     -- always returns the lowest duration if there are multiple instances
     findAuraCache = {},
@@ -584,7 +725,7 @@ aura_env.CPlayer = {
             auraData.name = ( cached and cached.data and cached.data.name ) or gsub( lower( auraData.name ), "%s+", "_" )
             auraData.stacks = auraData.applications or 0            
             auraData.remaining = ( auraData.expirationTime and auraData.expirationTime - time ) or 0
-            auraData.duratoin = auraData.duration or 0
+            auraData.duration = auraData.duration or 0
         end
         
         self.findAuraCache[ spellID ] = {
@@ -593,6 +734,44 @@ aura_env.CPlayer = {
         }
         
         return auraData
+    end,
+    
+    getTalent = function( name )
+        local self = aura_env.CPlayer
+        local t = self.talent[ name ]
+        
+        t = t or LibDBCache:find_talent( 0, 0 )
+        
+        return t
+    end,
+    
+    makeBuff = function( spellID, name )
+        local self = aura_env.CPlayer
+        
+        if not name or not self.buff[ name ] then
+            local buff = LibDBCache:find_spell( spellID ) 
+            
+            name = name or buff.tokenName
+            
+            if name then
+                buff.name = name
+                buff.up = function()
+                    local data = self.findAura( spellID )
+                    return ( data ~= nil )
+                end
+                buff.remains = function()
+                    local data = self.findAura( spellID )
+                    return data and data.remaining or 0
+                end
+                buff.stacks = function()
+                    local data = self.findAura( spellID )
+                    return data and data.stacks or 0 
+                end
+                self.buff[ name ] = buff
+            else
+                print( "Unable to make buff " .. spellID )
+            end
+        end
     end,
 }
 
@@ -670,7 +849,7 @@ aura_env.GetEnemy = function( srcGUID )
     end
     
     aura_env.CEnemy[ srcGUID ].unitID = UnitTokenFromGUID( srcGUID )
-    
+   
     return aura_env.CEnemy[ srcGUID ];
 end
 
@@ -1526,9 +1705,11 @@ aura_env.global_modifier = function( callback, future, real )
     else
         
         -- Damage
+        
+        -- Armor
         if not callback.ignore_armor then
             gm = gm * armor
-            gm = gm * ( 1 + mystic_touch )
+            gm = gm * ( 1 + mystic_touch ) -- TODO: School
         end
         
         -- Passive Talents
@@ -1538,6 +1719,12 @@ aura_env.global_modifier = function( callback, future, real )
         if callback == Player.default_action then
             aura_env.base_gm = gm
         end
+        
+          -- Miss
+        if callback.may_miss then
+            local miss = Combat.avg_level > 0 and min( 1, max( 0, 0.03 + ( ( Combat.avg_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
+            gm = gm * ( 1 - miss )
+        end      
         
         -- Dynamic Buffs/Debuffs
         local pta = Player.findAura( buff.press_the_advantage )
@@ -1755,7 +1942,6 @@ end
 ------------------------------------------------
 
 aura_env.spells = {}
-aura_env.combo_list = {}
 
 local function deepcopy(orig, copies)
     
@@ -1773,22 +1959,27 @@ local function deepcopy(orig, copies)
                 copy[deepcopy(orig_key, copies)] = deepcopy(orig_value, copies)
             end
             setmetatable(copy, deepcopy(getmetatable(orig), copies))
-            
-            if copy.spellID then
-                -- Identifier
-                copy.combo = true
-                
-                -- Initialize triggers
-                if not copy.trigger then
-                    copy.trigger = {}
-                end
-            end            
         end
     else -- number, string, boolean, etc
         copy = orig
     end
     
     return copy
+end
+
+local function generateChannels( actions )
+
+    for action, init in pairs( actions ) do
+        if init.channeled then
+            local canceled_name = action .. "_cancel"
+            if not actions[ canceled_name ] then
+                local _init = deepcopy( init )
+                _init.canceled = true
+                _init.execute_time = nil
+                actions[ canceled_name ] = Player.createAction( init.spellID, _init )
+            end
+        end
+    end
 end
 
 local function generateCallbacks( spells )
@@ -1817,20 +2008,32 @@ local function generateCallbacks( spells )
                         
                         local name = callback.."_"..action.."_generated"
                         if not spells[ name ] then
-                            spells[ name ] = deepcopy( cb_spell )
-                            spells[ name ].depth = ( spells[ name ].depth or 0 ) + 1 
-                            spells[ name ].trigger[ action ] = true
+                            
+                            local _init = deepcopy( cb_spell )
+                            _init.combo = true
+                            _init.combo_base = callback
+                            _init.depth = ( _init.depth or 0 ) + 1
+                            _init.trigger = _init.trigger or {}
+                            _init.trigger[ action ] = true
                             if base_spell.callback_ready then
-                                spells[ name ].ready = function() 
+                                _init.ready = function() 
                                     return base_spell.callback_ready( callback )
                                 end
                             end
+                            
+                            spells[ name ] = Player.createAction( _init.spellID, _init )
+                            
                             recursive = false
                         end
                     end
                 end
             end
         end
+    end
+    
+    -- Garbage cleaning
+    for _, data in pairs( spells ) do
+        data.callbacks = nil
     end
 end    
 
@@ -2010,12 +2213,11 @@ end
 
 local ww_spells = {
     -- Djaruun the Elder Flame
-    ["ancient_lava"] = {
-        spellID = 408836,
+    -- TODO: Generic Actions
+    -- TODO: Actual item scaling? This is very lazy
+    ["ancient_lava"] = Player.createAction( 408836, {
         background = true,
-        icd = 0.5,
-        may_crit = true,
-        ignore_armor = true,
+        icd = 0.5, -- Missing from spell data
         bonus_da = function()
             -- actual scaling isn't quite linear but this should be close
             local itemLevel = GetDetailedItemLevelInfo( GetInventoryItemLink( "player", 16 ) )
@@ -2033,8 +2235,9 @@ local ww_spells = {
         ready = function()
             return Player.findAura( 408835 )
         end,      
-    },
-    ["fists_of_fury"] = {
+    } ),
+
+    ["fists_of_fury"] = Player.createAction( 113656, {
         callbacks = {
             -- Chi generators
             "tiger_palm",
@@ -2044,20 +2247,17 @@ local ww_spells = {
             "blackout_kick", -- CDR        
         },
         
-        spellID = 113656,
-        dotID = 117418,
-        channeled = true,
-        ap = function() 
-            return spell.fists_of_fury.effectN( 5 ).ap_coefficient 
-        end,
+        damageID = 117418,
+        
         ticks = 5,
         interrupt_aa = true,
-        may_crit = true,
+        hasted_cooldown = true,
+
+        ww_mastery = true,
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
-        hasted_cooldown = true,
-        skyreach = true,
+        
         action_multiplier = function()
             local am = 1
             
@@ -2081,90 +2281,11 @@ local ww_spells = {
             
             return am
         end,
-        ww_mastery = true,
-        chi = function() 
-            return aura_env.chi_base_cost( 113656 )
-        end,
-        target_count = function()
-            return aura_env.learnedFrontalTargets( 117418 )
-        end,
-        target_multiplier = function( target_count )  
-            local primary_multiplier = 1
-            
-            if Player.set_pieces[30] >= 4 then
-                primary_multiplier = primary_multiplier * ( 1 + t30_4pc_ww_bonus )
-            end
-            
-            return aura_env.targetScale( target_count, spell.fists_of_fury.effectN( 1 ).base_value, 1, spell.fists_of_fury.effectN( 6 ).pct, primary_multiplier )
-        end,
-        execute_time = function()
-            return 4 / Player.haste
-        end,
-        tick_trigger = {
-            ["open_palm_strikes"] = true,
-            ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
-        },
-    },
-    ["fists_of_fury_cancel"] = {
-        callbacks = {
-            -- Chi generators
-            "tiger_palm",
-            "expel_harm",
-            "chi_burst",
-            
-            "blackout_kick", -- CDR        
-        },
         
-        spellID = 113656,
-        dotID = 117418,
-        channeled = true,
-        ap = function() 
-            return spell.fists_of_fury.effectN( 5 ).ap_coefficient 
-        end,
-        ticks = function() 
-            local gcd = aura_env.gcd( 113656 )
-            local tick_rate = 1 / Player.haste
-            local ticks_gcd = 1 + ( gcd / tick_rate )
-            return ticks_gcd 
-        end,
-        interrupt_aa = true,
-        may_crit = true,
-        copied_by_sef = true,
-        affected_by_serenity = true,
-        trigger_etl = true,
-        hasted_cooldown = true,
-        skyreach = true,
-        action_multiplier = function()
-            local am = 1
-            
-            am = am * Player.talent.flashing_fists.effectN( 1 ).mod 
-            
-            local transfer_the_power = Player.findAura( buff.transfer_the_power )
-            if transfer_the_power then
-                am = am * ( 1 + transfer_the_power.stacks * Player.talent.transfer_the_power.effectN( 1 ).pct )
-            end
-            
-            am = am * Player.talent.open_palm_strikes.effectN( 4 ).mod
-            
-            local fists_of_flowing_momentum_fof = Player.findAura( buff.fists_of_flowing_momentum_fof )
-            if fists_of_flowing_momentum_fof then
-                am = am * ( 1 + fists_of_flowing_momentum_fof.stacks * spell.fists_of_flowing_momentum.effectN( 1 ).pct )
-            end
-            
-            if Player.set_pieces[ 31 ] >= 4 then
-                am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end     
-            
-            return am
-        end,
-        ww_mastery = true,
-        chi = function() 
-            return aura_env.chi_base_cost( 113656 )
-        end,
         target_count = function()
             return aura_env.learnedFrontalTargets( 117418 )
         end,
+        
         target_multiplier = function( target_count )  
             local primary_multiplier = 1
             
@@ -2174,16 +2295,15 @@ local ww_spells = {
             
             return aura_env.targetScale( target_count, spell.fists_of_fury.effectN( 1 ).base_value, 1, spell.fists_of_fury.effectN( 6 ).pct, primary_multiplier )
         end,
-        execute_time = function()
-            return aura_env.gcd( 113656 )
-        end,
+        
         tick_trigger = {
             ["open_palm_strikes"] = true,
             ["ancient_lava"] = true,
             ["resonant_fists"] = true,
-        },      
-    },
-    ["rising_sun_kick"] = {
+        },
+    } ),
+
+    ["rising_sun_kick"] = Player.createAction( 107428, {
         callbacks = {
             -- Chi generators
             "tiger_palm",
@@ -2195,19 +2315,17 @@ local ww_spells = {
             "fists_of_fury_cancel", -- Pressure Point / T29 + T32 Set
         },
         
-        spellID = 107428,
-        dotID = 185099, -- This spell is really weird and triggers 185099 for the damage event even though it's not channeled
-        ap = function() 
-            return spell.rising_sun_kick.effectN( 1 ).ap_coefficient 
-        end,
-        may_crit = true,
+        damageID = 185099, -- This spell is really weird and triggers 185099 for the damage event even though it's not channeled
+        
+        hasted_cooldown = true,
+        
         generate_marks = 1,
         usable_during_sck = true,
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
-        hasted_cooldown = true,
-        skyreach = true,
+        ww_mastery = true,
+        
         critical_rate = function()
             local cr = Player.crit_bonus
             
@@ -2220,13 +2338,15 @@ local ww_spells = {
             
             return min(1, cr)
         end,
+        
         critical_modifier = function()
             local cm = 1
             
             cm = cm * Player.talent.rising_star.effectN( 2 ).mod
             
             return cm
-        end,        
+        end,   
+        
         action_multiplier = function( state )
             local am = 1
             
@@ -2248,30 +2368,28 @@ local ww_spells = {
             
             return am
         end,
-        ww_mastery = true,
-        chi = function()
-            return aura_env.chi_base_cost( 107428 )
-        end,
-        execute_time = function()
-            return aura_env.gcd( 107428 )
-        end,
+        
         trigger = {
             ["glory_of_the_dawn"] = true,
             ["shadowflame_nova"] = function() 
                 return Player.set_pieces[30] >= 2
             end,
         },
+    
         tick_trigger = {
             ["ancient_lava"] = true,
             ["resonant_fists"] = true,
         },
+    
         reduces_cd = {
             ["fists_of_fury"] = function() 
                 return Player.talent.xuens_battlegear.effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
             end,
         },
-    },
-    ["spinning_crane_kick"] = {
+    
+    } ),
+
+    ["spinning_crane_kick"] = Player.createAction( 101546, {
         callbacks = {
             -- Chi generators
             "tiger_palm", -- also MotC and Mastery eval.
@@ -2287,19 +2405,20 @@ local ww_spells = {
             "flying_serpent_kick", -- Mastery eval.
         },
         
-        spellID = 101546,
-        dotID = 107270,
-        channeled = true,
+        damageID = 107270,
+
         ap = function() 
             return spell.sck_tick.effectN( 1 ).ap_coefficient 
         end,
+        
         ticks = 4,
         interrupt_aa = true,
-        may_crit = true,
+        
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
-        skyreach = true,
+        ww_mastery = true,
+        
         chi_gain = function()
             if Player.bdb_targets > 0 then
                 return 1
@@ -2307,6 +2426,7 @@ local ww_spells = {
             
             return 0
         end,
+        
         action_multiplier = function( state )
             local am = 1
             
@@ -2330,37 +2450,38 @@ local ww_spells = {
             
             return am
         end,
-        ww_mastery = true,
+        
         chi = function()
             return aura_env.chi_base_cost( 101546 )
         end,
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, spell.spinning_crane_kick.effectN( 1 ).base_value )
         end,
-        execute_time = function()
-            return 1.5 / Player.haste
-        end,
+        
         trigger = {
             ["chi_explosion"] = true,
         },
+    
         tick_trigger = {
             ["ancient_lava"] = true,
             ["resonant_fists"] = true,            
         },
-    },
-    ["blackout_kick_totm"] = {
-        spellID = 228649,
-        ap = function() 
-            return spell.blackout_kick.effectN( 1 ).ap_coefficient 
-        end,
+    
+    } ),
+
+    ["blackout_kick_totm"] = Player.createAction( 228649, {
+        
         background = true,
-        may_crit = true,
+        
         copied_by_sef = true,
         trigger_etl = true,
-        skyreach = false,
+        ww_mastery = false,
+        
         critical_rate = function()
             local cr = Player.crit_bonus
             
@@ -2368,6 +2489,7 @@ local ww_spells = {
             
             return min(1, cr)
         end,
+        
         critical_modifier = function()
             local cm = 1
             
@@ -2375,6 +2497,7 @@ local ww_spells = {
             
             return cm
         end,
+        
         action_multiplier = function()
             local am = 1
             
@@ -2382,12 +2505,13 @@ local ww_spells = {
             
             return am
         end,
-        ww_mastery = false,
+        
         tick_trigger = {
             ["ancient_lava"] = true,            
         },        
-    },
-    ["blackout_kick"] = {
+    } ),
+
+    ["blackout_kick"] = Player.createAction( 100784, {
         callbacks = {
             -- Chi generators
             "tiger_palm", -- also TotM
@@ -2401,19 +2525,16 @@ local ww_spells = {
             "whirling_dragon_punch", -- CDR (T31)
         },
         
-        spellID = 100784,
-        ap = function() 
-            return spell.blackout_kick.effectN( 1 ).ap_coefficient 
-        end,
-        may_crit = true,
         usable_during_sck = true,       
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
-        skyreach = true,
+        ww_mastery = true,
+        
         generate_marks = function()
             return 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value
         end,
+        
         critical_rate = function()
             local cr = Player.crit_bonus
             
@@ -2421,13 +2542,15 @@ local ww_spells = {
             
             return min(1, cr)
         end,
+        
         critical_modifier = function()
             local cm = 1
             
             cm = cm * Player.talent.hardened_soles.effectN( 2 ).mod
             
             return cm
-        end,        
+        end,   
+        
         action_multiplier = function( state )
             local am = 1
             
@@ -2439,19 +2562,15 @@ local ww_spells = {
             
             return am
         end,
-        ww_mastery = true,
-        chi = function()
-            return aura_env.chi_base_cost( 100784 )
-        end,
+        
         target_count = function()
             return min( aura_env.target_count, 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value )
         end,
+        
         target_multiplier = function( target_count )
             return target_count
         end,
-        execute_time = function()
-            return aura_env.gcd( 100784 )
-        end,
+        
         reduces_cd = {
             ["rising_sun_kick"] = function( state ) 
                 local cdr = spell.blackout_kick.effectN( 3 ).seconds 
@@ -2508,6 +2627,7 @@ local ww_spells = {
                 return cdr
             end,            
         },
+    
         tick_trigger = {
             ["ancient_lava"] = true,  
             ["blackout_kick_totm"] = function( driver )
@@ -2542,27 +2662,26 @@ local ww_spells = {
             end,
             ["resonant_fists"] = true,
         },    
-    },
-    ["whirling_dragon_punch"] = {
+    } ),
+
+    ["whirling_dragon_punch"] = Player.createAction( 152175, {
         callbacks = {
             "rising_sun_kick", -- Spell activation        
         },
         
-        spellID = 152175, -- Tick: 158221
-        ap = function() 
-            return spell.wdp_tick.effectN( 1 ).ap_coefficient 
-        end,
+        damageID = 158221,
         ticks = 3,
-        may_crit = true,
+        hasted_cooldown = true,
+        
         ww_mastery = true,
         usable_during_sck = true,    
         copied_by_sef = true,
         trigger_etl = true,
-        hasted_cooldown = true,
-        skyreach = true,
+        
         ready = function()
             return Player.talent.whirling_dragon_punch.ok
         end,
+        
         callback_ready = function( callback )
             
             -- Not talented into WDP
@@ -2588,61 +2707,62 @@ local ww_spells = {
             
             return true            
         end,
+        
         action_multiplier = function ( )
             local am = 1
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
             end        
             return am
-        end,        
-        chi = function()
-            return aura_env.chi_base_cost( 152175 )
-        end,
+        end,  
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return target_count
         end,
-        execute_time = function()
-            return aura_env.gcd( 152175 )
-        end,
+        
         tick_trigger = {
             ["ancient_lava"] = true,  
             ["resonant_fists"] = true,
         },        
-    },
-    ["strike_of_the_windlord_mh"] = {
-        spellID = 395519,
-        ap = function() 
-            return spell.sotwl_mh.effectN( 1 ).ap_coefficient
-        end,
+    } ),
+
+    ["strike_of_the_windlord_mh"] = Player.createAction( 395519, {
         background = true,
-        may_crit = true,
+        
         ww_mastery = true,
         trigger_etl = true,
         copied_by_sef = true,
         affected_by_serenity = true,
-        skyreach = true,
+        
         action_multiplier = function ( )
             local am = 1
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
             end        
             return am      
-        end,          
+        end,  
+        
         target_count = function()
             return aura_env.learnedFrontalTargets( 395521 )
         end,
+        
         target_multiplier = function( target_count )
             return ( 1 + 1 / target_count * ( target_count - 1 ) )
         end,
+        
         tick_trigger = {
             ["ancient_lava"] = true, 
             ["resonant_fists"] = true,
         },    
-    },
-    ["strike_of_the_windlord"] = {
+    } ),
+
+    -- TODO: May need to separate OH hit into a triggered spell at some point, currently not necessary
+    -- Just setting DamageID as the OH hit, createAction handles the rest
+    ["strike_of_the_windlord"] = Player.createAction( 392983, {
         callbacks = {
             -- Chi generators
             "tiger_palm",
@@ -2652,51 +2772,47 @@ local ww_spells = {
             "blackout_kick", -- CDR (Tier 31)        
         },
         
-        spellID = 392983,
-        dotID = 395521, -- OH hit
-        ap = function() 
-            return spell.sotwl_oh.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
+        damageID = 395521, -- OH hit
+        
         ww_mastery = true,
         usable_during_sck = true,   
         trigger_etl = true,
         copied_by_sef = true,
         affected_by_serenity = true,
-        skyreach = true,
+        
         action_multiplier = function ( )
             local am = 1
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
             end        
             return am      
-        end,          
-        chi = function()
-            return aura_env.chi_base_cost( 392983 )
-        end,
+        end, 
+        
         target_count = function()
             return aura_env.learnedFrontalTargets( 395521 )
         end,
+        
         target_multiplier = function( target_count )
             return ( 1 + 1 / target_count * ( target_count - 1 ) )
         end,
-        execute_time = function()
-            return aura_env.gcd( 392983 )
-        end,
+        
         trigger = {
             ["thunderfist"] = true,
             ["strike_of_the_windlord_mh"] = true,
         },
+    
         tick_trigger = {
             ["ancient_lava"] = true, 
             ["resonant_fists"] = true,
-        },    
+        },
+    
         ready = function()
             local cd_xuen = aura_env.getCooldown( 123904 )
             return cd_xuen > 12 or cd_xuen < 1 
         end,
-    },
-    ["rushing_jade_wind"] = {
+    } ),
+
+    ["rushing_jade_wind"] = Player.createAction( 116847, {
         callbacks = {
             -- Chi generators
             "tiger_palm", -- also MotC and Mastery eval.
@@ -2704,45 +2820,31 @@ local ww_spells = {
             "chi_burst",
         },
         
-        spellID = 116847,
-        dotID = 148187,
-        ap = function() 
-            return spell.rjw_tick.effectN( 1 ).ap_coefficient
-        end,
-        ticks = function()
-            local ticks = 9 -- TODO: Use DBC Pointer
-            local rjw = Player.findAura( 116847 )
-            if rjw and rjw.duration and rjw.duration > 0 then
-                local ticks_remaining = ( rjw.remaining / rjw.duration ) * ticks
-                ticks = ticks - ticks_remaining
-            end
-            return ticks
-        end,
-        may_crit = true,
+        damageID = 148187,
+        base_tick_rate = 0.75, -- TODO: Better buff handling
+        hasted_cooldown = true,
+        
         ww_mastery = true,
         usable_during_sck = true,     
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
-        hasted_cooldown = true,
-        skyreach = true,
-        chi = function()
-            return aura_env.chi_base_cost( 116847 )
-        end,
+
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, spell.rushing_jade_wind.effectN( 1 ).base_value )
         end,
-        execute_time = function()
-            return aura_env.gcd( 116847 )
-        end,
+        
         tick_trigger = {
             ["ancient_lava"] = true,
             ["resonant_fists"] = true,
         },        
-    },
+    } ),
+
+    -- TODO: Refactor this with proper Debuffs
     ["jadefire_brand"] = {
         type = "damage_buff",
         debuff = true,
@@ -2768,21 +2870,15 @@ local ww_spells = {
             return Player.talent.jadefire_harmony.ok
         end,
     },
-    ["jadefire_stomp"] = {
-        spellID = 388193,
-        dotID = 388201, 
-        ap = function()
-            return spell.jadefire_stomp.effectN( 1 ).ap_coefficient + spell.jadefire_stomp_ww.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
-        usable_during_sck = true,       
+
+    ["jadefire_stomp_ww"] = Player.createAction( 388201, {
+
+        background = true,
+        
         trigger_etl = true,
         ignore_armor = true,
         ww_mastery = true,
-        skyreach = true,
-        ready = function()
-            return Player.talent.jadefire_stomp.ok and aura_env.fight_remains > 5 and Player.moving == false
-        end,
+        
         action_multiplier = function()
             local am = 1
             
@@ -2799,30 +2895,64 @@ local ww_spells = {
         target_multiplier = function( target_count )
             return min( 5, target_count )
         end,
-        trigger = {
-            ["jadefire_brand"] = true,    
-        },
+        
         tick_trigger = {
             ["ancient_lava"] = true,
             ["resonant_fists"] = true,
         },        
-    },
-    ["tiger_palm"] = {
-        callbacks = {
-            "blackout_kick", -- Teachings of the Monastery        
-        },
+    } ),    
+
+    ["jadefire_stomp"] = Player.createAction( 388193, {
+
+        damageID = 388207, 
+
+        usable_during_sck = true,       
+        trigger_etl = true,
+        ignore_armor = true,
+        ww_mastery = true,
         
-        spellID = 100780,
-        ap = function()
-            return spell.tiger_palm.effectN( 1 ).ap_coefficient
+        ready = function()
+            return Player.talent.jadefire_stomp.ok and aura_env.fight_remains > 5 and Player.moving == false
         end,
-        may_crit = true,
+        
+        action_multiplier = function()
+            local am = 1
+            
+            if Player.talent.path_of_jade.ok then 
+                local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.talent.path_of_jade.effectN( 2 ).base_value )
+                am = am * ( 1 + Player.talent.path_of_jade.effectN( 1 ).pct * poj_targets )
+            end
+            
+            return am
+        end,
+        
+        target_count = function()
+            return aura_env.learnedFrontalTargets( 388201 )
+        end,
+        
+        target_multiplier = function( target_count )
+            return min( 5, target_count )
+        end,
+        
+        trigger = {
+            ["jadefire_brand"] = true,    
+        },
+    
+        tick_trigger = {
+            ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
+        },        
+    } ),
+
+    ["tiger_palm"] = Player.createAction( 100780, {
+
         chi_gain = function() return ( Player.findAura( buff.power_strikes ) and 3 or 2 ) end,
         generate_marks = 1,
         usable_during_sck = true,     
         trigger_etl = true,
-        copied_by_sef = true,        
-        skyreach = true,
+        copied_by_sef = true,    
+        ww_mastery = true,
+        
         action_multiplier = function()
             local am = ( Player.findAura( buff.power_strikes ) and Player.talent.power_strikes.effectN( 2 ).mod ) or 1
             
@@ -2832,92 +2962,68 @@ local ww_spells = {
             
             return am
         end,
-        ww_mastery = true,
-        chi = function()
-            return aura_env.chi_base_cost( 100780 )
-        end,
-        execute_time = function()
-            return aura_env.gcd( 100780 )
-        end,
+        
         tick_trigger = {
             ["ancient_lava"] = true,
             ["resonant_fists"] = true,
         },    
-    },
-    ["chi_burst"] = {
-        spellID = 123986,
-        dotID = 148135,
-        ap = function()
-            return spell.chi_burst.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
+    } ),
+
+    ["chi_burst"] = Player.createAction( 123986, {
+
+        damageID = 148135,
         interrupt_aa = true,
+        
         trigger_etl = true,
-        copied_by_sef = true,        
-        chi_gain = function() return min( 2, aura_env.target_count ) end,
+        copied_by_sef = true,   
         ww_mastery = true,
-        skyreach = true,
-        chi = function()
-            return aura_env.chi_base_cost( 123986 )
+        
+        chi_gain = function() 
+            return min( 2, aura_env.target_count ) 
         end,
+
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return target_count
         end,
-        execute_time = function()
-            return 1 + aura_env.gcd( 123986 )
-        end,
-        reduces_cd = {
-            ["jadefire_stomp"] = function( ) 
-                -- CB is a guaranteed reset chance on FLS as long as you're within jadefire
-                return aura_env.getCooldown( 388193 )
-            end,
-        },
+        
         tick_trigger = {
             ["resonant_fists"] = true,
         },
-    },
-    ["chi_wave"] = {
-        spellID = 115098,
-        dotID = 132467,
-        ap = function()
-            return spell.chi_wave.effectN( 1 ).ap_coefficient
-        end,        
-        ticks = 4, -- 4 Bounces
-        may_crit = true,
+    } ),
+
+    ["chi_wave"] = Player.createAction( 115098, {
+        
+        damageID = 132467,
+        ticks = 4, -- 4 Damage Bounces
+        
         ww_mastery = true,
         usable_during_sck = true,        
         trigger_etl = true,
         copied_by_sef = true,
-        skyreach = true,
-        chi = function()
-            return aura_env.chi_base_cost( 115098 )
-        end,
-        execute_time = function()
-            return aura_env.gcd( 115098 )
-        end,
+        
         tick_trigger = {
             ["resonant_fists"] = true,
         },        
-    },
-    ["expel_harm"] = {
+    } ),
+
+    ["expel_harm"] = Player.createAction( 322101, {
         type = "self_heal",
-        spellID = 322101,
-        sp = function()
-            return spell.expel_harm.effectN( 1 ).sp_coefficient
-        end,
-        may_crit = true,
+    
         trigger_etl = true,
         ww_mastery = true,
         usable_during_sck = true,
+        
         chi_gain = function() 
             if IsPlayerSpell( spell.reverse_harm.id ) then -- Reverse Harm
                 return 1 + spell.reverse_harm.effectN( 2 ).base_value
             end
             return 1 
         end,
+        
         action_multiplier = function()
             local h = 1
             
@@ -2936,6 +3042,7 @@ local ww_spells = {
             
             return h
         end,
+        
         critical_rate = function()
             local cr = Player.crit_bonus
             
@@ -2943,6 +3050,7 @@ local ww_spells = {
             
             return min( 1, cr )
         end,
+        
         critical_modifier = function()
             local cm = 1
             
@@ -2950,7 +3058,9 @@ local ww_spells = {
             
             return cm
         end,        
-    },
+    } ),
+
+    -- TODO: Generic Actions
     ["arcane_torrent"] = {
         spellID = 28730,
         chi_gain = function() return 1 end,
@@ -2958,26 +3068,21 @@ local ww_spells = {
             return aura_env.gcd( 28730 )
         end,
     },
-    ["flying_serpent_kick"] = {
-        spellID = 101545,
-        dotID = 123586,
-        ap = function()
-            return spell.fsk_damage.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
+
+    ["flying_serpent_kick"] = Player.createAction( 101545, {
+
+        damageID = 123586,
+
         ww_mastery = true,
-        chi = function()
-            return aura_env.chi_base_cost( 101545 )
-        end,
+
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return target_count
         end,
-        execute_time = function()
-            return aura_env.gcd( 101545 )
-        end,
+        
         ready = function()
             local combo_spellid = Player.last_combo_strike
             local combo_ready, need_resources = IsUsableSpell( combo_spellid )
@@ -3000,20 +3105,19 @@ local ww_spells = {
             return false
             
         end,
+        
         tick_trigger = {
             ["ancient_lava"] = true,            
         },        
-    },
-    ["chi_explosion"] = {
-        spellID = 393056,
-        ap = function()
-            return spell.chi_explosion.effectN( 1 ).ap_coefficient
-        end,
+    } ),
+
+    ["chi_explosion"] = Player.createAction( 393056, {
+
         background = true,
-        may_crit = true,
+
         trigger_etl = true,
-        ignore_armor = true,
-        skyreach = true,
+        ww_mastery = false,
+        
         action_multiplier = function()
             local chi_energy = Player.findAura( buff.chi_energy )
             if chi_energy then
@@ -3021,14 +3125,17 @@ local ww_spells = {
             end
             return 0
         end,
-        ww_mastery = false,
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return target_count
         end,
-    },
+    } ),
+
+    -- TODO: Redo Thunderfist with Auto-Attack refactor
     ["thunderfist_single"] = {
         spellID = 393566,
         ap = function()
@@ -3039,7 +3146,6 @@ local ww_spells = {
         trigger_etl = true,
         ignore_armor = true,
         ww_mastery = false,
-        skyreach = true,
     },
     ["thunderfist"] = {
         spellID = 393566,
@@ -3051,7 +3157,6 @@ local ww_spells = {
         trigger_etl = true,
         ignore_armor = true,
         ww_mastery = false,
-        skyreach = true,
         target_count = function()
             return aura_env.learnedFrontalTargets( 395521 ) -- SotWL
         end,        
@@ -3062,17 +3167,15 @@ local ww_spells = {
             return min( stacks, aura_env.fight_remains / ( UnitAttackSpeed( "player" ) or 4 ) )          
         end,
     },
-    ["crackling_jade_lightning"] = {
-        spellID = 117952,
-        ap = function()
-            return spell.cj_lightning.effectN( 1 ).ap_coefficient
-        end,
+
+    ["crackling_jade_lightning"] = Player.createAction( 117952, {
+
         ticks = 4,
         interrupt_aa = true,
-        may_crit = true,
-        ignore_armor = true,
+  
         copied_by_sef = true,    
-        skyreach = true,
+        ww_mastery = true,
+        
         action_multiplier = function()
             local am = 1
             
@@ -3083,111 +3186,87 @@ local ww_spells = {
             
             return am
         end,
-        ww_mastery = true,
-        chi = function()
-            return aura_env.chi_base_cost( 117952 )
-        end,
-        execute_time = function()
-            return 4 / Player.haste
-        end,
+        
         tick_trigger = {
             ["resonant_fists"] = true,
         },
-    },
-    ["glory_of_the_dawn"] = {
-        spellID = 392959,
-        ap = function()
-            return spell.gotd_proc.effectN( 1 ).ap_coefficient
-        end,
+    } ),
+
+    ["glory_of_the_dawn"] = Player.createAction( 392959, {
         background = true,
-        may_crit = true,
+
         trigger_etl = true,
         copied_by_sef = true, 
-        skyreach = true,
-        chi_gain = function() return Player.talent.glory_of_the_dawn.effectN( 2 ).base_value end,
         ww_mastery = true,
-        trigger_rate = function() return Player.talent.glory_of_the_dawn.effectN( 3 ).roll end,
+         
+        chi_gain = function()
+            return Player.talent.glory_of_the_dawn.effectN( 2 ).base_value 
+        end,
+        
+        trigger_rate = function() 
+            return Player.talent.glory_of_the_dawn.effectN( 3 ).roll 
+        end,
+        
         ready = function()
             return Player.talent.glory_of_the_dawn.ok
         end,
+        
         tick_trigger = {
             ["ancient_lava"] = true,            
-        },        
-    },
-    ["shadowflame_nova"] = {
-        spellID = 410139,
-        ap = function()
-            return spell.shadowflame_nova.effectN( 1 ).ap_coefficient
-        end,
+        }, 
+    } ),
+
+    ["resonant_fists"] = Player.createAction( 389578, {
         background = true,
-        may_crit = true,
-        trigger_etl = false,
-        ignore_armor = true,
-        action_multiplier = function(  state )
-            
-            if state and state.sfv_targets then
-                -- Triggering from fof_rsk_combo ONLY this is net gain as the initial sfv_targets are included in the RSK Trigger
-                return ( ( state.sfv_targets - Player.sfv_targets ) / state.sfv_targets * shadowflame_vulnerability_amp )
-            end
-            
-            if Player.sfv_targets == 0 then
-                return 1
-            end
-            
-            return 1 + ( ( Player.sfv_targets / min( 20, aura_env.target_count ) ) * shadowflame_vulnerability_amp )
-        end,
-        target_count = function()
-            return aura_env.target_count
-        end,
-        target_multiplier = function( target_count )
-            return target_count
-        end,
-    },
-    ["resonant_fists"] = {
-        spellID = 391400,
-        ap = function()
-            return spell.resonant_fists.effectN( 1 ).ap_coefficient
-        end,
-        icd = 1.0,
-        background = true,
-        may_crit = true,
+        
         trigger_etl = true,
-        ignore_armor = true,
-        action_multiplier = function() return Player.talent.resonant_fists.rank end,
-        ww_mastery = false,
-        skyreach = true,
+
+        action_multiplier = function()
+            return Player.talent.resonant_fists.rank 
+        end,
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, 5 )
         end,
-        trigger_rate = 0.1,
+        
         ready = function()
             return Player.talent.resonant_fists.ok
         end,
-    },
-    ["open_palm_strikes"] = {
-        spellID = 392970,
+    } ),
+
+    ["open_palm_strikes"] = Player.createAction( 392970, {
         background = true,
-        chi_gain = function() return Player.talent.open_palm_strikes.effectN( 3 ).base_value end,
+        
+        chi_gain = function() 
+            return Player.talent.open_palm_strikes.effectN( 3 ).base_value 
+        end,
+        
         trigger_rate = function( callback )
             return Player.talent.open_palm_strikes.effectN( 2 ).roll
         end,
+        
         ready = function()
             return Player.talent.open_palm_strikes.ok
         end,
-    },
-    ["touch_of_karma"] = {
-        spellID = 122470,
-        may_crit = false,
+    } ),
+
+    -- TODO: Refactor this to debuff at some point?
+    ["touch_of_karma"] = Player.createAction( 122470, {
+
+        ignore_armor = true, -- Not parsed from spell attributes, probably missing the actual damageID
+        
         trigger_etl = false,
-        ignore_armor = true,
+        
         bonus_da = function()
             local tick_time = min( aura_env.target_ttd, 10 )
             local health_mod = Player.talent.touch_of_karma.effectN( 3 ).pct
             return min( UnitHealthMax( "player" ) * health_mod, Player.recent_dtps * tick_time ) * Player.talent.touch_of_karma.effectN( 4 ).pct
         end,
+        
         ready = function()
             local tick_time = min( aura_env.target_ttd, 10 )
             local health_mod = Player.talent.touch_of_karma.effectN( 3 ).pct
@@ -3201,10 +3280,11 @@ local ww_spells = {
             
             return InCombatLockdown() and aura_env.fight_remains >= 6 and aura_env.config.use_karma == 1
         end,
-    },
-    ["diffuse_magic"] = {
-        spellID = 122783,
-        skip_calcs = true,      
+    } ),
+
+    ["diffuse_magic"] = Player.createAction( 122783, {
+        skip_calcs = true,     
+        
         ready = function()
             
             local option = aura_env.config.diffuse_option
@@ -3219,8 +3299,9 @@ local ww_spells = {
             
             return false
         end,
-    },
-    ["touch_of_death"] = {
+    } ),
+
+    ["touch_of_death"] = Player.createAction( 322109, {
         callbacks = {
             -- Mastery eval
             "tiger_palm",
@@ -3229,11 +3310,12 @@ local ww_spells = {
             "spinning_crane_kick",
         },
         
-        spellID = 322109,
-        may_crit = false,
+        may_miss = false, -- Datamine parses this as physical effect that can miss but cannot miss in game
+        
         usable_during_sck = true,
         trigger_etl = true,
         ww_mastery = true,
+        
         callback_ready = function( callback )
             
             if not IsUsableSpell( 322109 ) then
@@ -3254,6 +3336,7 @@ local ww_spells = {
             
             return true
         end,
+        
         bonus_da = function()
             local da_mod = 1
             local targets = 1    
@@ -3280,43 +3363,41 @@ local ww_spells = {
             end
             
         end,
+        
         ready = function()
             return IsUsableSpell( 322109 )
         end,
-    },
-    ["white_tiger_statue"] = {
-        spellID = 388686,
-        dotID = 389541, -- (Claw of the White Tiger)
-        ap = function()
-            return spell.catue_claw.effectN( 1 ).ap_coefficient
-        end,
-        ticks = function()
-            return max( 1, min( aura_env.fight_remains, 30 ) / 2 )
-        end,
-        may_crit = true,
-        ignore_armor = true, -- Nature
+    } ),
+
+    ["white_tiger_statue"] = Player.createAction( 388686, {
+
+        damageID = 389541, -- (Claw of the White Tiger)
+        base_tick_rate = 2,
+        
         trigger_etl = false,
         usable_during_sck = true,
+        ww_mastery = false,
+        
         ready = function()
             return InCombatLockdown() and aura_env.fight_remains > 3 
         end,
-        ww_mastery = false,
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return target_count
         end,
-        execute_time = function()
-            return min( aura_env.fight_remains, 30 )
-        end,
+        
         tick_trigger = {
             ["resonant_fists"] = true,
         },
-    },
-    ["storm_earth_and_fire_fixate"] = {
-        spellID = 221771,
+    } ),
+
+    ["storm_earth_and_fire_fixate"] = Player.createAction( 221771, {
         skip_calcs = true,
+        
         ready = function()
             local arrogance = Player.findAura( 411661 )
             local sef = Player.findAura( buff.storm_earth_and_fire ) 
@@ -3340,7 +3421,9 @@ local ww_spells = {
                 ) 
             )
         end,        
-    },
+    } ),
+
+    -- TODO: Refactor with better proper buffs
     ["hit_combo"] = {
         type = "damage_buff",
         spellID = 196741,
@@ -3361,20 +3444,16 @@ local ww_spells = {
 -- --------- --
 
 local mw_spells = {
-    ["spinning_crane_kick"] = {
-        spellID = 101546,
-        channeled = true,
-        ap = 0.1,
-        ticks = 4,
+    ["spinning_crane_kick"] = Player.createAction( 101546, {
         interrupt_aa = true,
-        may_crit = true,
+
         target_count = function()
             return aura_env.target_count
         end,
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, 5 )
         end,
-    },
+    } ),
 }
 
 -- ---------- --
@@ -3383,12 +3462,11 @@ local mw_spells = {
 
 local brm_spells = {
     -- Djaruun the Elder Flame
-    ["ancient_lava"] = {
-        spellID = 408836,
+    -- TODO: Generic Actions
+    -- TODO: Actual item scaling? This is very lazy
+    ["ancient_lava"] = Player.createAction( 408836, {
         background = true,
-        icd = 0.5,
-        may_crit = true,
-        ignore_armor = true,
+        icd = 0.5, -- Missing from spell data
         bonus_da = function()
             -- actual scaling isn't quite linear but this should be close
             local itemLevel = GetDetailedItemLevelInfo( GetInventoryItemLink( "player", 16 ) )
@@ -3406,19 +3484,18 @@ local brm_spells = {
         ready = function()
             return Player.findAura( 408835 )
         end,      
-    },  
-    ["healing_sphere"] = {
+    } ),
+
+    ["healing_sphere"] = Player.createAction( 224863, {
         type = "self_heal",
-        spellID = 224863,
-        ap = function()
-            return spell.gift_of_the_ox.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
         background = true,
+        damageID = 124507,
+        
         action_multiplier = function()
             local spheres = GetSpellCount( 322101 )
             return spheres
         end,
+        
         reduce_stagger = function()
             if Player.talent.tranquil_spirit.ok then
                 return Player.stagger * Player.talent.tranquil_spirit.effectN( 1 ).pct
@@ -3426,12 +3503,16 @@ local brm_spells = {
             
             return 0
         end,        
-    },
-    ["expel_harm"] = {
+    } ),
+
+    -- TODO: Maybe figure out a better solution for the healing sphere mess
+    ["expel_harm"] = Player.createAction( 322101, {
         type = "self_heal",
-        spellID = 322101,
-        may_crit = true,
+        
+        ap = 0, sp = 0, -- Because healing spheres are added before modifiers I'm overwriting these and using bonus_heal instead
+
         usable_during_sck = true,
+        
         -- Using bonus_heal() method here because of how spheres are added before modifiers
         bonus_heal = function()
             local h = spell.expel_harm.effectN( 1 ).sp_coefficient * aura_env.spell_power * Player.vers_bonus
@@ -3452,6 +3533,7 @@ local brm_spells = {
             
             return h
         end,
+        
         critical_rate = function()
             local cr = Player.crit_bonus
             
@@ -3459,6 +3541,7 @@ local brm_spells = {
             
             return min( 1, cr )
         end,
+        
         critical_modifier = function()
             local cm = 1
             
@@ -3469,6 +3552,7 @@ local brm_spells = {
         trigger = {
             ["healing_sphere"] = false, -- These are added to the base amount instead
         },
+    
         reduce_stagger = function()
             if Player.talent.tranquil_spirit.ok then
                 return Player.stagger * Player.talent.tranquil_spirit.effectN( 1 ).pct
@@ -3476,21 +3560,20 @@ local brm_spells = {
             
             return 0
         end,            
-    },
-    ["healing_elixir"] = {
+    } ),
+
+    ["healing_elixir"] = Player.createAction( 122281, {
         type = "self_heal",
-        spellID = 122281,
+
         bonus_heal = function()
             return ( Player.talent.healing_elixir.effectN( 1 ).pct ) * UnitHealthMax( "player" )
         end,
-    },
-    ["pta_rising_sun_kick"] = {
-        spellID = 185099,
-        ap = function() 
-            return spell.rising_sun_kick.effectN( 1 ).ap_coefficient 
-        end,
-        may_crit = true,
+    } ),
+
+    ["pta_rising_sun_kick"] = Player.createAction( 185099, {
+        
         background = true,
+
         action_multiplier = function( state )
             local am = spell.press_the_advantage.effectN( 2 ).mod
             
@@ -3509,17 +3592,21 @@ local brm_spells = {
             
             return am
         end,
+        
         brew_cdr = function()
             return Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 3 ).seconds 
-        end,        
+        end,  
+        
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
             ["resonant_fists"] = true,
         },
+    
         trigger = {
             ["chi_surge"] = true,
         },
+    
         mitigate = function()
             local m = 0
             
@@ -3530,16 +3617,15 @@ local brm_spells = {
             
             return m
         end,    
-    },
-    ["rising_sun_kick"] = {
-        spellID = 107428,
-        dotID = 185099, -- This spell is weird and triggers a secondary damage event even though it is not channeled
-        ap = function() 
-            return spell.rising_sun_kick.effectN( 1 ).ap_coefficient 
-        end,
-        may_crit = true,
-        usable_during_sck = true,
+    } ),
+
+    ["rising_sun_kick"] = Player.createAction( 107428, {
+
+        damageID = 185099, -- This spell is weird and triggers a secondary damage event
         hasted_cooldown = true,
+        
+        usable_during_sck = true,
+
         critical_rate = function()
             local cr = Player.crit_bonus
             
@@ -3549,7 +3635,8 @@ local brm_spells = {
             end     
             
             return min( 1, cr )
-        end,        
+        end,     
+        
         action_multiplier = function( state )
             local am = 1
             
@@ -3562,11 +3649,13 @@ local brm_spells = {
             
             return am
         end,
+        
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
             ["resonant_fists"] = true,
         },
+    
         trigger = {
             ["pta_rising_sun_kick"] = function()
                 local pta = Player.findAura( buff.press_the_advantage )
@@ -3577,6 +3666,7 @@ local brm_spells = {
             end,
             ["weapons_of_order_debuff"] = true,
         },
+    
         mitigate = function()
             local m = 0
             
@@ -3587,13 +3677,12 @@ local brm_spells = {
             
             return m
         end,    
-    },
-    ["charred_passions"] = {
-        spellID = 386959,
-        may_crit = false,
-        ignore_armor = true, -- Fire
+    } ),
+
+    ["charred_passions"] = Player.createAction( 386959, {
         background = true,
-        skip_calcs = true,
+        skip_calcs = true, -- Uses state result
+        
         action_multiplier = function( state )
             local am = Player.talent.charred_passions.effectN( 1 ).pct
             if state then
@@ -3607,28 +3696,28 @@ local brm_spells = {
             end
             return am
         end,
+        
         ready = function()
             return Player.talent.charred_passions.ok
         end,
+        
         tick_trigger = {
             ["charred_dreams_heal"] = true,        
             ["breath_of_fire_periodic"] = function()
                 return Player.bof_targets > 0
             end,
         },
-    },
-    ["blackout_kick"] = {
+    } ),
+
+    ["blackout_kick"] = Player.createAction( 205523, {
         callbacks = {
             "breath_of_fire", -- Charred Passions        
         },
         
-        replaces = 100784,
-        spellID = 205523,
-        ap = function() 
-            return spell.blackout_kick.effectN( 1 ).ap_coefficient 
-        end,
-        may_crit = true,
+        replaces = 100784, -- Missing in Spell Data
+
         usable_during_sck = true, 
+        
         action_multiplier = function()
             local am = 1
             
@@ -3644,12 +3733,15 @@ local brm_spells = {
             
             return am
         end,
+        
         target_count = function()
             return min( aura_env.target_count, 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value )
         end,
+        
         target_multiplier = function( target_count )
             return target_count
         end,
+        
         reduce_stagger = function()
             local amount = 0
             
@@ -3661,6 +3753,7 @@ local brm_spells = {
             
             return amount
         end,
+        
         mitigate = function()
             local eb_stacks = 1
             
@@ -3670,9 +3763,11 @@ local brm_spells = {
             -- physical damage mitigated from one second of Elusive Brawler
             return dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
         end,
+        
         trigger = {
             ["shuffle"] = true,
         },
+    
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
@@ -3686,22 +3781,17 @@ local brm_spells = {
             end,     
             ["resonant_fists"] = true,
         },
-    },
-    ["spinning_crane_kick"] = {
+    } ),
+
+    ["spinning_crane_kick"] = Player.createAction( 322729, {
         callbacks = {
             "breath_of_fire", -- Charred Passions        
         },
         
-        replaces = 101546,
-        spellID = 322729,
-        dotID = 107270,
-        channeled = true,
-        ap = function() 
-            return spell.sck_tick.effectN( 1 ).ap_coefficient 
-        end,
+        damageID = 107270,
         ticks = 4,
         interrupt_aa = true,
-        may_crit = true,
+        
         critical_rate = function()
             local cr = Player.crit_bonus
             
@@ -3711,7 +3801,8 @@ local brm_spells = {
             end     
             
             return min( 1, cr )
-        end,          
+        end,    
+        
         action_multiplier = function( state )
             local am = 1
             
@@ -3728,15 +3819,15 @@ local brm_spells = {
             
             return am
         end,
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, spell.spinning_crane_kick.effectN( 1 ).base_value )
         end,
-        execute_time = function()
-            return 1.5 / Player.haste
-        end,        
+        
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
@@ -3750,55 +3841,53 @@ local brm_spells = {
             end,
             ["resonant_fists"] = true,
         },        
+    
         trigger = {
             ["healing_spheres"] = true,   
             ["shuffle"] = true,
         },
-    },
-    ["rushing_jade_wind"] = {
-        spellID = 116847,
-        dotID = 148187,
-        ap = function() 
-            return spell.rjw_tick.effectN( 1 ).ap_coefficient
-        end,
-        ticks = function()
-            local ticks = 9 -- TODO: Use DBC Pointer
-            local rjw = Player.findAura( 116847 )
-            if rjw and rjw.duration and rjw.duration > 0 then
-                local ticks_remaining = ( rjw.remaining / rjw.duration ) * ticks
-                ticks = ticks - ticks_remaining
-            end
-            return ticks
-        end,
-        may_crit = true,
-        usable_during_sck = true,
+    } ),
+
+    ["rushing_jade_wind"] = Player.createAction( 116847, {
+        callbacks = {
+            -- Chi generators
+            "tiger_palm", -- also MotC and Mastery eval.
+            "expel_harm", -- also Mastery eval.
+            "chi_burst",
+        },
+        
+        damageID = 148187,
+        base_tick_rate = 0.75, -- TODO: Better buff handling
         hasted_cooldown = true,
+        
+        usable_during_sck = true,     
+
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, spell.rushing_jade_wind.effectN( 1 ).base_value )
         end,
+        
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,      
             ["resonant_fists"] = true,
-        },
-    },
-    ["tiger_palm"] = {
+        },      
+    } ),
+
+    ["tiger_palm"] = Player.createAction( 100780, {
         callbacks = {
             "blackout_kick", -- Blackout Combo
         },    
         
-        spellID = 100780,
-        ap = function()
-            return spell.tiger_palm.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
         usable_during_sck = true,  
+        
         ready = function()
             return not ( Player.talent.press_the_advantage.ok )
         end,
+        
         action_multiplier = function( state )
             local am = 1
             
@@ -3814,55 +3903,55 @@ local brm_spells = {
             
             return am
         end,
-        execute_time = function()
-            return aura_env.gcd( 100780 )
-        end,
+        
         brew_cdr = function()
             return 1 + ( Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 3 ).seconds ) 
         end,
+        
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,   
             ["resonant_fists"] = true,
         },
-    },
-    ["chi_burst"] = {
-        spellID = 123986,
-        dotID = 148135,
-        ap = function()
-            return spell.chi_burst.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
+    } ),
+
+    ["chi_burst"] = Player.createAction( 123986, {
+
+        damageID = 148135,
         interrupt_aa = true,
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return target_count
         end,
+        
         tick_trigger = {
             ["exploding_keg_proc"] = true,   
             ["resonant_fists"] = true,
         },
-    },
-    ["chi_wave"] = {
-        spellID = 115098,
-        dotID = 132467,
-        ap = function()
-            return spell.chi_wave.effectN( 1 ).ap_coefficient
-        end, 
-        ticks = 4, -- 4 Bounces
-        may_crit = true,
+    } ),
+
+    ["chi_wave"] = Player.createAction( 115098, {
+
+        damageID = 132467,
+        ticks = 4, -- 4 Damage Bounces
         usable_during_sck = true,   
+        
         tick_trigger = {
             ["exploding_keg_proc"] = true,  
             ["resonant_fists"] = true,
         },
-    },
-    ["touch_of_death"] = {
-        spellID = 322109,
-        may_crit = false,
-        usable_during_sck = true,        
+    } ),
+
+    ["touch_of_death"] = Player.createAction( 322109, {
+        
+        may_miss = false,
+        
+        usable_during_sck = true,
+        
         bonus_da = function()
             local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" )
             local damage_pct = spell.touch_of_death.effectN( 3 ).pct
@@ -3873,6 +3962,7 @@ local brm_spells = {
                 return UnitHealthMax("player") * damage_pct
             end
         end,
+        
         ready = function()
             if not IsUsableSpell( 322109 ) then
                 return false
@@ -3883,6 +3973,7 @@ local brm_spells = {
             local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" )
             return is_execute or aura_env.target_ttd > ( damage_pct * cd ) 
         end,
+        
         reduce_stagger = function()
             local tod = aura_env.spells["touch_of_death"]
             if tod then
@@ -3891,37 +3982,36 @@ local brm_spells = {
             end
             return 0
         end,
-    },
-    ["white_tiger_statue"] = {
-        spellID = 388686,
-        dotID = 389541, -- (Claw of the White Tiger)
-        ap = function()
-            return spell.catue_claw.effectN( 1 ).ap_coefficient
-        end,
-        ticks = function()
-            return max( 1, min( aura_env.fight_remains, 30 ) / 2 )
-        end,        
-        may_crit = true,
-        ignore_armor = true, -- Nature
-        usable_during_sck = true,        
+    } ),
+
+    ["white_tiger_statue"] = Player.createAction( 388686, {
+
+        damageID = 389541, -- (Claw of the White Tiger)
+        base_tick_rate = 2,
+        
+        usable_during_sck = true,
+        
         ready = function()
             return InCombatLockdown() and aura_env.fight_remains > 3 
         end,
-        ww_mastery = false,
-        target_multiplier = function()
-            return min( aura_env.target_count, 20 )
+        
+        target_count = function()
+            return aura_env.target_count
         end,
-        execute_time = function()
-            return min( aura_env.fight_remains, 30 )
+        
+        target_multiplier = function( target_count )
+            return target_count
         end,
+        
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["resonant_fists"] = true,
         },
-    },
-    ["diffuse_magic"] = {
-        spellID = 122783,
-        skip_calcs = true,    
+    } ),
+
+    ["diffuse_magic"] = Player.createAction( 122783, {
+        skip_calcs = true,     
+        
         ready = function()
             
             local option = aura_env.config.diffuse_option
@@ -3936,57 +4026,52 @@ local brm_spells = {
             
             return false
         end,
-    },
-    ["resonant_fists"] = {
-        spellID = 391400,
-        ap = function()
-            return spell.resonant_fists.effectN( 1 ).ap_coefficient
-        end,
-        icd = 1.0, 
-        may_crit = true,
-        ignore_armor = true,
+    } ),
+
+    ["resonant_fists"] = Player.createAction( 389578, {
         background = true,
-        action_multiplier = function() return Player.talent.resonant_fists.rank end,
+        
+        action_multiplier = function()
+            return Player.talent.resonant_fists.rank 
+        end,
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, 5 )
         end,
-        trigger_rate = 0.1,
+        
         ready = function()
             return Player.talent.resonant_fists.ok
         end,
-    },
-    ["chi_surge"] = {
-        spellID = 393786,
-        ap = function()
-            return spell.chi_surge_dot.effectN( 1 ).ap_coefficient
-        end,
-        ticks = 4,
+    } ),
+
+    ["chi_surge"] = Player.createAction( 393786, {
         background = true,
-        may_crit = true,
-        ignore_armor = true,
+        base_tick_rate = 2,
+        
         action_multiplier = function()
             return Player.talent.press_the_advantage.effectN( 4 ).mod
         end,
+        
         target_count = function()
             return aura_env.target_count
-        end,        
+        end,    
+        
         ready = function()
             return Player.talent.chi_surge.ok
         end,
+        
         tick_trigger = {
             ["resonant_fists"] = true,
         },
     },
-    ["pta_keg_smash"] = {
-        spellID = 121253,
-        ap = function()
-            return spell.keg_smash.effectN( 2 ).ap_coefficient
-        end,
-        may_crit = true,
+
+    ["pta_keg_smash"] = Player.createAction( 121253, {
         background = true,
+        
         action_multiplier = function( state )
             local am = spell.press_the_advantage.effectN( 2 ).mod
             
@@ -4018,12 +4103,15 @@ local brm_spells = {
             
             return am
         end,
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, spell.keg_smash.effectN( 7 ).base_value )
         end,
+        
         brew_cdr = function()
             local cdr = 3
             
@@ -4035,6 +4123,7 @@ local brm_spells = {
             
             return cdr
         end,
+        
         reduces_cd = {
             ["breath_of_fire"] = function ()
                 if Player.talent.salsalabims_strength.ok then
@@ -4043,28 +4132,28 @@ local brm_spells = {
                 return 0 
             end,
         },
+    
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,  
             ["resonant_fists"] = true,
-        },    
+        },   
+    
         trigger = {
             ["chi_surge"] = true,
             ["shuffle"] = true,
         },
-    },
-    ["keg_smash"] = {
+    } ),
+
+    ["keg_smash"] = Player.createAction( 121253, {
         callbacks = {
             "breath_of_fire", -- Scalding Brew / Sal'Salabim's        
         },
-        
-        spellID = 121253,
-        ap = function()
-            return spell.keg_smash.effectN( 2 ).ap_coefficient
-        end,
-        may_crit = true,
-        usable_during_sck = true,
+    
         hasted_cooldown = true,
+        
+        usable_during_sck = true,
+
         action_multiplier = function()
             local am = 1
             
@@ -4086,12 +4175,15 @@ local brm_spells = {
             
             return am
         end,
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, spell.keg_smash.effectN( 7 ).base_value )
         end,
+        
         brew_cdr = function()
             local cdr = 3
             
@@ -4105,6 +4197,7 @@ local brm_spells = {
             
             return cdr
         end,
+        
         ready = function()
             -- With Press the Advantage we don't want to "waste" a buffed RSK if it's worth delaying
             local pta = Player.findAura( buff.press_the_advantage )
@@ -4122,6 +4215,7 @@ local brm_spells = {
             end
             return true
         end,
+        
         reduces_cd = {
             ["breath_of_fire"] = function ()
                 if Player.talent.salsalabims_strength.ok then
@@ -4130,11 +4224,13 @@ local brm_spells = {
                 return 0 
             end,
         },
+    
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
             ["resonant_fists"] = true,
         },    
+    
         trigger = {
             ["pta_keg_smash"] = function()
                 local pta = Player.findAura( buff.press_the_advantage )
@@ -4146,29 +4242,27 @@ local brm_spells = {
             ["weapons_of_order_debuff"] = true,
             ["shuffle"] = true,
         },
-    },
-    ["exploding_keg"] = {
+    } ),
+
+    ["exploding_keg"] = Player.createAction( 325153, {
         callbacks = {
             "rushing_jade_wind", --  EK ticks from buff
         },
     
-        spellID = 325153,
-        ap = function()
-            return Player.talent.exploding_keg.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
-        ignore_armor = true, -- fire       
         usable_during_sck = true,        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return target_count
         end,
+        
         mitigate = function()
             -- same as 100% dodge
             return dodgeMitigation( 1.0, exploding_keg_duration )
         end,   
+        
         callback_ready = function( callback )
             
             if Player.talent.bountiful_brew.ok and Player.bdb_targets == 0 then
@@ -4184,6 +4278,7 @@ local brm_spells = {
             
             return false
         end,
+        
         ready = function()
             if Player.talent.bountiful_brew.ok and Player.bdb_targets == 0 then
                 return false
@@ -4191,6 +4286,7 @@ local brm_spells = {
             
             return true
         end,
+        
         tick_trigger = {
             ["charred_dreams_heal"] = true,   
             ["resonant_fists"] = true,
@@ -4199,12 +4295,16 @@ local brm_spells = {
                 return driver == "rushing_jade_wind"
             end,
         },
-    },
-    ["exploding_keg_proc"] = {
-        spellID = 325153,
+    } ),
+
+    ["exploding_keg_proc"] = Player.createAction( 325153, {
+        
+        background = true,
+        
         ap = function()
             return Player.talent.exploding_keg.effectN( 4 ).ap_coefficient
         end,
+        
         action_multiplier = function( state )
             
             if not state then
@@ -4257,27 +4357,21 @@ local brm_spells = {
 
             return 1
         end,
-        may_crit = true,
-        ignore_armor = true, -- fire       
-        background = true,
+        
         tick_trigger = {
             ["charred_dreams_heal"] = true, 
             ["resonant_fists"] = true,
         },
-    },
-    ["breath_of_fire"] = {
+    } ),
+
+    ["breath_of_fire"] = Player.createAction( 115181, {
         callbacks = {
             "blackout_kick", -- Blackout Combo
             "keg_smash", -- Periodic Fire
         },
         
-        spellID = 115181,
-        ap = function()
-            return Player.talent.breath_of_fire.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
-        ignore_armor = true, -- fire
-        usable_during_sck = true,        
+        usable_during_sck = true, 
+        
         action_multiplier = function( state )
             local am = 1
             
@@ -4305,61 +4399,60 @@ local brm_spells = {
             
             return am
         end,
+        
         target_count = function()
             return aura_env.learnedFrontalTargets( 115181 )
         end,
+        
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, 5, 1 )
         end, 
+        
         tick_trigger = {
             ["exploding_keg_proc"] = true,    
             ["charred_dreams_heal"] = true,
             ["charred_dreams_damage"] = true,       
             ["resonant_fists"] = true,
-        },        
+        }, 
+    
         trigger = {
             ["breath_of_fire_periodic"] = function( driver ) 
                 return driver == "keg_smash" or Player.ks_targets > 0 
             end,  
             ["dragonfire"] = true,  
         },
-    },
-    ["dragonfire"] = {
-        spellID = 387621,
-        ap = function()
-            return spell.dragonfire.effectN( 1 ).ap_coefficient
-        end,
+    } ),
+
+    ["dragonfire"] = Player.createAction( 387621, {
+        
+        background = true,
+        
         ticks = function()
             return Player.talent.dragonfire_brew.effectN( 1 ).base_value
         end,
-        may_crit = true,
-        ignore_armor = true, -- fire 
-        background = true,
+        
         target_count = function()
             return aura_env.learnedFrontalTargets( 387621 )    
         end,
+        
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, 5, 1 )
-        end,         
+        end,  
+        
         ready = function()
             return Player.talent.dragonfire_brew.ok
         end,
+        
         tick_trigger = {
             ["charred_dreams_heal"] = true,  
             ["charred_dreams_damage"] = true,      
         },
-    },
-    ["breath_of_fire_periodic"] = {
-        spellID = 123725,
-        ap = function()
-            return spell.breath_of_fire_dot.effectN( 1 ).ap_coefficient
-        end,
-        ticks = function() 
-            return bof_duration / 2 
-        end,
-        may_crit = true,
-        ignore_armor = true, -- fire
+    } ),
+
+    ["breath_of_fire_periodic"] = Player.createAction( 123725, {
         background = true,
+        base_tick_rate = 2,
+        
         action_multiplier = function( state )
             local am = 1
             
@@ -4369,6 +4462,7 @@ local brm_spells = {
             
             return am
         end,
+        
         target_count = function()
             if Player.bof_targets > 0 then
                 return Player.bof_targets
@@ -4376,9 +4470,11 @@ local brm_spells = {
                 return min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets )
             end
         end,
+        
         target_multiplier = function( target_count )
             return target_count
-        end,    
+        end,  
+        
         mitigate = function( state )
             local ratio = min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets ) / aura_env.target_count 
             local dr = spell.breath_of_fire_dot.effectN( 2 ).pct
@@ -4393,27 +4489,30 @@ local brm_spells = {
             
             return dr * bof_duration * ratio * Player.recent_dtps
         end,
+        
         tick_trigger = {
             ["charred_dreams_heal"] = true,  
             ["charred_dreams_damage"] = true,      
         },        
-    },
-    ["gai_plins_imperial_brew"] = {
+    } ),
+
+    ["gai_plins_imperial_brew"] = Player.createAction( 383701, {
         type = "self_heal",
-        spellID = 383701,
-        may_crit = false,
         background = true,
+        
         bonus_heal = function()
             return Player.stagger * 0.5 * ( Player.talent.gai_plins_imperial_brew.effectN( 1 ).pct )
         end,        
-    },
-    ["shuffle"] = {
-        spellID = 215479,
+    } ),
+
+    ["shuffle"] = Player.createAction( 215479, {
         background = true,
         skip_calcs = true,
+        
         ready = function()
             return Player.talent.shuffle.ok
         end,
+        
         reduce_stagger = function( state )
             if not state then
                 return 0
@@ -4445,6 +4544,7 @@ local brm_spells = {
             
             return 0
         end,
+        
         mitigate = function( state )
 
             if not state then
@@ -4490,17 +4590,21 @@ local brm_spells = {
             
             return m
         end,
-    },
-    ["purifying_brew"] = {
-        spellID = 119582,
-        usable_during_sck = true,
+    } ),
+
+    ["purifying_brew"] = Player.createAction( 119582, {
+
         hasted_cooldown = true,
+        
+        usable_during_sck = true,
+
         trigger = {
             ["special_delivery"] = true,
             ["gai_plins_imperial_brew"] = function()
                 return Player.talent.gai_plins_imperial_brew.ok
             end,
         },
+    
         bonus_da = function()
             local d = 0
             
@@ -4517,9 +4621,11 @@ local brm_spells = {
             
             return d
         end,
+        
         reduce_stagger = function()
             return Player.stagger * 0.5
         end,
+        
         mitigate = function()
             local m = 0
             
@@ -4535,6 +4641,7 @@ local brm_spells = {
             
             return m
         end,
+        
         ready = function()
             local pb_cur, pb_max = GetSpellCharges( 119582 )
             
@@ -4549,15 +4656,16 @@ local brm_spells = {
             
             return Player.stagger > 0 
         end,
-    },
-    ["celestial_brew"] = {
+    } ),
+
+    ["celestial_brew"] = Player.createAction( 322507, {
         callbacks = {
             "purifying_brew", -- Purified Chi
             "blackout_kick", -- Blackout Combo
         },
     
-        spellID = 322507,
         usable_during_sck = true,
+        
         ready = function()
             -- Hold for next tank buster if applicable
             if aura_env.danger_next and ( aura_env.danger_next < 40 and aura_env.danger_next > 8 ) then
@@ -4566,6 +4674,7 @@ local brm_spells = {
             
             return not Player.findAura( 322507 ) -- never overwrite current CB
         end,
+        
         mitigate = function( state )
             
             -- We can use the tooltip to parse for healing reduction effects
@@ -4636,17 +4745,21 @@ local brm_spells = {
             -- return
             return m
         end,
+        
         trigger = {
             ["special_delivery"] = true,
         },        
-    },
-    ["black_ox_brew"] = {
-        spellID = 115399,
+    } ),
+
+    ["black_ox_brew"] = Player.createAction( 115399, {
+        
         usable_during_sck = true,
+        
         ready = function()
             -- Require Celestial Brew on CD
             return aura_env.getCooldown( 322507 ) > 0
         end,
+        
         reduces_cd = {
             ["celestial_brew"] = function( ) 
                 return aura_env.getCooldown( 322507 ) -- CB
@@ -4663,46 +4776,46 @@ local brm_spells = {
                 return cdr
             end,     
         },
+    
         trigger = {
             ["special_delivery"] = true,
         },    
-    },
-    ["special_delivery"] = {
-        spellID = 196733,
-        ap = function()
-            return spell.special_delivery.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
+    } ),
+
+    ["special_delivery"] = Player.createAction( 196733, {
         background = true,
+        
         target_count = function()
             return aura_env.target_count
         end,
+        
         target_multiplier = function( target_count )
             return target_count
-        end,      
+        end,    
+        
         ready = function()
             return Player.talent.special_delivery.ok
         end,
-    },
-    ["press_the_advantage"] = {
+    } ),
+
+    ["press_the_advantage"] = Player.createAction( 418360, {
         -- Melee swing damage event that replaces TP
-        spellID = 418360,
-        ap = function()
-            return spell.pta_melee.effectN( 1 ).ap_coefficient
-        end,
-        may_crit = true,
-        ignore_armor = true, -- Nature
         background = true,
+        
         ready = function()
             return Player.talent.press_the_advantage.ok
         end,
+        
         brew_cdr = function()
             return Player.talent.press_the_advantage.effectN( 1 ).seconds
         end,
+        
         tick_trigger = {
             ["resonant_fists"] = true,
         },
-    },
+    } ),
+
+    -- TODO: Refactor with proper debuffs
     ["weapons_of_order_debuff"] = {
         type = "damage_buff",
         debuff = true,
@@ -4729,12 +4842,11 @@ local brm_spells = {
             return Player.talent.weapons_of_order.ok and Player.findAura( 387184 )
         end,
     },
-    ["charred_dreams_damage"] = {
-        spellID = 425299,
-        may_crit = false,
-        ignore_armor = true, -- Shadowflame
+
+    ["charred_dreams_damage"] = Player.createAction( 425299, {
         background = true,
-        skip_calcs = true,
+        skip_calcs = true, -- Uses state result
+        
         action_multiplier = function( state )
             local am = spell.t31_brm_2pc.effectN( 1 ).pct
 
@@ -4749,16 +4861,17 @@ local brm_spells = {
             end
             return am
         end,
+        
         ready = function()
             return ( Player.set_pieces[ 31 ] >= 2 or Player.set_pieces[ 32 ] >= 2 )
         end,
-    },
-    ["charred_dreams_heal"] = {
+    } ),
+
+    ["charred_dreams_heal"] = Player.createAction( 425298, {
         type = "self_heal",
-        spellID = 425298,
-        may_crit = false,
         background = true,
-        skip_calcs = true,
+        skip_calcs = true, -- Uses state result
+        
         action_multiplier = function( state )
             local am = spell.t31_brm_2pc.effectN( 2 ).pct
             if state then
@@ -4772,11 +4885,18 @@ local brm_spells = {
             end
             return am
         end,
+        
         ready = function()
             return ( Player.set_pieces[ 31 ] >= 2 or Player.set_pieces[ 32 ] >= 2  )
         end,
-    },
+    } ),
 }
+
+-- Generate channel actions
+generateChannels( ww_spells )
+generateChannels( mw_spells )
+generateChannels( brm_spells )
+
 
 -- Generate action callbacks for spell tables
 generateCallbacks( ww_spells )
@@ -4819,22 +4939,6 @@ aura_env.initSpecialization = function()
         aura_env.spells = brm_spells
     end
     
-    -- Populate action callbacks
-    aura_env.combo_list = {}
-    
-    for action, base_spell in pairs( aura_env.spells ) do
-        if base_spell.callbacks then
-            for _, callback in pairs( base_spell.callbacks ) do
-                local name = callback.."_"..action.."_generated"
-                if aura_env.spells[ name ] then
-                    aura_env.combo_list[ callback ] = aura_env.combo_list[ callback ] or {}
-                    if not aura_env.combo_list[ callback ][ name ] then
-                        insert( aura_env.combo_list[ callback ], name )
-                    end
-                end
-            end
-        end
-    end
 end
 
 aura_env.initGear = function()
