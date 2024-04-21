@@ -4067,7 +4067,7 @@ local brm_spells = {
         tick_trigger = {
             ["resonant_fists"] = true,
         },
-    },
+    } ),
 
     ["pta_keg_smash"] = Player.createAction( 121253, {
         background = true,
