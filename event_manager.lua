@@ -848,7 +848,7 @@ function(event, ...)
                     debug_process_max = spell_it
                     
                     local spellID = action.spellID
-                    local action_type = action.type or "damage"
+                    local action_type = action.type
                     
                     if action_type == "damage_buff"
                     or action_type == "healing_buff" then

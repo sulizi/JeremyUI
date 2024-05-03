@@ -560,6 +560,16 @@ aura_env.CPlayer = {
         action.may_miss         = action.may_miss or _damage_data.may_miss
         action.may_crit         = action.may_crit or _damage_data.may_crit
         
+        local effect_type = function( e )
+            if effect.is_heal then
+                if action.target_count then
+                    return "smart_heal"
+                end
+                return "self_heal"
+            end
+            return "damage"
+        end
+        
         if not action.ap then
             local iter = 1
             local effect = 0
@@ -569,7 +579,8 @@ aura_env.CPlayer = {
                     action.ap = function()
                         return effect.ap_coefficient
                     end
-                    action.is_periodic = action.is_periodic or effect.is_periodic 
+                    action.is_periodic = action.is_periodic or effect.is_periodic
+                    action.type = action.type or effect_type( effect )
                     break
                 end
                 iter = iter + 1
@@ -586,11 +597,14 @@ aura_env.CPlayer = {
                         return effect.sp_coefficient
                     end
                     action.is_periodic = action.is_periodic or effect.is_periodic 
+                    action.type = action.type or effect_type( effect )
                     break
                 end
                 iter = iter + 1
             end            
         end
+        
+        action.type = action.type or "damage"
         
         if not action.ticks and action.duration and action.base_tick_rate and action.base_tick_rate > 0 then
             action.ticks = action.duration / action.base_tick_rate
@@ -3046,7 +3060,6 @@ local ww_spells = {
     } ),
 
     ["chi_wave"] = Player.createAction( Player.is_beta() and 450391 or 115098, {
-        
         background = Player.is_beta(),
         damageID = 132467,
         ticks = 4, -- 4 Damage Bounces
@@ -3062,8 +3075,6 @@ local ww_spells = {
     } ),
 
     ["expel_harm"] = Player.createAction( Player.is_beta() and 451968 or 322101, {
-        type = "self_heal",
-    
         trigger_etl = true,
         ww_mastery = true,
         usable_during_sck = true,
@@ -3535,7 +3546,6 @@ local brm_spells = {
     } ),
 
     ["healing_sphere"] = Player.createAction( 224863, {
-        type = "self_heal",
         background = true,
         damageID = 124507,
         
@@ -3555,10 +3565,10 @@ local brm_spells = {
 
     -- TODO: Maybe figure out a better solution for the healing sphere mess
     ["expel_harm"] = Player.createAction( 322101, {
-        type = "self_heal",
         
         ap = 0, sp = 0, -- Because healing spheres are added before modifiers I'm overwriting these and using bonus_heal instead
-
+        type = "self_heal", -- because ap and sp are set to zero the heal effect isn't parsed
+        
         usable_during_sck = true,
         
         -- Using bonus_heal() method here because of how spheres are added before modifiers
@@ -3611,8 +3621,6 @@ local brm_spells = {
     } ),
 
     ["healing_elixir"] = Player.createAction( 122281, {
-        type = "self_heal",
-
         bonus_heal = function()
             return ( Player.talent.healing_elixir.effectN( 1 ).pct ) * UnitHealthMax( "player" )
         end,
@@ -4490,7 +4498,6 @@ local brm_spells = {
     } ),
 
     ["gai_plins_imperial_brew"] = Player.createAction( 383701, {
-        type = "self_heal",
         background = true,
         
         bonus_heal = function()
@@ -4847,7 +4854,6 @@ local brm_spells = {
     } ),
 
     ["charred_dreams_heal"] = Player.createAction( 425298, {
-        type = "self_heal",
         background = true,
         skip_calcs = true, -- Uses state result
         
