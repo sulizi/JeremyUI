@@ -569,6 +569,7 @@ aura_env.CPlayer = {
                     action.ap = function()
                         return effect.ap_coefficient
                     end
+                    action.is_periodic = action.is_periodic or effect.is_periodic 
                     break
                 end
                 iter = iter + 1
@@ -584,6 +585,7 @@ aura_env.CPlayer = {
                     action.sp = function() 
                         return effect.sp_coefficient
                     end
+                    action.is_periodic = action.is_periodic or effect.is_periodic 
                     break
                 end
                 iter = iter + 1
@@ -2045,7 +2047,7 @@ local function generateCallbacks( spells )
     end
 end    
 
-aura_env.auraEffectForSpell = function ( spellID )
+aura_env.auraEffectForSpell = function ( spellID, periodic )
     
     local total_aura_effect = 1
     local spec_aura = Player.spec_aura
@@ -2059,8 +2061,8 @@ aura_env.auraEffectForSpell = function ( spellID )
             if effect and effect.affected_spells then
                 if effect.affected_spells[ spellID ] then
                     local properties = effect.properties
-                    if properties then
-                        if properties.add_percent_modifier and properties.spell_direct_amount  then
+                    if properties and properties.add_percent_modifier then
+                        if ( periodic and properties.spell_periodic_amount ) or ( not periodic and properties.spell_direct_amount ) then
                             total_aura_effect = total_aura_effect * ( effect.mod or 1 ) 
                         end
                     end
