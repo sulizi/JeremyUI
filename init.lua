@@ -106,7 +106,8 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 2.0
+local DBC_Version = 2.2
+local DBC_Critical = 2.2
 local LibDBCache = LibStub("LibDBCache-1.0", true)
 
 if not LibDBCache then
@@ -114,10 +115,18 @@ if not LibDBCache then
     return
 end
 
+if DBC_Critical > LibDBCache.Version then
+    print("JeremyUI: DISABLED - A critical database update is needed.")
+    return
+end
+
 if DBC_Version > LibDBCache.Version then
     print("JeremyUI: Your database is out of date, an update is needed.")
     print("JeremyUI: You may experience Lua errors until your database is updated.")    
 end
+
+local spell_affected_by_effect = LibDBCache:spell_affected_by_effect
+
 --boop
 local spell = {
     -- Spec Auras
@@ -130,9 +139,6 @@ local spell = {
     t31_brm_4pc = LibDBCache:find_spell( 422887 ),
     t31_ww_2pc  = LibDBCache:find_spell( 422891 ),
     t31_ww_4pc  = LibDBCache:find_spell( 422892 ),
-
-    kicks_of_flowing_momentum = LibDBCache:find_spell( 394944 ), -- WW DF Season 1/4 Tier 2PC
-    fists_of_flowing_momentum = LibDBCache:find_spell( 394949), -- WW DF Season 1/4 Tier 4PC
     
     -- Actions
     blackout_kick       = LibDBCache:find_spell( 100784 ),
@@ -157,33 +163,26 @@ local spell = {
     wdp_tick            = LibDBCache:find_spell( 158221 ),
     
     -- Other Spells
-    blackout_combo          = LibDBCache:find_spell( 228563 ),
-    blackout_reinforcement  = LibDBCache:find_spell( 424454 ),    
     breath_of_fire_dot      = LibDBCache:find_spell( 123725 ),
     catue_claw              = LibDBCache:find_spell( 389541 ),
     celestial_fortune       = LibDBCache:find_spell( 216519 ),
     chi_energy              = LibDBCache:find_spell( 393057 ),
     chi_explosion           = LibDBCache:find_spell( 393056 ),
     chi_surge_dot           = LibDBCache:find_spell( 393786 ),
-    counterstrike           = LibDBCache:find_spell( 383800 ),
     cyclone_strikes         = LibDBCache:find_spell( 220358 ),
     dragonfire              = LibDBCache:find_spell( 387621 ),
     emperors_capacitor      = LibDBCache:find_spell( 393039 ),
     jadefire_brand_dmg      = LibDBCache:find_spell( 395414 ),
     gift_of_the_ox          = LibDBCache:find_spell( 124507 ),
     gotd_proc               = LibDBCache:find_spell( 392959 ),
-    hit_combo               = LibDBCache:find_spell( 196741 ),
-    hit_scheme              = LibDBCache:find_spell( 383696 ),
     keefers_skyreach        = LibDBCache:find_spell( 344021 ),
-    press_the_advantage     = LibDBCache:find_spell( 418361 ),
-    pressure_point          = LibDBCache:find_spell( 337482 ),
     pretense                = LibDBCache:find_spell( 393515 ),
     pta_melee               = LibDBCache:find_spell( 418360 ),
-    purified_chi            = LibDBCache:find_spell( 325092 ),
     resonant_fists          = LibDBCache:find_spell( 391400 ),
-    shadowflame_nova        = LibDBCache:find_spell( 410139 ),
     special_delivery        = LibDBCache:find_spell( 196733 ),
     thunderfist             = LibDBCache:find_spell( 393566 ),
+    
+    mystic_touch            = LibDBCache:find_spell( 113746 ),
     
     -- PvP Talents
     pvp_enabled  = LibDBCache:find_spell( 134735 ),
@@ -194,13 +193,6 @@ local spell = {
 -- Other spell values
 -- TODO: Add these to DBC
 -- ------------------------------------------------------------------------------
-
--- sets
-local t30_2pc_ww_bonus = 0.10
-local t30_4pc_ww_bonus = 0.30
-local t30_2pc_brm_bonus = 0.2
-local t30_4pc_brm_bonus = 0.05
-local shadowflame_vulnerability_amp = 0.5
 
 -- todo
 local bdb_chance = 0.5
@@ -218,59 +210,8 @@ local press_the_advantage_fp_mod = 0.25
 local press_the_advantage_boc_mod = 0.5
 
 local armor = 0.7
-local mystic_touch = 0.05
 local SEF_bonus = 1.26
 local SER_bonus = 1.15
-
--- ------------------------------------------------------------------------------
--- Buff IDs
--- TODO: populate spell data using find_buff 
--- ------------------------------------------------------------------------------
-
-local buff = {}
-
--- items
-buff.annihilating_flame = 426553
-
--- general
-buff.close_to_heart = 389684
-buff.save_them_all = 390105
-
--- ww 
-buff.chi_energy = 337571
-buff.dance_of_chiji = 325202
-buff.the_emperors_capacitor = 393039
-buff.fists_of_flowing_momentum_fof = 394949
-buff.hit_combo = 196741
-buff.kicks_of_flowing_momentum = 394944
-buff.pressure_point = 337482
-buff.serenity = 152173
-buff.storm_earth_and_fire = 137639
-buff.teachings_of_the_monastery = 202090
-buff.thunderfist = 242387
-buff.transfer_the_power = 195321
-buff.xuen_the_white_tiger = 123904
-buff.power_strikes = 129914
-buff.blackout_reinforcement = 424454
-
--- brm
-buff.blackout_combo = 228563
-buff.counterstrike = 383800
-buff.hit_scheme = 383696
-buff.charred_passions = 386963
-buff.celestial_flames = 325190
-buff.light_stagger = 124275
-buff.moderate_stagger = 124274
-buff.heavy_stagger = 124273
-buff.double_barrel = 202346
-buff.purified_chi = 325092
-buff.exploding_keg = 325153
-buff.pretense_of_instability = 393516
-buff.leverage = 408503
-buff.press_the_advantage = 418361
-
--- mw
-buff.accumulating_mist = 388566
 
 -- ------------------------------------------------------------------------------
 
@@ -317,8 +258,8 @@ end
 
 aura_env.aura_amps_player = {}
 aura_env.aura_amps_primary = {}
-aura_env.aura_amps_player_ignore = { [buff.xuen_the_white_tiger] = true, [buff.serenity] = true, [buff.storm_earth_and_fire] = true, [buff.hit_combo] = true,  }
-aura_env.aura_amps_player_ignore_h = { [buff.save_them_all] = true, }
+aura_env.aura_amps_player_ignore = {}--{ [buff.xuen_the_white_tiger] = true, [buff.serenity] = true, [buff.storm_earth_and_fire] = true, [buff.hit_combo] = true,  }
+aura_env.aura_amps_player_ignore_h = {}--{ [buff.save_them_all] = true, }
 for _, v in ipairs( aura_env.config.aura_amp_player ) do
     if v.spellid then
         if v.spellid > 0 then
@@ -463,7 +404,7 @@ aura_env.CPlayer = {
     auraDataByInstance = {},
     auraExclusions = {},    
     auraInstancesByID = {},
-    buff = {}, -- populated by makeBuff
+    buffs = {}, -- populated by makeBuff
     chi = 0,
     chi_max = 0,
     combat = {
@@ -576,6 +517,10 @@ aura_env.CPlayer = {
     end, 
     
     createAction = function( spellID, init )
+        if not spellID then
+            return nil
+        end
+        
         local Player = aura_env.CPlayer
         local action = init or {}
         local data          = LibDBCache:find_spell( spellID )
@@ -601,6 +546,7 @@ aura_env.CPlayer = {
         action.replaces     = action.replaces or data.replaces
         action.background   = action.background or false
         action.channeled    = action.channeled or data.channeled
+        action.delay_aa     = action.delay_aa or data.delay_auto_attack
         
         action.icd              = action.icd or data.icd
         action.duration         = action.duration or data.duration
@@ -620,7 +566,9 @@ aura_env.CPlayer = {
             while ( effect ~= nil ) do
                 effect = _damage_data.effectN( iter )
                 if effect and effect.ap_coefficient then
-                    action.ap = effect.ap_coefficient
+                    action.ap = function()
+                        return effect.ap_coefficient
+                    end
                     break
                 end
                 iter = iter + 1
@@ -633,21 +581,22 @@ aura_env.CPlayer = {
             while ( effect ~= nil ) do
                 effect = _damage_data.effectN( iter )
                 if effect and effect.sp_coefficient then
-                    action.sp = effect.sp_coefficient
+                    action.sp = function() 
+                        return effect.sp_coefficient
+                    end
                     break
                 end
                 iter = iter + 1
             end            
         end
         
-        if not action.ticks and action.duration and action.base_tick_rate then
+        if not action.ticks and action.duration and action.base_tick_rate and action.base_tick_rate > 0 then
             action.ticks = action.duration / action.base_tick_rate
         end
         
-        local _ticks = action.ticks or 1
-        if type( _ticks ) ~= "function" then
+        local ticks = action.ticks or 1
+        if type( ticks ) ~= "function" then
             action.ticks = function()
-                local ticks = _ticks
                 if action.channeled and action.canceled then
                     local ticks_gcd = 0
                     local ticks_on_cast = ( action.tick_zero and 1 or 0 )
@@ -657,21 +606,22 @@ aura_env.CPlayer = {
                         local gcd = aura_env.gcd( action.spellID )
                         local duration = action.duration
                         
-                        if action.duration_hasted then
-                            duration = duration / Player.haste
-                        end                
-                        
-                        local tick_rate = duration / ticks_remaining
-                        ticks_gcd = ( gcd / tick_rate )
+                        if duration then
+                            if action.duration_hasted then
+                                duration = duration / Player.haste
+                            end                
+                            
+                            local tick_rate = duration / ticks_remaining
+                            ticks_gcd = max( 0, ( gcd / tick_rate ) )
+                        end
                     end
                     
                     return ticks_on_cast + ticks_gcd
                 end
                 
-                return ticks
+                return max( 1, ticks )
             end
         end
-        action.ticks = action.ticks or 1
         
         -- Cast Time / Execute Time functions
         
@@ -691,7 +641,7 @@ aura_env.CPlayer = {
             
             local gcd = aura_env.gcd( action.spellID )
 
-            if action.channeled and not action.canceled then
+            if action.channeled and action.duration and not action.canceled then
                 local duration = action.duration
                 if action.duration_hasted then
                     duration = duration / Player.haste
@@ -748,13 +698,18 @@ aura_env.CPlayer = {
     makeBuff = function( spellID, name )
         local self = aura_env.CPlayer
         
-        if not name or not self.buff[ name ] then
+        if not name or not self.buffs[ name ] then
             local buff = LibDBCache:find_spell( spellID ) 
             
             name = name or buff.tokenName
             
             if name then
+                buff.spellID = spellID
                 buff.name = name
+                buff.auraData = function()
+                    local data = self.findAura( spellID )
+                    return data
+                end
                 buff.up = function()
                     local data = self.findAura( spellID )
                     return ( data ~= nil )
@@ -767,7 +722,7 @@ aura_env.CPlayer = {
                     local data = self.findAura( spellID )
                     return data and data.stacks or 0 
                 end
-                self.buff[ name ] = buff
+                self.buffs[ name ] = buff
             else
                 print( "Unable to make buff " .. spellID )
             end
@@ -883,6 +838,58 @@ aura_env.ResetEnemy = function( GUID, dead )
         aura_env.last_fixate_bonus = 0
     end
 end
+
+-- ------------------------------------------------------------------------------
+-- Make Buffs
+-- TODO: Make this a player function
+-- ------------------------------------------------------------------------------
+
+
+local buff = {}
+
+-- items
+Player.makeBuff( 426553, "annihilating_flame" )
+
+-- general
+
+Player.makeBuff( 389684, "close_to_heart" )
+Player.makeBuff( 390105, "save_them_all" )
+
+-- ww 
+Player.makeBuff( 424454, "blackout_reinforcement" )
+Player.makeBuff( 337571, "chi_energy" )
+Player.makeBuff( 325202, "dance_of_chiji" )
+Player.makeBuff( 394949, "fists_of_flowing_momentum" )
+Player.makeBuff( 196741, "hit_combo" )
+Player.makeBuff( 394944, "kicks_of_flowing_momentum" )
+Player.makeBuff( 129914, "power_strikes" )
+Player.makeBuff( 337482, "pressure_point" )
+Player.makeBuff( 152173, "serenity" )
+Player.makeBuff( 137639, "storm_earth_and_fire" )
+Player.makeBuff( 202090, "teachings_of_the_monastery" )
+Player.makeBuff( 393039, "the_emperors_capacitor" )
+Player.makeBuff( 242387, "thunderfist" )
+Player.makeBuff( 195321, "transfer_the_power" )
+Player.makeBuff( 123904, "xuen_the_white_tiger" )
+
+-- brm
+Player.makeBuff( 228563, "blackout_combo" )
+Player.makeBuff( 325190, "celestial_flames" )
+Player.makeBuff( 389963, "charred_passions" ) 
+Player.makeBuff( 383800, "counterstrike" )
+Player.makeBuff( 202346, "double_barrel" )
+Player.makeBuff( 325153, "exploding_keg" )
+Player.makeBuff( 124273, "heavy_stagger" )
+Player.makeBuff( 383696, "hit_scheme" )
+Player.makeBuff( 124275, "light_stagger" )
+Player.makeBuff( 124274, "moderate_stagger" )
+Player.makeBuff( 418361, "press_the_advantage" )
+Player.makeBuff( 393516, "pretense_of_instability" )
+Player.makeBuff( 325092, "purified_chi" )
+
+-- ------------------------------------------------------------------------------
+
+
 
 aura_env.combo_strike = {
     [100780] = true,  -- Tiger Palm
@@ -1387,7 +1394,7 @@ aura_env.actionModRate = function( action )
         return rate
     end
     
-    if Player.findAura( buff.serenity ) and action.affected_by_serenity then
+    if Player.buffs.serenity.up() and action.affected_by_serenity then
         rate = 0.5
     end
     
@@ -1426,13 +1433,12 @@ aura_env.actionBaseCooldown = function( action )
         end
     end
     
-    local serenity = Player.findAura( buff.serenity )
-    
-    if serenity and action.affected_by_serenity then
-        if cooldown < serenity.remaining then
+
+    if Player.buffs.serenity.up() and action.affected_by_serenity then
+        if cooldown < Player.buffs.serenity.remains() then
             cooldown = cooldown / 2
         else
-            cooldown = cooldown - serenity.remaining
+            cooldown = cooldown - Player.buffs.serenity.remains()
         end
     else
         cooldown = cooldown * aura_env.actionModRate( action )
@@ -1501,7 +1507,7 @@ aura_env.gcd = function ( spellID )
         gcd_flat_modifier = spell.windwalker_monk.effectN( 12 )
     end
     
-    if gcd_flat_modifier and gcd_flat_modifier.affected_spells[ spellID ] then
+    if spell_affected_by_effect( spellID, gcd_flat_modifier ) then
         ret_ms = ret_ms + gcd_flat_modifier.base_value
     end        
     
@@ -1585,7 +1591,7 @@ aura_env.targetAuraEffect = function( callback, future )
     if callback_type == "damage" then
         
         if target_count == 1 and aura_env.targetAuras["target"] then
-            for _, aura in pairs(  aura_env.targetAuras["target"] ) do
+            for _, aura in pairs( aura_env.targetAuras["target"] ) do
                 local remaining = aura.expire - GetTime() - future
                 if aura.amp > 0 and remaining > 0 then
                     amp = amp * ( 1 + ( aura.amp - 1 ) * ( execute_time > 1 and min( 1, remaining  / execute_time ) or 1 ) )
@@ -1598,7 +1604,7 @@ aura_env.targetAuraEffect = function( callback, future )
                 
                 local enemy = aura_env.GetEnemy( UnitGUID( UnitID ) )
                 if enemy and enemy.ttd then
-                    if enemy.ttd - future <= 1 then
+                    if execute_time > 0 and enemy.ttd - future <= 1 then
                         -- Cheeky way of evaluating increased execute value of AoE abilities when enemies are about to die
                         -- I.e, your AoE ability will hit more targets if used this global and thus more damage
                         targets["near_death"] = { 
@@ -1650,7 +1656,7 @@ aura_env.targetAuraEffect = function( callback, future )
                     target_amp = target_amp * ( 1 + ( aura_modifier - 1 ) * stacks * ( execute_time > 1 and min( 1, ( aura.remaining - future ) / execute_time ) or 1 ) )
                 end
             end  
-            if Player.talent.save_them_all.ok and aura_env.findUnitAura( UnitID, buff.save_them_all, "HELPFUL" ) then
+            if Player.talent.save_them_all.ok and aura_env.findUnitAura( UnitID, Player.buffs.save_them_all.spellID, "HELPFUL" ) then
                 if UnitHealth( UnitID ) / UnitHealthMax( UnitID ) < Player.talent.save_them_all.effectN( 3 ).roll then
                     target_amp = target_amp * Player.talent.save_them_all.effectN( 1 ).mod
                 end
@@ -1680,6 +1686,7 @@ aura_env.global_modifier = function( callback, future, real )
     future = future or 0
     real = real or true
     
+    local target_count = max( 1, min( 20, ( callback.target_count and callback.target_count() or 1 ) ) )
     local execute_time = callback.execute_time and callback.execute_time() or 1
     local callback_type = callback.type or "damage"
     
@@ -1709,7 +1716,12 @@ aura_env.global_modifier = function( callback, future, real )
         -- Armor
         if not callback.ignore_armor then
             gm = gm * armor
-            gm = gm * ( 1 + mystic_touch ) -- TODO: School
+        end
+        
+        -- Mystic Touch
+        -- No point in debuff tracking for this spell as a Monk, save the CPU time
+        if spell_affected_by_effect( callback.spellID, spell.mystic_touch.effectN( 1 ) ) then
+            gm = gm * spell.mystic_touch.effectN( 1 ).mod
         end
         
         -- Passive Talents
@@ -1722,38 +1734,33 @@ aura_env.global_modifier = function( callback, future, real )
         
           -- Miss
         if callback.may_miss then
-            local miss = Combat.avg_level > 0 and min( 1, max( 0, 0.03 + ( ( Combat.avg_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
+            local enemy_level = target_count == 1 and UnitLevel( "target" ) or Combat.avg_level
+            local miss = enemy_level > 0 and min( 1, max( 0, 0.03 + ( ( enemy_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
             gm = gm * ( 1 - miss )
         end      
         
         -- Dynamic Buffs/Debuffs
-        local pta = Player.findAura( buff.press_the_advantage )
-        if pta and spell.press_the_advantage.effectN( 1 ).affected_spells[ callback.spellID ] then
-            gm = gm * ( 1 + pta.stacks * spell.press_the_advantage.effectN( 1 ).pct )
+        if Player.buffs.press_the_advantage.up() and spell_affected_by_effect( callback.spellID, Player.buffs.press_the_advantage.effectN( 1 ) ) then
+            gm = gm * ( 1 + Player.buffs.press_the_advantage.stacks() * Player.buffs.press_the_advantage.effectN( 1 ).pct )
         end
         
-        local hit_combo = Player.findAura( buff.hit_combo )
-        if hit_combo and spell.hit_combo.effectN( 1 ).affected_spells[ callback.spellID ] then
-            gm = gm * ( 1 + hit_combo.stacks * spell.hit_combo.effectN( 1 ).pct  )
+        if Player.buffs.hit_combo.up() and spell_affected_by_effect( callback.spellID, Player.buffs.hit_combo.effectN( 1 ) ) then
+            gm = gm * ( 1 + Player.buffs.hit_combo.stacks() * Player.buffs.hit_combo.effectN( 1 ).pct  )
         end
         
-        if Player.talent.empowered_tiger_lightning.ok
-        and callback.trigger_etl then
-            local xuen = Player.findAura( buff.xuen_the_white_tiger )
-            if xuen and xuen.remaining > future then
-                gm = gm * ( Player.talent.empowered_tiger_lightning.effectN( 2 ).mod * ( execute_time > 1 and min( 1, ( xuen.remaining - future ) / execute_time ) or 1 ) )
+        if Player.talent.empowered_tiger_lightning.ok and callback.trigger_etl then
+            if Player.buffs.xuen_the_white_tiger.remains() > future then
+                gm = gm * ( Player.talent.empowered_tiger_lightning.effectN( 2 ).mod * ( execute_time > 1 and min( 1, ( Player.buffs.xuen_the_white_tiger.remains() - future ) / execute_time ) or 1 ) )
             end
         end
         
-        local sef = Player.findAura( buff.storm_earth_and_fire )
-        if sef and callback.copied_by_sef and sef.remaining > future then
-            gm = gm * ( 1 + ( SEF_bonus - 1 ) * ( execute_time > 1 and min( 1, ( sef.remaining - future ) / execute_time ) or 1 ) )
+        if callback.copied_by_sef and Player.buffs.storm_earth_and_fire.remains() > future then
+            gm = gm * ( 1 + ( SEF_bonus - 1 ) * ( execute_time > 1 and min( 1, ( Player.buffs.storm_earth_and_fire.remains() - future ) / execute_time ) or 1 ) )
         end
         
-        local serenity = Player.findAura( buff.serenity )
-        if serenity and serenity.remaining > future then
+        if Player.buffs.serenity.remains() > future then
             local serenity_bonus = ( aura_env.pvp_mode and 0.67 or 1 ) * SER_bonus
-            gm = gm * ( 1 + ( serenity_bonus - 1 ) * ( execute_time > 1 and min( 1, ( serenity.remaining - future ) / execute_time ) or 1 ) )
+            gm = gm * ( 1 + ( serenity_bonus - 1 ) * ( execute_time > 1 and min( 1, ( Player.buffs.serenity.remains() - future ) / execute_time ) or 1 ) )
         end
         
         for aura_id, aura_modifier in ipairs ( aura_env.aura_amps_player ) do
@@ -1766,7 +1773,7 @@ aura_env.global_modifier = function( callback, future, real )
         
         -- Tracked for heuristics but do not double-dip into damage output
         -- when real is set to false they will be approximated
-        if real == false then
+        if real == false and Player.primary_stat > 0 then
             for aura_id, primary_stat in ipairs ( aura_env.aura_amps_primary ) do
                 local aura = Player.findAura( aura_id )
                 if aura and aura.remaining > future then
@@ -1843,7 +1850,7 @@ aura_env.skyreach_modifier = function( callback )
     local callback_type = callback.type or "damage"
     
     if not callback.may_crit 
-    or not spell.keefers_skyreach.effectN( 1 ).affected_spells[ callback.spellID ]
+    or not spell_affected_by_effect( callback.spellID, spell.keefers_skyreach.effectN( 1 ) )
     or callback_type ~= "damage" then
         return 0
     end
@@ -1897,14 +1904,13 @@ aura_env.actionPostProcessor = function( result )
     local action = result.callback
     
     -- Augury of the Primal Flame: Annihilating Flame
-    Player.auraExists( buff.annihilating_flame, function( auraData )
-            
-            local cap = auraData.points[ 2 ]
-            local annihilating_flame_damage = min( cap, 0.5 * result.critical_damage )
-            
-            result.damage = result.damage + annihilating_flame_damage
-            return true
-    end ) 
+    if Player.buffs.annihilating_flame.up() then
+        
+        local cap = Player.buffs.annihilating_flame.auraData().points[ 2 ]
+        local annihilating_flame_damage = min( cap, 0.5 * result.critical_damage )
+        
+        result.damage = result.damage + annihilating_flame_damage
+    end 
     
 end
 
@@ -2015,12 +2021,14 @@ local function generateCallbacks( spells )
                             _init.depth = ( _init.depth or 0 ) + 1
                             _init.trigger = _init.trigger or {}
                             _init.trigger[ action ] = true
-                            if base_spell.callback_ready then
-                                _init.ready = function() 
-                                    return base_spell.callback_ready( callback )
+                            _init.ready = function() 
+                                if not base_spell.background and IsSpellKnown( base_spell.replaces or base_spell.spellID ) then
+                                    return base_spell.callback_ready and base_spell.callback_ready( callback ) or cb_spell.ready
+                                else
+                                    return false
                                 end
                             end
-                            
+
                             spells[ name ] = Player.createAction( _init.spellID, _init )
                             
                             recursive = false
@@ -2067,6 +2075,7 @@ end
 
 ------------------------------------------------
 -- Class Helper Functions
+-- TODO: ToTM State Function
 ------------------------------------------------
 
 local CurrentCraneStacks = function( state )
@@ -2094,7 +2103,7 @@ local CurrentCraneStacks = function( state )
                 
                 if motc_gain > 0 then
 
-                    if Player.findAura( buff.storm_earth_and_fire ) and not aura_env.sef_fixate then
+                    if Player.buffs.storm_earth_and_fire.up() and not aura_env.sef_fixate then
                         motc_gain = motc_gain * 3
                     end
                     
@@ -2115,7 +2124,7 @@ end
 
 local IsBlackoutCombo = function( state )
     if not state then
-        return Player.findAura( buff.blackout_combo ) 
+        return Player.buffs.blackout_combo.up()
     else
         local blackout_combo = false
         if Player.talent.blackout_combo.ok then
@@ -2164,7 +2173,7 @@ local IsBlackoutReinforcement = function( state )
     end
     
     if not state then
-        return Player.findAura( buff.blackout_reinforcement )
+        return Player.buffs.blackout_reinforcement.up()
     else
         local blackout_reinforcement = false
         for cb_idx, cb in ipairs( state.callback_stack ) do
@@ -2189,7 +2198,7 @@ local IsFlowingMomentumKicks = function( state )
     end
     
     if not state then
-        return Player.findAura( buff.kicks_of_flowing_momentum )
+        return Player.buffs.kicks_of_flowing_momentum.up()
     else
         local flowing_momentum = false
         for cb_idx, cb in ipairs( state.callback_stack ) do
@@ -2250,7 +2259,6 @@ local ww_spells = {
         damageID = 117418,
         
         ticks = 5,
-        interrupt_aa = true,
         hasted_cooldown = true,
 
         ww_mastery = true,
@@ -2263,16 +2271,14 @@ local ww_spells = {
             
             am = am * Player.talent.flashing_fists.effectN( 1 ).mod
             
-            local transfer_the_power = Player.findAura( buff.transfer_the_power )
-            if transfer_the_power then
-                am = am * ( 1 + transfer_the_power.stacks * Player.talent.transfer_the_power.effectN( 1 ).pct )
+            if Player.buffs.transfer_the_power.up() then
+                am = am * ( 1 + Player.buffs.transfer_the_power.stacks() * Player.talent.transfer_the_power.effectN( 1 ).pct )
             end
             
             am = am * Player.talent.open_palm_strikes.effectN( 4 ).mod
             
-            local fists_of_flowing_momentum_fof = Player.findAura( buff.fists_of_flowing_momentum_fof )
-            if fists_of_flowing_momentum_fof then
-                am = am * ( 1 + fists_of_flowing_momentum_fof.stacks * spell.fists_of_flowing_momentum.effectN( 1 ).pct )
+            if Player.buffs.fists_of_flowing_momentum.up() then
+                am = am * ( 1 + Player.buffs.fists_of_flowing_momentum.stacks() * Player.buffs.fists_of_flowing_momentum.effectN( 1 ).pct )
             end
             
             if Player.set_pieces[ 31 ] >= 4 then
@@ -2288,10 +2294,6 @@ local ww_spells = {
         
         target_multiplier = function( target_count )  
             local primary_multiplier = 1
-            
-            if Player.set_pieces[30] >= 4 then
-                primary_multiplier = primary_multiplier * ( 1 + t30_4pc_ww_bonus )
-            end
             
             return aura_env.targetScale( target_count, spell.fists_of_fury.effectN( 1 ).base_value, 1, spell.fists_of_fury.effectN( 6 ).pct, primary_multiplier )
         end,
@@ -2332,8 +2334,8 @@ local ww_spells = {
             -- Buff isn't gained until channel ends but still affects RSK if you break the channel with it
             if ( Player.channel.spellID and Player.channel.spellID == 113656 and Player.talent.xuens_battlegear.ok )
             -- 
-            or Player.findAura ( buff.pressure_point ) then
-                cr = cr + spell.pressure_point.effectN( 1 ).roll
+            or Player.buffs.pressure_point.up() then
+                cr = cr + Player.buffs.pressure_point.effectN( 1 ).roll
             end
             
             return min(1, cr)
@@ -2355,11 +2357,7 @@ local ww_spells = {
             am = am * Player.talent.rising_star.effectN( 1 ).mod
             
             if IsFlowingMomentumKicks( state ) then
-                am = am * spell.kicks_of_flowing_momentum.effectN( 1 ).mod
-            end
-            
-            if Player.set_pieces[30] >= 2 then
-                am = am * ( 1 + t30_2pc_ww_bonus )
+                am = am * Player.buffs.kicks_of_flowing_momentum.effectN( 1 ).mod
             end
             
             if Player.set_pieces[ 31 ] >= 4 then
@@ -2371,8 +2369,9 @@ local ww_spells = {
         
         trigger = {
             ["glory_of_the_dawn"] = true,
-            ["shadowflame_nova"] = function() 
-                return Player.set_pieces[30] >= 2
+            ["chi_wave"] = function()
+                -- Todo: Replace with buff.up()
+                return Player.findAura( 450380 )
             end,
         },
     
@@ -2412,7 +2411,6 @@ local ww_spells = {
         end,
         
         ticks = 4,
-        interrupt_aa = true,
         
         copied_by_sef = true,
         affected_by_serenity = true,
@@ -2436,23 +2434,19 @@ local ww_spells = {
                 am = am * ( 1 + ( motc_stacks * spell.cyclone_strikes.effectN( 1 ).pct ) )
             end
             
-            if Player.findAura( buff.dance_of_chiji ) then
+            if Player.buffs.dance_of_chiji.up() then
                 am = am * Player.talent.dance_of_chiji.effectN( 1 ).mod
             end
             
             am = am * Player.talent.crane_vortex.effectN( 1 ).mod
             
             if IsFlowingMomentumKicks( state ) then
-                am = am * spell.kicks_of_flowing_momentum.effectN( 1 ).mod
+                am = am * Player.buffs.kicks_of_flowing_momentum.effectN( 1 ).mod
             end
             
             am = am * Player.talent.fast_feet.effectN( 2 ).mod
             
             return am
-        end,
-        
-        chi = function()
-            return aura_env.chi_base_cost( 101546 )
         end,
         
         target_count = function()
@@ -2532,6 +2526,10 @@ local ww_spells = {
         ww_mastery = true,
         
         generate_marks = function()
+            if Player.is_beta() then
+                return 1
+            end
+            
             return 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value
         end,
         
@@ -2557,7 +2555,7 @@ local ww_spells = {
             am = am * Player.talent.shadowboxing_treads.effectN( 2 ).mod
             
             if IsBlackoutReinforcement( state ) then
-                am = am * spell.blackout_reinforcement.effectN( 1 ).mod
+                am = am * Player.buffs.blackout_reinforcement.effectN( 1 ).mod
             end
             
             return am
@@ -2579,11 +2577,11 @@ local ww_spells = {
                     local remaining = aura_env.getCooldown( 107428 ) -- RSK
                     if remaining > 0 then
                         local targets = min( aura_env.target_count, 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value )
-                        local totm = Player.findAura( buff.teachings_of_the_monastery )
-                        local totm_stacks = ( totm and totm.stacks or 0 )
+                        local totm_stacks = Player.buffs.teachings_of_the_monastery.stacks()
+                        local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks
                         
                         if ( state and state.callback.spellID == 100780 ) then
-                            totm_stacks = min( 3, totm_stacks + 1 )
+                            totm_stacks = min( totm_max_stacks, totm_stacks + 1 )
                         end
                         
                         cdr = cdr + ( min( 1, Player.talent.teachings_of_the_monastery.effectN( 1 ).roll * targets * ( 1 + totm_stacks ) ) * remaining )
@@ -2632,10 +2630,10 @@ local ww_spells = {
             ["ancient_lava"] = true,  
             ["blackout_kick_totm"] = function( driver )
                 local totm_stacks = 0
-
+                
                 if Player.talent.teachings_of_the_monastery.ok then
-                    local totm = Player.findAura( buff.teachings_of_the_monastery )
-                    totm_stacks = min( 3, ( totm and totm.stacks or 0 ) + ( driver == "tiger_palm" and 1 or 0 ) )
+                    local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks
+                    totm_stacks = min( totm_max_stacks, Player.buffs.teachings_of_the_monastery.stacks() + ( driver == "tiger_palm" and 1 or 0 ) )
                 end
                 
                 return totm_stacks > 0
@@ -2644,8 +2642,8 @@ local ww_spells = {
                 local totm_stacks = 0
                 
                 if Player.talent.teachings_of_the_monastery.ok then
-                    local totm = Player.findAura( buff.teachings_of_the_monastery )
-                    totm_stacks = min( 3, ( totm and totm.stacks or 0 ) + ( driver == "tiger_palm" and 1 or 0 ) )
+                    local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks
+                    totm_stacks = min( totm_max_stacks, Player.buffs.teachings_of_the_monastery.stacks() + ( driver == "tiger_palm" and 1 or 0 ) )
                 end
                 
                 return totm_stacks > 1
@@ -2654,8 +2652,8 @@ local ww_spells = {
                 local totm_stacks = 0
                 
                 if Player.talent.teachings_of_the_monastery.ok then
-                    local totm = Player.findAura( buff.teachings_of_the_monastery )
-                    totm_stacks = min( 3, ( totm and totm.stacks or 0 ) + ( driver == "tiger_palm" and 1 or 0 ) )
+                    local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks
+                    totm_stacks = min( totm_max_stacks, Player.buffs.teachings_of_the_monastery.stacks() + ( driver == "tiger_palm" and 1 or 0 ) )
                 end
                 
                 return totm_stacks > 2
@@ -2663,6 +2661,27 @@ local ww_spells = {
             ["resonant_fists"] = true,
         },    
     } ),
+
+    ["wdp_st_tick"] = Player.createAction( Player.is_beta() and 451767 or nil, {
+        background = true,
+        
+        ww_mastery = true,
+        copied_by_sef = true,
+        trigger_etl = true,
+        
+        action_multiplier = function ( )
+            local am = 1
+            if Player.set_pieces[ 31 ] >= 4 then
+                am = am * spell.t31_ww_4pc.effectN( 2 ).mod
+            end        
+            return am
+        end,        
+        
+        tick_trigger = {
+            ["ancient_lava"] = true,  
+            ["resonant_fists"] = true,
+        },       
+    }),
 
     ["whirling_dragon_punch"] = Player.createAction( 152175, {
         callbacks = {
@@ -2721,8 +2740,17 @@ local ww_spells = {
         end,
         
         target_multiplier = function( target_count )
+            
+            if Player.is_beta() then
+                return aura_env.targetScale( target_count, Player.talent.whirling_dragon_punch.effectN( 1 ).base_value )
+            end
+            
             return target_count
         end,
+        
+        trigger = {
+            ["wdp_st_tick"] = Player.is_beta(),
+        },
         
         tick_trigger = {
             ["ancient_lava"] = true,  
@@ -2946,7 +2974,14 @@ local ww_spells = {
 
     ["tiger_palm"] = Player.createAction( 100780, {
 
-        chi_gain = function() return ( Player.findAura( buff.power_strikes ) and 3 or 2 ) end,
+        chi_gain = function() 
+            if Player.is_beta() then
+                return 2
+            end
+            
+            return ( Player.buffs.power_strikes.up() and 3 or 2 ) 
+        end,
+        
         generate_marks = 1,
         usable_during_sck = true,     
         trigger_etl = true,
@@ -2954,7 +2989,13 @@ local ww_spells = {
         ww_mastery = true,
         
         action_multiplier = function()
-            local am = ( Player.findAura( buff.power_strikes ) and Player.talent.power_strikes.effectN( 2 ).mod ) or 1
+            local am = 1
+            
+            local combat_wisdom = Player.is_beta() and Player.getTalent( "combat_wisdom" ) or Player.getTalent( "power_strikes" )
+            
+            if Player.buffs.power_strikes.up() and combat_wisdom.ok then
+                am = am * combat_wisdom.effectN( 2 ).mod
+            end
             
             am = am * Player.talent.touch_of_the_tiger.effectN( 1 ).mod
             
@@ -2962,6 +3003,10 @@ local ww_spells = {
             
             return am
         end,
+        
+        trigger = {
+            ["expel_harm"] = Player.is_beta(),
+        },
         
         tick_trigger = {
             ["ancient_lava"] = true,
@@ -2972,13 +3017,16 @@ local ww_spells = {
     ["chi_burst"] = Player.createAction( 123986, {
 
         damageID = 148135,
-        interrupt_aa = true,
         
         trigger_etl = true,
         copied_by_sef = true,   
         ww_mastery = true,
         
-        chi_gain = function() 
+        chi_gain = function()
+            if Player.is_beta() then
+                return 0
+            end
+            
             return min( 2, aura_env.target_count ) 
         end,
 
@@ -2995,8 +3043,9 @@ local ww_spells = {
         },
     } ),
 
-    ["chi_wave"] = Player.createAction( 115098, {
+    ["chi_wave"] = Player.createAction( Player.is_beta() and 450391 or 115098, {
         
+        background = Player.is_beta(),
         damageID = 132467,
         ticks = 4, -- 4 Damage Bounces
         
@@ -3004,24 +3053,28 @@ local ww_spells = {
         usable_during_sck = true,        
         trigger_etl = true,
         copied_by_sef = true,
-        
+ 
         tick_trigger = {
             ["resonant_fists"] = true,
         },        
     } ),
 
-    ["expel_harm"] = Player.createAction( 322101, {
+    ["expel_harm"] = Player.createAction( Player.is_beta() and 451968 or 322101, {
         type = "self_heal",
     
         trigger_etl = true,
         ww_mastery = true,
         usable_during_sck = true,
         
-        chi_gain = function() 
+        chi_gain = function()
+            
+            local chi = Player.is_beta() and 0 or 1
+            
             if IsPlayerSpell( spell.reverse_harm.id ) then -- Reverse Harm
-                return 1 + spell.reverse_harm.effectN( 2 ).base_value
+                chi = chi + spell.reverse_harm.effectN( 2 ).base_value
             end
-            return 1 
+            
+            return chi
         end,
         
         action_multiplier = function()
@@ -3071,7 +3124,7 @@ local ww_spells = {
 
     ["flying_serpent_kick"] = Player.createAction( 101545, {
 
-        damageID = 123586,
+        damageID = Player.is_beta() and 123586 or nil,
 
         ww_mastery = true,
 
@@ -3119,9 +3172,8 @@ local ww_spells = {
         ww_mastery = false,
         
         action_multiplier = function()
-            local chi_energy = Player.findAura( buff.chi_energy )
-            if chi_energy then
-                return ( 1 + chi_energy.stacks * spell.chi_energy.effectN( 1 ).pct )
+            if Player.buffs.chi_energy.up() then
+                return ( 1 + Player.buffs.chi_energy.stacks() * spell.chi_energy.effectN( 1 ).pct )
             end
             return 0
         end,
@@ -3161,9 +3213,9 @@ local ww_spells = {
             return aura_env.learnedFrontalTargets( 395521 ) -- SotWL
         end,        
         target_multiplier = function( target_count )
-            local thunderfist = Player.findAura( 242387 )
-            local current_stacks = thunderfist and thunderfist.stacks or 0
-            local stacks = min( 10, target_count + current_stacks ) -- SotWL
+            local current_stacks = Player.buffs.thunderfist.stacks()
+            local stacks_acquired = target_count + ( Player.is_beta() and Player.talent.thunderfist.effectN( 1 ).base_value or 0 )
+            local stacks = min( 10, stacks_acquired + current_stacks )
             return min( stacks, aura_env.fight_remains / ( UnitAttackSpeed( "player" ) or 4 ) )          
         end,
     },
@@ -3171,7 +3223,6 @@ local ww_spells = {
     ["crackling_jade_lightning"] = Player.createAction( 117952, {
 
         ticks = 4,
-        interrupt_aa = true,
   
         copied_by_sef = true,    
         ww_mastery = true,
@@ -3179,9 +3230,8 @@ local ww_spells = {
         action_multiplier = function()
             local am = 1
             
-            local emp_cap = Player.findAura( buff.the_emperors_capacitor )
-            if emp_cap then
-                am = am * ( 1 + emp_cap.stacks * spell.emperors_capacitor.effectN( 1 ).pct )
+            if Player.buffs.the_emperors_capacitor.up() then
+                am = am * ( 1 + Player.buffs.the_emperors_capacitor.stacks() * spell.emperors_capacitor.effectN( 1 ).pct )
             end
             
             return am
@@ -3257,8 +3307,8 @@ local ww_spells = {
     -- TODO: Refactor this to debuff at some point?
     ["touch_of_karma"] = Player.createAction( 122470, {
 
-        ignore_armor = true, -- Not parsed from spell attributes, probably missing the actual damageID
-        
+        damageID = 124280,
+
         trigger_etl = false,
         
         bonus_da = function()
@@ -3400,8 +3450,7 @@ local ww_spells = {
         
         ready = function()
             local arrogance = Player.findAura( 411661 )
-            local sef = Player.findAura( buff.storm_earth_and_fire ) 
-            return InCombatLockdown() and sef and sef.remaining >= 1
+            return InCombatLockdown() and Player.buffs.storm_earth_and_fire.remains() >= 1
             and 
             (
                 (
@@ -3428,8 +3477,7 @@ local ww_spells = {
         type = "damage_buff",
         spellID = 196741,
         pct = function()
-            local hc_buff = Player.findAura( buff.hit_combo )
-            return ( min( 6, ( hc_buff and hc_buff.stacks or 0 ) ) * spell.hit_combo.effectN( 1 ).pct )
+            return ( min( 6, Player.buffs.hit_combo.stacks() ) * Player.buffs.hit_combo.effectN( 1 ).pct )
         end,
         base_duration = 9,
         duration = 9,
@@ -3445,8 +3493,6 @@ local ww_spells = {
 
 local mw_spells = {
     ["spinning_crane_kick"] = Player.createAction( 101546, {
-        interrupt_aa = true,
-
         target_count = function()
             return aura_env.target_count
         end,
@@ -3575,19 +3621,19 @@ local brm_spells = {
         background = true,
 
         action_multiplier = function( state )
-            local am = spell.press_the_advantage.effectN( 2 ).mod
+            local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
             
             am = am * Player.talent.fast_feet.effectN( 1 ).mod
             
             -- TP Modifiers
             if IsBlackoutCombo( state ) then
-                am = am * ( 1 + ( spell.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
+                am = am * ( 1 + ( Player.buffs.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
             end           
             
             am = am * ( 1 + ( Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 2 ).pct * press_the_advantage_fp_mod ) )
             
-            if Player.findAura( buff.counterstrike ) then
-                am = am * ( 1 + ( spell.counterstrike.effectN( 1 ).pct * press_the_advantage_cs_mod ) )
+            if Player.buffs.counterstrike.up() then
+                am = am * ( 1 + ( Player.buffs.counterstrike.effectN( 1 ).pct * press_the_advantage_cs_mod ) )
             end        
             
             return am
@@ -3607,16 +3653,6 @@ local brm_spells = {
             ["chi_surge"] = true,
         },
     
-        mitigate = function()
-            local m = 0
-            
-            if Player.set_pieces[30] >= 4 then
-                -- physical damage mitigated from one second of Elusive Brawler
-                m = m + dodgeMitigation( ( GetMasteryEffect() / 100 ) )
-            end
-            
-            return m
-        end,    
     } ),
 
     ["rising_sun_kick"] = Player.createAction( 107428, {
@@ -3625,27 +3661,11 @@ local brm_spells = {
         hasted_cooldown = true,
         
         usable_during_sck = true,
-
-        critical_rate = function()
-            local cr = Player.crit_bonus
-            
-            local leverage = Player.findAura( buff.leverage )
-            if leverage then
-                cr = cr + ( leverage.stacks * t30_4pc_brm_bonus )
-            end     
-            
-            return min( 1, cr )
-        end,     
         
         action_multiplier = function( state )
             local am = 1
             
             am = am * Player.talent.fast_feet.effectN( 1 ).mod
-            
-            local leverage = Player.findAura( buff.leverage )
-            if leverage then
-                am = am * ( 1 + leverage.stacks * t30_4pc_brm_bonus )
-            end     
             
             return am
         end,
@@ -3658,25 +3678,19 @@ local brm_spells = {
     
         trigger = {
             ["pta_rising_sun_kick"] = function()
-                local pta = Player.findAura( buff.press_the_advantage )
-                if pta and pta.stacks >= 10 then
+                if Player.buffs.press_the_advantage.stacks() >= 10 then
                     return true
                 end
+                
                 return false
             end,
             ["weapons_of_order_debuff"] = true,
+            ["chi_wave"] = function()
+                -- Todo: Replace with buff.up()
+                return Player.findAura( 450380 )
+            end,
         },
     
-        mitigate = function()
-            local m = 0
-            
-            if Player.set_pieces[30] >= 4 then
-                -- physical damage mitigated from one second of Elusive Brawler
-                m = m + dodgeMitigation( ( GetMasteryEffect() / 100 ) )
-            end
-            
-            return m
-        end,    
     } ),
 
     ["charred_passions"] = Player.createAction( 386959, {
@@ -3727,10 +3741,6 @@ local brm_spells = {
             
             am = am * Player.talent.elusive_footwork.effectN( 2 ).mod
             
-            if Player.set_pieces[30] >= 2 then
-                am = am * ( 1 + t30_2pc_brm_bonus )
-            end    
-            
             return am
         end,
         
@@ -3773,7 +3783,7 @@ local brm_spells = {
             ["ancient_lava"] = true,
             ["charred_passions"] = function( driver )
                 if Player.talent.charred_passions.ok then
-                    if driver == "breath_of_fire" or Player.findAura( buff.charred_passions ) then
+                    if driver == "breath_of_fire" or Player.buffs.charred_passions.up() then
                         return true
                     end
                 end
@@ -3790,15 +3800,9 @@ local brm_spells = {
         
         damageID = 107270,
         ticks = 4,
-        interrupt_aa = true,
         
         critical_rate = function()
             local cr = Player.crit_bonus
-            
-            local leverage = Player.findAura( buff.leverage )
-            if leverage then
-                cr = cr + ( leverage.stacks * t30_4pc_brm_bonus )
-            end     
             
             return min( 1, cr )
         end,    
@@ -3808,14 +3812,9 @@ local brm_spells = {
             
             am = am * Player.talent.fast_feet.effectN( 2 ).mod
             
-            if Player.findAura( buff.counterstrike ) then
-                am = am * spell.counterstrike.effectN( 1 ).mod
+            if Player.buffs.counterstrike.up() then
+                am = am * Player.buffs.counterstrike.effectN( 1 ).mod
             end
-            
-            local leverage = Player.findAura( buff.leverage )
-            if leverage then
-                am = am * ( 1 + leverage.stacks * t30_4pc_brm_bonus )
-            end                 
             
             return am
         end,
@@ -3833,7 +3832,7 @@ local brm_spells = {
             ["ancient_lava"] = true,
             ["charred_passions"] = function( driver )
                 if Player.talent.charred_passions.ok then
-                    if driver == "breath_of_fire" or Player.findAura( buff.charred_passions ) then
+                    if driver == "breath_of_fire" or Player.buffs.charred_passions.up() then
                         return true
                     end
                 end
@@ -3897,8 +3896,8 @@ local brm_spells = {
             
             am = am * ( 1 + ( Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 2 ).pct  ) )
             
-            if Player.findAura( buff.counterstrike ) then
-                am = am * spell.counterstrike.effectN( 1 ).mod
+            if Player.buffs.counterstrike.up() then
+                am = am * Player.buffs.counterstrike.effectN( 1 ).mod
             end
             
             return am
@@ -3918,7 +3917,6 @@ local brm_spells = {
     ["chi_burst"] = Player.createAction( 123986, {
 
         damageID = 148135,
-        interrupt_aa = true,
         
         target_count = function()
             return aura_env.target_count
@@ -3934,8 +3932,9 @@ local brm_spells = {
         },
     } ),
 
-    ["chi_wave"] = Player.createAction( 115098, {
-
+    ["chi_wave"] = Player.createAction( Player.is_beta() and 450391 or 115098, {
+        
+        background = Player.is_beta(),
         damageID = 132467,
         ticks = 4, -- 4 Damage Bounces
         usable_during_sck = true,   
@@ -4073,7 +4072,7 @@ local brm_spells = {
         background = true,
         
         action_multiplier = function( state )
-            local am = spell.press_the_advantage.effectN( 2 ).mod
+            local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
             
             am = am * Player.talent.stormstouts_last_keg.effectN( 1 ).mod
             
@@ -4086,19 +4085,19 @@ local brm_spells = {
             
             This might work, but needs to be tested
             
-            if Player.findAura( buff.double_barrel ) then
+            if Player.buffs.double_barrel.up() then
                 am = am * ( 1 + double_barrel_amp )
             end]]
             
             -- TP Modifiers
             if IsBlackoutCombo( state ) then
-                am = am * ( 1 + ( spell.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
+                am = am * ( 1 + ( Player.buffs.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
             end     
             
             am = am * ( 1 + ( Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 2 ).pct * press_the_advantage_fp_mod ) )
             
-            if Player.findAura( buff.counterstrike ) then
-                am = am * ( 1 + ( spell.counterstrike.effectN( 1 ).pct * press_the_advantage_cs_mod ) )
+            if Player.buffs.counterstrike.up() then
+                am = am * ( 1 + ( Player.buffs.counterstrike.effectN( 1 ).pct * press_the_advantage_cs_mod ) )
             end   
             
             return am
@@ -4159,9 +4158,8 @@ local brm_spells = {
             
             am = am * Player.talent.stormstouts_last_keg.effectN( 1 ).mod
             
-            local hit_scheme = Player.findAura( buff.hit_scheme )
-            if hit_scheme then
-                am = am * ( 1 + hit_scheme.stacks * spell.hit_scheme.effectN( 1 ).pct )
+            if Player.buffs.hit_scheme.up() then
+                am = am * ( 1 + Player.buffs.hit_scheme.stacks() * Player.buffs.hit_scheme.effectN( 1 ).pct )
             end     
             
             if Player.bof_targets > 0 and Player.talent.scalding_brew.ok then
@@ -4169,7 +4167,7 @@ local brm_spells = {
                 am = am * ( 1 + ( ratio * Player.talent.scalding_brew.effectN( 1 ).pct ) )
             end
             
-            if Player.findAura( buff.double_barrel ) then
+            if Player.buffs.double_barrel.up() then
                 am = am * ( 1 + double_barrel_amp )
             end
             
@@ -4200,9 +4198,8 @@ local brm_spells = {
         
         ready = function()
             -- With Press the Advantage we don't want to "waste" a buffed RSK if it's worth delaying
-            local pta = Player.findAura( buff.press_the_advantage )
             local last_update = aura_env.jeremy_update
-            if pta and pta.stacks >= 10 and last_update then
+            if Player.buffs.press_the_advantage.stacks() >= 10 and last_update then
                 local pta_rsk = last_update.raw["pta_rising_sun_kick"] or 0
                 local pta_ks  = last_update.raw["pta_keg_smash"] or 0
                 
@@ -4233,10 +4230,10 @@ local brm_spells = {
     
         trigger = {
             ["pta_keg_smash"] = function()
-                local pta = Player.findAura( buff.press_the_advantage )
-                if pta and pta.stacks >= 10 then
+                if Player.buffs.press_the_advantage.stacks() >= 10 then
                     return true
                 end
+                
                 return false
             end,
             ["weapons_of_order_debuff"] = true,
@@ -4338,13 +4335,7 @@ local brm_spells = {
                 return 0
             end
 
-            local ek_buff = Player.findAura( buff.exploding_keg )
-        
-            if not ek_buff then
-                return 0
-            end
-            
-            local remaining = ek_buff.remaining
+            local remaining = Player.buffs.exploding_keg.remains()
             
             if result.delay >= remaining then
                 return 0
@@ -4377,15 +4368,15 @@ local brm_spells = {
             
             -- BUG: BoC buffs the initial hit as well as the periodic
             if IsBlackoutCombo( state ) then
-                am = am * spell.blackout_combo.effectN( 5 ).mod
+                am = am * Player.buffs.blackout_combo.effectN( 5 ).mod
             end            
             
             if Player.stagger > 0 and Player.talent.dragonfire_brew.ok then
                 local ratio = 1
                 
-                if Player.findAura( buff.light_stagger ) then
+                if Player.buffs.light_stagger.up() then
                     ratio = 1 / 3
-                elseif Player.findAura( buff.moderate_stagger ) then
+                elseif Player.buffs.moderate_stagger.up() then
                     ratio = 2 / 3
                 end
                 
@@ -4457,7 +4448,7 @@ local brm_spells = {
             local am = 1
             
             if IsBlackoutCombo( state ) then
-                am = am * spell.blackout_combo.effectN( 5 ).mod
+                am = am * Player.buffs.blackout_combo.effectN( 5 ).mod
             end         
             
             return am
@@ -4479,12 +4470,12 @@ local brm_spells = {
             local ratio = min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets ) / aura_env.target_count 
             local dr = spell.breath_of_fire_dot.effectN( 2 ).pct
             
-            if Player.findAura( buff.celestial_flames ) then
+            if Player.buffs.celestial_flames.up() then
                 dr = dr + Player.talent.celestial_flames.effectN( 2 ).pct
             end
             
             if IsBlackoutCombo( state ) then
-                dr = dr + spell.blackout_combo.effectN( 2 ).pct
+                dr = dr + Player.buffs.blackout_combo.effectN( 2 ).pct
             end
             
             return dr * bof_duration * ratio * Player.recent_dtps
@@ -4630,12 +4621,7 @@ local brm_spells = {
             local m = 0
             
             if Player.talent.pretense_of_instability.ok then
-                local pretenseGain = pretense_duration
-                local activePretense = Player.findAura( buff.pretense_of_instability )
-                if activePretense then
-                    pretenseGain = pretenseGain - activePretense.remaining
-                end
-                
+                local pretenseGain = pretense_duration - Player.buffs.pretense_of_instability.remains()
                 m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
             end
             
@@ -4648,7 +4634,7 @@ local brm_spells = {
             if pb_cur < pb_max then
                 local charge_cd = aura_env.getCooldown( 119582 )
                 if charge_cd > 6 then
-                    if not Player.findAura( buff.heavy_stagger ) then
+                    if not Player.buffs.heavy_stagger.up() then
                         return false
                     end
                 end
@@ -4697,9 +4683,9 @@ local brm_spells = {
                 if driver and driver == "purifying_brew" then
                     -- TODO: Use DBC Value
                     purified_chi_count = 1
-                    if Player.findAura( buff.moderate_stagger ) then
+                    if Player.buffs.moderate_stagger.up() then
                         purified_chi_count = 3
-                    elseif Player.findAura( buff.heavy_stagger ) then
+                    elseif Player.buffs.heavy_stagger.up() then
                         purified_chi_count = 5
                     end
                 end
@@ -4710,13 +4696,9 @@ local brm_spells = {
                 end
                 
                 -- current buff
+                purified_chi_count = purified_chi_count + Player.buffs.purified_chi.stacks()
                 
-                local purified_chi = Player.findAura( buff.purified_chi )
-                if purified_chi then
-                    purified_chi_count = purified_chi_count + purified_chi.stacks
-                end
-                
-                m = m * ( 1 + ( min( 10, purified_chi_count ) * spell.purified_chi.effectN( 1 ).pct ) )
+                m = m * ( 1 + ( min( 10, purified_chi_count ) * Player.buffs.purified_chi.effectN( 1 ).pct ) )
 
                 -- --------------------------
             
@@ -4733,12 +4715,7 @@ local brm_spells = {
             
             -- Pretense of Instability
             if Player.talent.pretense_of_instability.ok then
-                local pretenseGain = pretense_duration
-                local activePretense = Player.findAura( buff.pretense_of_instability )
-                if activePretense then
-                    pretenseGain = pretenseGain - activePretense.remaining
-                end
-                
+                local pretenseGain = pretense_duration - Player.buffs.pretense_of_instability.remains()
                 m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
             end
             

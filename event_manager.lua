@@ -271,6 +271,7 @@ function(event, ...)
                 actionhash[ tbl.name ] = index
             end
             aura_env.action_cache[ tbl.name ] = tbl
+            
         end
         
         if spec == 0 then
@@ -1214,7 +1215,7 @@ function(event, ...)
                             end             
                             
                             -- AA Loss
-                            if action.interrupt_aa then
+                            if action.delay_aa then
                                 
                                 local mh_dmg = Player.mh_wdps * Player.vers_bonus
                                 local oh_dmg = Player.oh_wdps * Player.vers_bonus
@@ -1421,11 +1422,11 @@ function(event, ...)
                                     local spell_result = spell.result
                                     
                                     if spell and spell_result then
-                                        
+
                                         local total_ticks = ( spell_result.ticks or 1 ) * ( spell_result.target_count or 1 )
-                                        local tick_damage = spell_result.damage or 0 / total_ticks
-                                        local tick_healing = spell_result.healing or 0  / total_ticks
-                                        local tick_group_heal = spell_result.group_healing or 0 / total_ticks
+                                        local tick_damage = ( spell_result.damage or 0 ) / total_ticks
+                                        local tick_healing = ( spell_result.healing or 0 )  / total_ticks
+                                        local tick_group_heal = ( spell_result.group_healing or 0 ) / total_ticks
                                         
                                         local result_ticks = ( result.ticks or 1 ) * ( result.target_count or 1 )
                                         local duration = result.execute_time 
@@ -1967,6 +1968,11 @@ function(event, ...)
                     or ( spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"]  and v.mana_cost > Player.mana )
                     or ( spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  and v.energy_cost > Player.energy ) then
                         jeremy.rank[ v.name ] = 0
+                    elseif v.mastery_break
+                    and aura_env.fight_remains > 1
+                    and v.name ~= "touch_of_death" 
+                    and ( v.name ~= "spinning_crane_kick" or Player.bdb_targets == 0 ) then
+                        jeremy.rank[ v.name ] = 0                               
                     else
                         local action_name = gsub( v.combo_base and v.combo_base or v.name, "_cancel", "" )
                         jeremy.rank[ action_name ] = jeremy.rank[ action_name ] or k
