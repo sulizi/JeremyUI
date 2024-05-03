@@ -108,7 +108,7 @@ local ScanEvents = WeakAuras.ScanEvents
 
 local DBC_Version = 2.2
 local DBC_Critical = 2.2
-local LibDBCache = LibStub("LibDBCache-1.0", true)
+local LibDBCache = LibStub( "LibDBCache-1.0", true )
 
 if not LibDBCache then
     print("JeremyUI: Database missing!")
@@ -124,8 +124,6 @@ if DBC_Version > LibDBCache.Version then
     print("JeremyUI: Your database is out of date, an update is needed.")
     print("JeremyUI: You may experience Lua errors until your database is updated.")    
 end
-
-local spell_affected_by_effect = LibDBCache:spell_affected_by_effect
 
 --boop
 local spell = {
@@ -561,7 +559,7 @@ aura_env.CPlayer = {
         action.may_crit         = action.may_crit or _damage_data.may_crit
         
         local effect_type = function( e )
-            if effect.is_heal then
+            if e.is_heal then
                 if action.target_count then
                     return "smart_heal"
                 end
@@ -1523,7 +1521,7 @@ aura_env.gcd = function ( spellID )
         gcd_flat_modifier = spell.windwalker_monk.effectN( 12 )
     end
     
-    if spell_affected_by_effect( spellID, gcd_flat_modifier ) then
+    if LibDBCache:spell_affected_by_effect( spellID, gcd_flat_modifier ) then
         ret_ms = ret_ms + gcd_flat_modifier.base_value
     end        
     
@@ -1736,7 +1734,7 @@ aura_env.global_modifier = function( callback, future, real )
         
         -- Mystic Touch
         -- No point in debuff tracking for this spell as a Monk, save the CPU time
-        if spell_affected_by_effect( callback.spellID, spell.mystic_touch.effectN( 1 ) ) then
+        if LibDBCache:spell_affected_by_effect( callback.spellID, spell.mystic_touch.effectN( 1 ) ) then
             gm = gm * spell.mystic_touch.effectN( 1 ).mod
         end
         
@@ -1756,11 +1754,11 @@ aura_env.global_modifier = function( callback, future, real )
         end      
         
         -- Dynamic Buffs/Debuffs
-        if Player.buffs.press_the_advantage.up() and spell_affected_by_effect( callback.spellID, Player.buffs.press_the_advantage.effectN( 1 ) ) then
+        if Player.buffs.press_the_advantage.up() and LibDBCache:spell_affected_by_effect( callback.spellID, Player.buffs.press_the_advantage.effectN( 1 ) ) then
             gm = gm * ( 1 + Player.buffs.press_the_advantage.stacks() * Player.buffs.press_the_advantage.effectN( 1 ).pct )
         end
         
-        if Player.buffs.hit_combo.up() and spell_affected_by_effect( callback.spellID, Player.buffs.hit_combo.effectN( 1 ) ) then
+        if Player.buffs.hit_combo.up() and LibDBCache:spell_affected_by_effect( callback.spellID, Player.buffs.hit_combo.effectN( 1 ) ) then
             gm = gm * ( 1 + Player.buffs.hit_combo.stacks() * Player.buffs.hit_combo.effectN( 1 ).pct  )
         end
         
@@ -1866,7 +1864,7 @@ aura_env.skyreach_modifier = function( callback )
     local callback_type = callback.type or "damage"
     
     if not callback.may_crit 
-    or not spell_affected_by_effect( callback.spellID, spell.keefers_skyreach.effectN( 1 ) )
+    or not LibDBCache:spell_affected_by_effect( callback.spellID, spell.keefers_skyreach.effectN( 1 ) )
     or callback_type ~= "damage" then
         return 0
     end
