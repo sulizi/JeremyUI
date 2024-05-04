@@ -2252,18 +2252,25 @@ local IsBlackoutProc = function ( state )
         local bok_proc = Player.buffs.bok_proc.up()
         local docj = Player.buffs.dance_of_chiji.up()
         
-        for cb_idx, cb in ipairs( state.callback_stack ) do
-            if cb_idx == #state.callback_stack then
+        local _next = nil
+        local _, stack = ipairs( state.callback_stack )
+        local cb_idx = 1
+        
+        for cb_idx = 1, #stack do
+            if cb_idx == #stack then
                 break
             end
             
+            local cb = stack[ cb_idx ] 
+             _next = stack [ cb_idx + 1 ]
+             
             if cb.name == "spinning_crane_kick" and docj then
                 if Player.getTalent( "sequenced_strikes" ).ok then
                     bok_proc = true
                 end
                 
                 docj = false
-            elseif cb.name == "blackout_kick" then
+            elseif cb.name == "blackout_kick" and _next.name ~= "energy_burst" then
                 bok_proc = false
             end
         end
@@ -2563,6 +2570,26 @@ local ww_spells = {
         },        
     } ),
 
+    ["energy_burst"] = Player.createAction( 451498, {
+        background = true,
+        
+        chi_gain = function( state )
+            if IsBlackoutProc( state ) then
+                return Player.getTalent( "energy_burst" ).effectN( 2 ).base_value
+            end
+            
+            return 0
+        end,
+        
+        trigger_rate = function( callback )
+            return Player.getTalent( "energy_burst" ).effectN( 1 ).roll
+        end,
+        
+        ready = function()
+            return Player.getTalent( "energy_burst" ).ok
+        end,
+    } ),
+
     ["blackout_kick"] = Player.createAction( 100784, {
         callbacks = {
             -- Chi generators
@@ -2688,6 +2715,10 @@ local ww_spells = {
                 
                 return cdr
             end,            
+        },
+    
+        trigger = {
+            ["energy_burst"] = true,    
         },
     
         tick_trigger = {

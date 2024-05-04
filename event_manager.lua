@@ -1574,7 +1574,7 @@ function(event, ...)
                                         healing_out    = healing_out + ( tick_healing * tick_count ) 
                                         group_heal_out = group_heal_out + ( tick_group_heal * tick_count ) 
                                         mitigate_out   = mitigate_out + ( tick_mitigate * tick_count )
-                                        trigger_chi_gain = trigger_chi_gain + ( tick_count * ( spell.chi_gain and spell.chi_gain() or 0 ) )
+                                        trigger_chi_gain = trigger_chi_gain + ( tick_count * ( spell.chi_gain and spell.chi_gain( trigger.state ) or 0 ) )
                                         
                                     end
                                     
