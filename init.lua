@@ -871,6 +871,7 @@ Player.makeBuff( 390105, "save_them_all" )
 
 -- ww 
 Player.makeBuff( 424454, "blackout_reinforcement" )
+Player.makeBuff( 116768, "bok_proc" )
 Player.makeBuff( 337571, "chi_energy" )
 Player.makeBuff( 325202, "dance_of_chiji" )
 Player.makeBuff( 394949, "fists_of_flowing_momentum" )
@@ -2150,7 +2151,8 @@ local IsBlackoutCombo = function( state )
     if not state then
         return Player.buffs.blackout_combo.up()
     else
-        local blackout_combo = false
+        local blackout_combo = Player.buffs.blackout_combo.up()
+        
         if Player.talent.blackout_combo.ok then
             
             local _next = nil
@@ -2199,7 +2201,8 @@ local IsBlackoutReinforcement = function( state )
     if not state then
         return Player.buffs.blackout_reinforcement.up()
     else
-        local blackout_reinforcement = false
+        local blackout_reinforcement = Player.buffs.blackout_reinforcement.up()
+        
         for cb_idx, cb in ipairs( state.callback_stack ) do
             if cb_idx == #state.callback_stack then
                 break
@@ -2224,7 +2227,8 @@ local IsFlowingMomentumKicks = function( state )
     if not state then
         return Player.buffs.kicks_of_flowing_momentum.up()
     else
-        local flowing_momentum = false
+        local flowing_momentum = Player.buffs.kicks_of_flowing_momentum.up()
+        
         for cb_idx, cb in ipairs( state.callback_stack ) do
             if cb_idx == #state.callback_stack then
                 break
@@ -2237,6 +2241,34 @@ local IsFlowingMomentumKicks = function( state )
             end
         end
         return flowing_momentum
+    end
+end
+
+local IsBlackoutProc = function ( state )
+    
+    if not state then
+        return Player.buffs.bok_proc.up()
+    else
+        local bok_proc = Player.buffs.bok_proc.up()
+        local docj = Player.buffs.dance_of_chiji.up()
+        
+        for cb_idx, cb in ipairs( state.callback_stack ) do
+            if cb_idx == #state.callback_stack then
+                break
+            end
+            
+            if cb.name == "spinning_crane_kick" and docj then
+                if Player.getTalent( "sequenced_strikes" ).ok then
+                    bok_proc = true
+                end
+                
+                docj = false
+            elseif cb.name == "blackout_kick" then
+                bok_proc = false
+            end
+        end
+        
+        return bok_proc
     end
 end
 
@@ -2585,6 +2617,10 @@ local ww_spells = {
             end
             
             am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
+            
+            if IsBlackoutProc( state ) then
+                am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
+            end
             
             return am
         end,
