@@ -2799,6 +2799,9 @@ local ww_spells = {
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
             end        
+            
+            am = am * Player.getTalent( "communion_with_wind" ).effectN( 2 ).mod
+            
             return am      
         end,  
         
@@ -2840,7 +2843,10 @@ local ww_spells = {
             local am = 1
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end        
+            end
+            
+            am = am * Player.getTalent( "communion_with_wind" ).effectN( 2 ).mod
+            
             return am      
         end, 
         
