@@ -1607,9 +1607,9 @@ end
 aura_env.targetAuras = { }
 aura_env.bdb_amp = function()
     
-    local attenuation_bonus = Player.talent.attenuation.effectN( 1 ).mod
+    local attenuation_bonus = Player.getTalent( "attenuation" ).effectN( 1 ).mod
     
-    return 1 + ( Player.talent.bonedust_brew.effectN( 1 ).mod * attenuation_bonus * bdb_chance )
+    return 1 + ( Player.getTalent( "bonedust_brew" ).effectN( 1 ).mod * attenuation_bonus * bdb_chance )
 end
 aura_env.targetAuraEffect = function( callback, future )
     
@@ -1688,9 +1688,9 @@ aura_env.targetAuraEffect = function( callback, future )
                     target_amp = target_amp * ( 1 + ( aura_modifier - 1 ) * stacks * ( execute_time > 1 and min( 1, ( aura.remaining - future ) / execute_time ) or 1 ) )
                 end
             end  
-            if Player.talent.save_them_all.ok and aura_env.findUnitAura( UnitID, Player.buffs.save_them_all.spellID, "HELPFUL" ) then
-                if UnitHealth( UnitID ) / UnitHealthMax( UnitID ) < Player.talent.save_them_all.effectN( 3 ).roll then
-                    target_amp = target_amp * Player.talent.save_them_all.effectN( 1 ).mod
+            if Player.getTalent( "save_them_all" ).ok and aura_env.findUnitAura( UnitID, Player.buffs.save_them_all.spellID, "HELPFUL" ) then
+                if UnitHealth( UnitID ) / UnitHealthMax( UnitID ) < Player.getTalent( "save_them_all" ).effectN( 3 ).roll then
+                    target_amp = target_amp * Player.getTalent( "save_them_all" ).effectN( 1 ).mod
                 end
             end
             combined_amp = combined_amp + ( target_amp - 1 )
@@ -1733,7 +1733,7 @@ aura_env.global_modifier = function( callback, future, real )
         -- Self Healing
         if callback.type == "self_heal" then
             
-            gm = gm * Player.talent.grace_of_the_crane.effectN( 1 ).mod
+            gm = gm * Player.getTalent( "grace_of_the_crane" ).effectN( 1 ).mod
             
             if Player.spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"] then
                 gm = gm * aura_env.celestialFortune()
@@ -1763,7 +1763,7 @@ aura_env.global_modifier = function( callback, future, real )
         end
         
         -- Passive Talents
-        gm = gm * Player.talent.ferocity_of_xuen.effectN( 1 ).mod
+        gm = gm * Player.getTalent( "ferocity_of_xuen" ).effectN( 1 ).mod
         
         if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 1 ) )
             gm = gm * Player.getTalent( "chi_proficiency" ).effectN( 1 ).mod
@@ -1790,9 +1790,9 @@ aura_env.global_modifier = function( callback, future, real )
             gm = gm * ( 1 + Player.buffs.hit_combo.stacks() * Player.buffs.hit_combo.effectN( 1 ).pct  )
         end
         
-        if Player.talent.empowered_tiger_lightning.ok and callback.trigger_etl then
+        if Player.getTalent( "empowered_tiger_lightning" ).ok and callback.trigger_etl then
             if Player.buffs.xuen_the_white_tiger.remains() > future then
-                gm = gm * ( Player.talent.empowered_tiger_lightning.effectN( 2 ).mod * ( execute_time > 1 and min( 1, ( Player.buffs.xuen_the_white_tiger.remains() - future ) / execute_time ) or 1 ) )
+                gm = gm * ( Player.getTalent( "empowered_tiger_lightning" ).effectN( 2 ).mod * ( execute_time > 1 and min( 1, ( Player.buffs.xuen_the_white_tiger.remains() - future ) / execute_time ) or 1 ) )
             end
         end
         
@@ -2121,7 +2121,7 @@ end
 
 local CurrentCraneStacks = function( state )
     
-    if not Player.talent.mark_of_the_crane.ok then
+    if not Player.getTalent( "mark_of_the_crane" ).ok then
         return 0
     end
     
@@ -2169,7 +2169,7 @@ local IsBlackoutCombo = function( state )
     else
         local blackout_combo = Player.buffs.blackout_combo.up()
         
-        if Player.talent.blackout_combo.ok then
+        if Player.getTalent( "blackout_combo" ).ok then
             
             local _next = nil
             local consume_boc = { 
@@ -2297,7 +2297,7 @@ end
 
 local GetTotMStacks = function( state )
     
-    if not Player.getTalent( "\1" ).ok then
+    if not Player.getTalent( "teachings_of_the_monastery" ).ok then
         return 0
     end
     
@@ -2377,13 +2377,13 @@ local ww_spells = {
         action_multiplier = function()
             local am = 1
             
-            am = am * Player.talent.flashing_fists.effectN( 1 ).mod
+            am = am * Player.getTalent( "flashing_fists" ).effectN( 1 ).mod
             
             if Player.buffs.transfer_the_power.up() then
-                am = am * ( 1 + Player.buffs.transfer_the_power.stacks() * Player.talent.transfer_the_power.effectN( 1 ).pct )
+                am = am * ( 1 + Player.buffs.transfer_the_power.stacks() * Player.getTalent( "transfer_the_power" ).effectN( 1 ).pct )
             end
             
-            am = am * Player.talent.open_palm_strikes.effectN( 4 ).mod
+            am = am * Player.getTalent( "open_palm_strikes" ).effectN( 4 ).mod
             
             if Player.buffs.fists_of_flowing_momentum.up() then
                 am = am * ( 1 + Player.buffs.fists_of_flowing_momentum.stacks() * Player.buffs.fists_of_flowing_momentum.effectN( 1 ).pct )
@@ -2440,7 +2440,7 @@ local ww_spells = {
             local cr = Player.crit_bonus
             
             -- Buff isn't gained until channel ends but still affects RSK if you break the channel with it
-            if ( Player.channel.spellID and Player.channel.spellID == 113656 and Player.talent.xuens_battlegear.ok )
+            if ( Player.channel.spellID and Player.channel.spellID == 113656 and Player.getTalent( "xuens_battlegear" ).ok )
             -- 
             or Player.buffs.pressure_point.up() then
                 cr = cr + Player.buffs.pressure_point.effectN( 1 ).roll
@@ -2452,7 +2452,7 @@ local ww_spells = {
         critical_modifier = function()
             local cm = 1
             
-            cm = cm * Player.talent.rising_star.effectN( 2 ).mod
+            cm = cm * Player.getTalent( "rising_star" ).effectN( 2 ).mod
             
             return cm
         end,   
@@ -2460,9 +2460,9 @@ local ww_spells = {
         action_multiplier = function( state )
             local am = 1
             
-            am = am * Player.talent.fast_feet.effectN( 1 ).mod
+            am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
             
-            am = am * Player.talent.rising_star.effectN( 1 ).mod
+            am = am * Player.getTalent( "rising_star" ).effectN( 1 ).mod
             
             if IsFlowingMomentumKicks( state ) then
                 am = am * Player.buffs.kicks_of_flowing_momentum.effectN( 1 ).mod
@@ -2490,7 +2490,7 @@ local ww_spells = {
     
         reduces_cd = {
             ["fists_of_fury"] = function() 
-                return Player.talent.xuens_battlegear.effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
+                return Player.getTalent( "xuens_battlegear" ).effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
             end,
         },
     
@@ -2543,16 +2543,16 @@ local ww_spells = {
             end
             
             if Player.buffs.dance_of_chiji.up() then
-                am = am * Player.talent.dance_of_chiji.effectN( 1 ).mod
+                am = am * Player.getTalent( "dance_of_chiji" ).effectN( 1 ).mod
             end
             
-            am = am * Player.talent.crane_vortex.effectN( 1 ).mod
+            am = am * Player.getTalent( "crane_vortex" ).effectN( 1 ).mod
             
             if IsFlowingMomentumKicks( state ) then
                 am = am * Player.buffs.kicks_of_flowing_momentum.effectN( 1 ).mod
             end
             
-            am = am * Player.talent.fast_feet.effectN( 2 ).mod
+            am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
             
             return am
         end,
@@ -2587,7 +2587,7 @@ local ww_spells = {
         critical_rate = function()
             local cr = Player.crit_bonus
             
-            cr = cr + Player.talent.hardened_soles.effectN( 1 ).roll
+            cr = cr + Player.getTalent( "hardened_soles" ).effectN( 1 ).roll
             
             return min(1, cr)
         end,
@@ -2595,7 +2595,7 @@ local ww_spells = {
         critical_modifier = function()
             local cm = 1
             
-            cm = cm * Player.talent.hardened_soles.effectN( 2 ).mod
+            cm = cm * Player.getTalent( "hardened_soles" ).effectN( 2 ).mod
             
             return cm
         end,
@@ -2603,7 +2603,7 @@ local ww_spells = {
         action_multiplier = function()
             local am = 1
             
-            am = am * Player.talent.shadowboxing_treads.effectN( 2 ).mod
+            am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
             
             am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
             
@@ -2660,13 +2660,13 @@ local ww_spells = {
                 return 1
             end
             
-            return 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value
+            return 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value
         end,
         
         critical_rate = function()
             local cr = Player.crit_bonus
             
-            cr = cr + Player.talent.hardened_soles.effectN( 1 ).roll
+            cr = cr + Player.getTalent( "hardened_soles" ).effectN( 1 ).roll
             
             return min(1, cr)
         end,
@@ -2674,7 +2674,7 @@ local ww_spells = {
         critical_modifier = function()
             local cm = 1
             
-            cm = cm * Player.talent.hardened_soles.effectN( 2 ).mod
+            cm = cm * Player.getTalent( "hardened_soles" ).effectN( 2 ).mod
             
             return cm
         end,   
@@ -2682,7 +2682,7 @@ local ww_spells = {
         action_multiplier = function( state )
             local am = 1
             
-            am = am * Player.talent.shadowboxing_treads.effectN( 2 ).mod
+            am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
             
             if IsBlackoutReinforcement( state ) then
                 am = am * Player.buffs.blackout_reinforcement.effectN( 1 ).mod
@@ -2698,7 +2698,7 @@ local ww_spells = {
         end,
         
         target_count = function()
-            return min( aura_env.target_count, 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value )
+            return min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
         end,
         
         target_multiplier = function( target_count )
@@ -2714,13 +2714,13 @@ local ww_spells = {
             ["rising_sun_kick"] = function( state ) 
                 local cdr = spell.blackout_kick.effectN( 3 ).seconds 
                 
-                if Player.talent.teachings_of_the_monastery.ok then
+                if Player.getTalent( "teachings_of_the_monastery" ).ok then
                     local remaining = aura_env.getCooldown( 107428 ) -- RSK
                     if remaining > 0 then
-                        local targets = min( aura_env.target_count, 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value )
+                        local targets = min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
                         local totm_stacks = GetTotMStacks( state )
                         
-                        cdr = cdr + ( min( 1, Player.talent.teachings_of_the_monastery.effectN( 1 ).roll * targets * ( 1 + totm_stacks ) ) * remaining )
+                        cdr = cdr + ( min( 1, Player.getTalent( "teachings_of_the_monastery" ).effectN( 1 ).roll * targets * ( 1 + totm_stacks ) ) * remaining )
                     end
                 end
                 
@@ -2771,7 +2771,7 @@ local ww_spells = {
             ["blackout_kick_totm"] = function( driver )
                 local totm_stacks = 0
                 
-                if Player.talent.teachings_of_the_monastery.ok then
+                if Player.getTalent( "teachings_of_the_monastery" ).ok then
                     local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks()
                     totm_stacks = Player.buffs.teachings_of_the_monastery.stacks() + ( driver == "tiger_palm" and 1 or 0 )
                     totm_stacks = totm_stacks + ( driver == "whirling_dragon_punch" and Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value or 0 )
@@ -2824,13 +2824,13 @@ local ww_spells = {
         trigger_etl = true,
         
         ready = function()
-            return Player.talent.whirling_dragon_punch.ok
+            return Player.getTalent( "whirling_dragon_punch" ).ok
         end,
         
         callback_ready = function( callback )
             
             -- Not talented into WDP
-            if not Player.talent.whirling_dragon_punch.ok then
+            if not Player.getTalent( "whirling_dragon_punch" ).ok then
                 return false
             end
             -- WDP not ready
@@ -2872,7 +2872,7 @@ local ww_spells = {
         target_multiplier = function( target_count )
             
             if Player.is_beta() then
-                return aura_env.targetScale( target_count, Player.talent.whirling_dragon_punch.effectN( 1 ).base_value )
+                return aura_env.targetScale( target_count, Player.getTalent( "whirling_dragon_punch" ).effectN( 1 ).base_value )
             end
             
             return target_count
@@ -3031,7 +3031,7 @@ local ww_spells = {
             return max( 0, duration )
         end,
         ready = function()
-            return Player.talent.jadefire_harmony.ok
+            return Player.getTalent( "jadefire_harmony" ).ok
         end,
     },
 
@@ -3046,9 +3046,9 @@ local ww_spells = {
         action_multiplier = function()
             local am = 1
             
-            if Player.talent.path_of_jade.ok then 
-                local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.talent.path_of_jade.effectN( 2 ).base_value )
-                am = am * ( 1 + Player.talent.path_of_jade.effectN( 1 ).pct * poj_targets )
+            if Player.getTalent( "path_of_jade" ).ok then 
+                local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.getTalent( "path_of_jade" ).effectN( 2 ).base_value )
+                am = am * ( 1 + Player.getTalent( "path_of_jade" ).effectN( 1 ).pct * poj_targets )
             end
             
             return am
@@ -3076,15 +3076,15 @@ local ww_spells = {
         ww_mastery = true,
         
         ready = function()
-            return Player.talent.jadefire_stomp.ok and aura_env.fight_remains > 5 and Player.moving == false
+            return Player.getTalent( "jadefire_stomp" ).ok and aura_env.fight_remains > 5 and Player.moving == false
         end,
         
         action_multiplier = function()
             local am = 1
             
-            if Player.talent.path_of_jade.ok then 
-                local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.talent.path_of_jade.effectN( 2 ).base_value )
-                am = am * ( 1 + Player.talent.path_of_jade.effectN( 1 ).pct * poj_targets )
+            if Player.getTalent( "path_of_jade" ).ok then 
+                local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.getTalent( "path_of_jade" ).effectN( 2 ).base_value )
+                am = am * ( 1 + Player.getTalent( "path_of_jade" ).effectN( 1 ).pct * poj_targets )
             end
             
             return am
@@ -3133,9 +3133,9 @@ local ww_spells = {
                 am = am * combat_wisdom.effectN( 2 ).mod
             end
             
-            am = am * Player.talent.touch_of_the_tiger.effectN( 1 ).mod
+            am = am * Player.getTalent( "touch_of_the_tiger" ).effectN( 1 ).mod
             
-            am = am * Player.talent.inner_peace.effectN( 2 ).mod
+            am = am * Player.getTalent( "inner_peace" ).effectN( 2 ).mod
             
             return am
         end,
@@ -3213,13 +3213,13 @@ local ww_spells = {
         action_multiplier = function()
             local h = 1
             
-            h = h * Player.talent.vigorous_expulsion.effectN( 1 ).mod
+            h = h * Player.getTalent( "vigorous_expulsion" ).effectN( 1 ).mod
             
-            if Player.talent.strength_of_spirit.ok then
+            if Player.getTalent( "strength_of_spirit" ).ok then
                 local health_deficit = UnitHealthMax( "player" ) - UnitHealth( "player" )
                 local health_percent = health_deficit / UnitHealthMax( "player" )
                 
-                h = h * ( 1 + ( health_percent * Player.talent.strength_of_spirit.effectN( 1 ).pct ) )
+                h = h * ( 1 + ( health_percent * Player.getTalent( "strength_of_spirit" ).effectN( 1 ).pct ) )
             end
             
             if IsPlayerSpell( spell.reverse_harm.id ) then -- Reverse Harm
@@ -3232,7 +3232,7 @@ local ww_spells = {
         critical_rate = function()
             local cr = Player.crit_bonus
             
-            cr = cr + Player.talent.vigorous_expulsion.effectN( 2 ).mod
+            cr = cr + Player.getTalent( "vigorous_expulsion" ).effectN( 2 ).mod
             
             return min( 1, cr )
         end,
@@ -3240,7 +3240,7 @@ local ww_spells = {
         critical_modifier = function()
             local cm = 1
             
-            cm = cm * Player.talent.profound_rebuttal.effectN( 1 ).mod 
+            cm = cm * Player.getTalent( "profound_rebuttal" ).effectN( 1 ).mod 
             
             return cm
         end,        
@@ -3347,7 +3347,7 @@ local ww_spells = {
         end,        
         target_multiplier = function( target_count )
             local current_stacks = Player.buffs.thunderfist.stacks()
-            local stacks_acquired = target_count + ( Player.is_beta() and Player.talent.thunderfist.effectN( 1 ).base_value or 0 )
+            local stacks_acquired = target_count + ( Player.is_beta() and Player.getTalent( "thunderfist" ).effectN( 1 ).base_value or 0 )
             local stacks = min( 10, stacks_acquired + current_stacks )
             return min( stacks, aura_env.fight_remains / ( UnitAttackSpeed( "player" ) or 4 ) )          
         end,
@@ -3384,22 +3384,22 @@ local ww_spells = {
          
         chi_gain = function()
             if Player.is_beta() then
-                return Player.talent.glory_of_the_dawn.effectN( 3 ).base_value     
+                return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).base_value     
             end
             
-            return Player.talent.glory_of_the_dawn.effectN( 2 ).base_value 
+            return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).base_value 
         end,
         
         trigger_rate = function() 
             if Player.is_beta() then
-                return Player.talent.glory_of_the_dawn.effectN( 2 ).roll * Player.haste
+                return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).roll * Player.haste
             end
             
-            return Player.talent.glory_of_the_dawn.effectN( 3 ).roll 
+            return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).roll 
         end,
         
         ready = function()
-            return Player.talent.glory_of_the_dawn.ok
+            return Player.getTalent( "glory_of_the_dawn" ).ok
         end,
         
         tick_trigger = {
@@ -3413,7 +3413,7 @@ local ww_spells = {
         trigger_etl = true,
 
         action_multiplier = function()
-            return Player.talent.resonant_fists.rank 
+            return Player.getTalent( "resonant_fists" ).rank 
         end,
         
         target_count = function()
@@ -3425,7 +3425,7 @@ local ww_spells = {
         end,
         
         ready = function()
-            return Player.talent.resonant_fists.ok
+            return Player.getTalent( "resonant_fists" ).ok
         end,
     } ),
 
@@ -3433,15 +3433,15 @@ local ww_spells = {
         background = true,
         
         chi_gain = function() 
-            return Player.talent.open_palm_strikes.effectN( 3 ).base_value 
+            return Player.getTalent( "open_palm_strikes" ).effectN( 3 ).base_value 
         end,
         
         trigger_rate = function( callback )
-            return Player.talent.open_palm_strikes.effectN( 2 ).roll
+            return Player.getTalent( "open_palm_strikes" ).effectN( 2 ).roll
         end,
         
         ready = function()
-            return Player.talent.open_palm_strikes.ok
+            return Player.getTalent( "open_palm_strikes" ).ok
         end,
     } ),
 
@@ -3454,13 +3454,13 @@ local ww_spells = {
         
         bonus_da = function()
             local tick_time = min( aura_env.target_ttd, 10 )
-            local health_mod = Player.talent.touch_of_karma.effectN( 3 ).pct
-            return min( UnitHealthMax( "player" ) * health_mod, Player.recent_dtps * tick_time ) * Player.talent.touch_of_karma.effectN( 4 ).pct
+            local health_mod = Player.getTalent( "touch_of_karma" ).effectN( 3 ).pct
+            return min( UnitHealthMax( "player" ) * health_mod, Player.recent_dtps * tick_time ) * Player.getTalent( "touch_of_karma" ).effectN( 4 ).pct
         end,
         
         ready = function()
             local tick_time = min( aura_env.target_ttd, 10 )
-            local health_mod = Player.talent.touch_of_karma.effectN( 3 ).pct
+            local health_mod = Player.getTalent( "touch_of_karma" ).effectN( 3 ).pct
             
             -- Hold for next tank buster if applicable
             if aura_env.danger_next and ( aura_env.danger_next < 90 and aura_env.danger_next > 10 )
@@ -3513,7 +3513,7 @@ local ww_spells = {
                 return false
             end
             
-            if Player.talent.forbidden_technique.okay then
+            if Player.getTalent( "forbidden_technique" ).okay then
                 local fatal_touch = Player.findAura( 213114 )
                 
                 if fatal_touch then
@@ -3533,13 +3533,13 @@ local ww_spells = {
             local targets = 1    
             local damage_pct = spell.touch_of_death.effectN( 3 ).pct
             
-            if Player.talent.fatal_flying_guillotine.ok then
+            if Player.getTalent( "fatal_flying_guillotine" ).ok then
                 targets = min( 5, aura_env.target_count )
             end
             
-            da_mod = da_mod * Player.talent.meridian_strikes.effectN( 1 ).mod
+            da_mod = da_mod * Player.getTalent( "meridian_strikes" ).effectN( 1 ).mod
             
-            da_mod = da_mod * Player.talent.forbidden_technique.effectN( 2 ).mod
+            da_mod = da_mod * Player.getTalent( "forbidden_technique" ).effectN( 2 ).mod
             
             if Player.last_combo_strike ~= 322109 then
                 da_mod = da_mod * Player.mast_bonus
@@ -3623,7 +3623,7 @@ local ww_spells = {
         base_duration = 9,
         duration = 9,
         ready = function()
-            return Player.talent.hit_combo.ok
+            return Player.getTalent( "hit_combo" ).ok
         end,
     },
 }
@@ -3683,8 +3683,8 @@ local brm_spells = {
         end,
         
         reduce_stagger = function()
-            if Player.talent.tranquil_spirit.ok then
-                return Player.stagger * Player.talent.tranquil_spirit.effectN( 1 ).pct
+            if Player.getTalent( "tranquil_spirit" ).ok then
+                return Player.stagger * Player.getTalent( "tranquil_spirit" ).effectN( 1 ).pct
             end
             
             return 0
@@ -3708,13 +3708,13 @@ local brm_spells = {
             local spheres = GetSpellCount( 322101 )
             h = h + ( 3 * Player.ability_power * spheres )
             
-            h = h * Player.talent.vigorous_expulsion.effectN( 1 ).mod
+            h = h * Player.getTalent( "vigorous_expulsion" ).effectN( 1 ).mod
             
-            if Player.talent.strength_of_spirit.ok then
+            if Player.getTalent( "strength_of_spirit" ).ok then
                 local health_deficit = UnitHealthMax( "player" ) - UnitHealth( "player" )
                 local health_percent = health_deficit / UnitHealthMax( "player" )
                 
-                h = h * ( 1 + ( health_percent * Player.talent.strength_of_spirit.effectN( 1 ).pct ) )
+                h = h * ( 1 + ( health_percent * Player.getTalent( "strength_of_spirit" ).effectN( 1 ).pct ) )
             end
             
             return h
@@ -3723,7 +3723,7 @@ local brm_spells = {
         critical_rate = function()
             local cr = Player.crit_bonus
             
-            cr = cr + Player.talent.vigorous_expulsion.effectN( 2 ).mod
+            cr = cr + Player.getTalent( "vigorous_expulsion" ).effectN( 2 ).mod
             
             return min( 1, cr )
         end,
@@ -3731,7 +3731,7 @@ local brm_spells = {
         critical_modifier = function()
             local cm = 1
             
-            cm = cm * Player.talent.profound_rebuttal.effectN( 1 ).mod 
+            cm = cm * Player.getTalent( "profound_rebuttal" ).effectN( 1 ).mod 
             
             return cm
         end,
@@ -3740,8 +3740,8 @@ local brm_spells = {
         },
     
         reduce_stagger = function()
-            if Player.talent.tranquil_spirit.ok then
-                return Player.stagger * Player.talent.tranquil_spirit.effectN( 1 ).pct
+            if Player.getTalent( "tranquil_spirit" ).ok then
+                return Player.stagger * Player.getTalent( "tranquil_spirit" ).effectN( 1 ).pct
             end
             
             return 0
@@ -3750,7 +3750,7 @@ local brm_spells = {
 
     ["healing_elixir"] = Player.createAction( 122281, {
         bonus_heal = function()
-            return ( Player.talent.healing_elixir.effectN( 1 ).pct ) * UnitHealthMax( "player" )
+            return ( Player.getTalent( "healing_elixir" ).effectN( 1 ).pct ) * UnitHealthMax( "player" )
         end,
     } ),
 
@@ -3761,14 +3761,14 @@ local brm_spells = {
         action_multiplier = function( state )
             local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
             
-            am = am * Player.talent.fast_feet.effectN( 1 ).mod
+            am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
             
             -- TP Modifiers
             if IsBlackoutCombo( state ) then
                 am = am * ( 1 + ( Player.buffs.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
             end           
             
-            am = am * ( 1 + ( Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 2 ).pct * press_the_advantage_fp_mod ) )
+            am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct * press_the_advantage_fp_mod ) )
             
             if Player.buffs.counterstrike.up() then
                 am = am * ( 1 + ( Player.buffs.counterstrike.effectN( 1 ).pct * press_the_advantage_cs_mod ) )
@@ -3778,7 +3778,7 @@ local brm_spells = {
         end,
         
         brew_cdr = function()
-            return Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 3 ).seconds 
+            return Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds 
         end,  
         
         tick_trigger = {
@@ -3803,7 +3803,7 @@ local brm_spells = {
         action_multiplier = function( state )
             local am = 1
             
-            am = am * Player.talent.fast_feet.effectN( 1 ).mod
+            am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
             
             return am
         end,
@@ -3836,7 +3836,7 @@ local brm_spells = {
         skip_calcs = true, -- Uses state result
         
         action_multiplier = function( state )
-            local am = Player.talent.charred_passions.effectN( 1 ).pct
+            local am = Player.getTalent( "charred_passions" ).effectN( 1 ).pct
             if state then
                 local result = state.result
                 
@@ -3850,7 +3850,7 @@ local brm_spells = {
         end,
         
         ready = function()
-            return Player.talent.charred_passions.ok
+            return Player.getTalent( "charred_passions" ).ok
         end,
         
         tick_trigger = {
@@ -3873,11 +3873,11 @@ local brm_spells = {
         action_multiplier = function()
             local am = 1
             
-            am = am * Player.talent.shadowboxing_treads.effectN( 2 ).mod
+            am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
             
-            am = am * Player.talent.fluidity_of_motion.effectN( 2 ).mod
+            am = am * Player.getTalent( "fluidity_of_motion" ).effectN( 2 ).mod
             
-            am = am * Player.talent.elusive_footwork.effectN( 2 ).mod
+            am = am * Player.getTalent( "elusive_footwork" ).effectN( 2 ).mod
             
             am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
             
@@ -3885,7 +3885,7 @@ local brm_spells = {
         end,
         
         target_count = function()
-            return min( aura_env.target_count, 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value )
+            return min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
         end,
         
         target_multiplier = function( target_count )
@@ -3895,10 +3895,10 @@ local brm_spells = {
         reduce_stagger = function()
             local amount = 0
             
-            if Player.talent.staggering_strikes.ok then
+            if Player.getTalent( "staggering_strikes" ).ok then
                 amount = Player.ability_power or 0
-                amount = amount * min( aura_env.target_count, 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value )
-                amount = amount * Player.talent.staggering_strikes.effectN( 2 ).pct
+                amount = amount * min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
+                amount = amount * Player.getTalent( "staggering_strikes" ).effectN( 2 ).pct
             end
             
             return amount
@@ -3908,7 +3908,7 @@ local brm_spells = {
             local eb_stacks = 1
             
             -- elusive footwork crit bonus
-            eb_stacks = eb_stacks + ( Player.talent.elusive_footwork.effectN( 1 ).base_value * min( 1, Player.crit_bonus ) )
+            eb_stacks = eb_stacks + ( Player.getTalent( "elusive_footwork" ).effectN( 1 ).base_value * min( 1, Player.crit_bonus ) )
             
             -- physical damage mitigated from one second of Elusive Brawler
             return dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
@@ -3922,7 +3922,7 @@ local brm_spells = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
             ["charred_passions"] = function( driver )
-                if Player.talent.charred_passions.ok then
+                if Player.getTalent( "charred_passions" ).ok then
                     if driver == "breath_of_fire" or Player.buffs.charred_passions.up() then
                         return true
                     end
@@ -3950,7 +3950,7 @@ local brm_spells = {
         action_multiplier = function( state )
             local am = 1
             
-            am = am * Player.talent.fast_feet.effectN( 2 ).mod
+            am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
             
             if Player.buffs.counterstrike.up() then
                 am = am * Player.buffs.counterstrike.effectN( 1 ).mod
@@ -3971,7 +3971,7 @@ local brm_spells = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
             ["charred_passions"] = function( driver )
-                if Player.talent.charred_passions.ok then
+                if Player.getTalent( "charred_passions" ).ok then
                     if driver == "breath_of_fire" or Player.buffs.charred_passions.up() then
                         return true
                     end
@@ -4024,17 +4024,17 @@ local brm_spells = {
         usable_during_sck = true,  
         
         ready = function()
-            return not ( Player.talent.press_the_advantage.ok )
+            return not ( Player.getTalent( "press_the_advantage" ).ok )
         end,
         
         action_multiplier = function( state )
             local am = 1
             
             if IsBlackoutCombo( state ) then
-                am = am * Player.talent.blackout_combo.effectN( 1 ).mod
+                am = am * Player.getTalent( "blackout_combo" ).effectN( 1 ).mod
             end
             
-            am = am * ( 1 + ( Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 2 ).pct  ) )
+            am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct  ) )
             
             if Player.buffs.counterstrike.up() then
                 am = am * Player.buffs.counterstrike.effectN( 1 ).mod
@@ -4044,7 +4044,7 @@ local brm_spells = {
         end,
         
         brew_cdr = function()
-            return 1 + ( Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 3 ).seconds ) 
+            return 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds ) 
         end,
         
         tick_trigger = {
@@ -4171,7 +4171,7 @@ local brm_spells = {
         background = true,
         
         action_multiplier = function()
-            return Player.talent.resonant_fists.rank 
+            return Player.getTalent( "resonant_fists" ).rank 
         end,
         
         target_count = function()
@@ -4183,7 +4183,7 @@ local brm_spells = {
         end,
         
         ready = function()
-            return Player.talent.resonant_fists.ok
+            return Player.getTalent( "resonant_fists" ).ok
         end,
     } ),
 
@@ -4192,7 +4192,7 @@ local brm_spells = {
         base_tick_rate = 2,
         
         action_multiplier = function()
-            return Player.talent.press_the_advantage.effectN( 4 ).mod
+            return Player.getTalent( "press_the_advantage" ).effectN( 4 ).mod
         end,
         
         target_count = function()
@@ -4200,7 +4200,7 @@ local brm_spells = {
         end,    
         
         ready = function()
-            return Player.talent.chi_surge.ok
+            return Player.getTalent( "chi_surge" ).ok
         end,
         
         tick_trigger = {
@@ -4214,11 +4214,11 @@ local brm_spells = {
         action_multiplier = function( state )
             local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
             
-            am = am * Player.talent.stormstouts_last_keg.effectN( 1 ).mod
+            am = am * Player.getTalent( "stormstouts_last_keg" ).effectN( 1 ).mod
             
-            if Player.bof_targets > 0 and Player.talent.scalding_brew.ok then
+            if Player.bof_targets > 0 and Player.getTalent( "scalding_brew" ).ok then
                 local ratio = Player.bof_targets / min( 20, aura_env.target_count ) 
-                am = am * ( 1 + ( ratio * Player.talent.scalding_brew.effectN( 1 ).pct ) )
+                am = am * ( 1 + ( ratio * Player.getTalent( "scalding_brew" ).effectN( 1 ).pct ) )
             end
             
             --[[
@@ -4234,7 +4234,7 @@ local brm_spells = {
                 am = am * ( 1 + ( Player.buffs.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
             end     
             
-            am = am * ( 1 + ( Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 2 ).pct * press_the_advantage_fp_mod ) )
+            am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct * press_the_advantage_fp_mod ) )
             
             if Player.buffs.counterstrike.up() then
                 am = am * ( 1 + ( Player.buffs.counterstrike.effectN( 1 ).pct * press_the_advantage_cs_mod ) )
@@ -4258,14 +4258,14 @@ local brm_spells = {
                 cdr = cdr + 1
             end
             
-            cdr = cdr + ( Player.talent.face_palm.effectN( 1 ).roll * Player.talent.face_palm.effectN( 3 ).seconds )
+            cdr = cdr + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds )
             
             return cdr
         end,
         
         reduces_cd = {
             ["breath_of_fire"] = function ()
-                if Player.talent.salsalabims_strength.ok then
+                if Player.getTalent( "salsalabims_strength" ).ok then
                     return aura_env.getCooldown( 115181 ) -- BoF
                 end
                 return 0 
@@ -4296,15 +4296,15 @@ local brm_spells = {
         action_multiplier = function()
             local am = 1
             
-            am = am * Player.talent.stormstouts_last_keg.effectN( 1 ).mod
+            am = am * Player.getTalent( "stormstouts_last_keg" ).effectN( 1 ).mod
             
             if Player.buffs.hit_scheme.up() then
                 am = am * ( 1 + Player.buffs.hit_scheme.stacks() * Player.buffs.hit_scheme.effectN( 1 ).pct )
             end     
             
-            if Player.bof_targets > 0 and Player.talent.scalding_brew.ok then
+            if Player.bof_targets > 0 and Player.getTalent( "scalding_brew" ).ok then
                 local ratio = Player.bof_targets / min( 20, aura_env.target_count ) 
-                am = am * ( 1 + ( ratio * Player.talent.scalding_brew.effectN( 1 ).pct ) )
+                am = am * ( 1 + ( ratio * Player.getTalent( "scalding_brew" ).effectN( 1 ).pct ) )
             end
             
             if Player.buffs.double_barrel.up() then
@@ -4326,7 +4326,7 @@ local brm_spells = {
             local cdr = 3
             
             if IsBlackoutCombo( state ) then
-                cdr = cdr + Player.talent.blackout_combo.effectN( 3 ).base_value
+                cdr = cdr + Player.getTalent( "blackout_combo" ).effectN( 3 ).base_value
             end
             
             if Player.bdb_targets > 0 then
@@ -4355,7 +4355,7 @@ local brm_spells = {
         
         reduces_cd = {
             ["breath_of_fire"] = function ()
-                if Player.talent.salsalabims_strength.ok then
+                if Player.getTalent( "salsalabims_strength" ).ok then
                     return aura_env.getCooldown( 115181 ) -- BoF
                 end
                 return 0 
@@ -4402,7 +4402,7 @@ local brm_spells = {
         
         callback_ready = function( callback )
             
-            if Player.talent.bountiful_brew.ok and Player.bdb_targets == 0 then
+            if Player.getTalent( "bountiful_brew" ).ok and Player.bdb_targets == 0 then
                 return false
             end
             
@@ -4417,7 +4417,7 @@ local brm_spells = {
         end,
         
         ready = function()
-            if Player.talent.bountiful_brew.ok and Player.bdb_targets == 0 then
+            if Player.getTalent( "bountiful_brew" ).ok and Player.bdb_targets == 0 then
                 return false
             end
             
@@ -4439,7 +4439,7 @@ local brm_spells = {
         background = true,
         
         ap = function()
-            return Player.talent.exploding_keg.effectN( 4 ).ap_coefficient
+            return Player.getTalent( "exploding_keg" ).effectN( 4 ).ap_coefficient
         end,
         
         action_multiplier = function( state )
@@ -4511,7 +4511,7 @@ local brm_spells = {
                 am = am * Player.buffs.blackout_combo.effectN( 5 ).mod
             end            
             
-            if Player.stagger > 0 and Player.talent.dragonfire_brew.ok then
+            if Player.stagger > 0 and Player.getTalent( "dragonfire_brew" ).ok then
                 local ratio = 1
                 
                 if Player.buffs.light_stagger.up() then
@@ -4520,7 +4520,7 @@ local brm_spells = {
                     ratio = 2 / 3
                 end
                 
-                am = am * ( 1 + ( ratio * Player.talent.dragonfire_brew.effectN( 2 ).pct ) )
+                am = am * ( 1 + ( ratio * Player.getTalent( "dragonfire_brew" ).effectN( 2 ).pct ) )
             end
             
             -- Incendiary Breath
@@ -4559,7 +4559,7 @@ local brm_spells = {
         background = true,
         
         ticks = function()
-            return Player.talent.dragonfire_brew.effectN( 1 ).base_value
+            return Player.getTalent( "dragonfire_brew" ).effectN( 1 ).base_value
         end,
         
         target_count = function()
@@ -4571,7 +4571,7 @@ local brm_spells = {
         end,  
         
         ready = function()
-            return Player.talent.dragonfire_brew.ok
+            return Player.getTalent( "dragonfire_brew" ).ok
         end,
         
         tick_trigger = {
@@ -4611,7 +4611,7 @@ local brm_spells = {
             local dr = spell.breath_of_fire_dot.effectN( 2 ).pct
             
             if Player.buffs.celestial_flames.up() then
-                dr = dr + Player.talent.celestial_flames.effectN( 2 ).pct
+                dr = dr + Player.getTalent( "celestial_flames" ).effectN( 2 ).pct
             end
             
             if IsBlackoutCombo( state ) then
@@ -4631,7 +4631,7 @@ local brm_spells = {
         background = true,
         
         bonus_heal = function()
-            return Player.stagger * 0.5 * ( Player.talent.gai_plins_imperial_brew.effectN( 1 ).pct )
+            return Player.stagger * 0.5 * ( Player.getTalent( "gai_plins_imperial_brew" ).effectN( 1 ).pct )
         end,        
     } ),
 
@@ -4640,7 +4640,7 @@ local brm_spells = {
         skip_calcs = true,
         
         ready = function()
-            return Player.talent.shuffle.ok
+            return Player.getTalent( "shuffle" ).ok
         end,
         
         reduce_stagger = function( state )
@@ -4652,7 +4652,7 @@ local brm_spells = {
                 return 0
             end
             
-            if Player.talent.quick_sip.ok then
+            if Player.getTalent( "quick_sip" ).ok then
                 local driver = state.callback
                 local shuffle_granted = 0
                 
@@ -4669,7 +4669,7 @@ local brm_spells = {
                     return 0
                 end            
             
-                return ( Player.talent.quick_sip.effectN( 1 ).pct / Player.talent.quick_sip.effectN( 2 ).base_value ) * Player.stagger * shuffle_granted
+                return ( Player.getTalent( "quick_sip" ).effectN( 1 ).pct / Player.getTalent( "quick_sip" ).effectN( 2 ).base_value ) * Player.stagger * shuffle_granted
             end
             
             return 0
@@ -4731,7 +4731,7 @@ local brm_spells = {
         trigger = {
             ["special_delivery"] = true,
             ["gai_plins_imperial_brew"] = function()
-                return Player.talent.gai_plins_imperial_brew.ok
+                return Player.getTalent( "gai_plins_imperial_brew" ).ok
             end,
         },
     
@@ -4759,7 +4759,7 @@ local brm_spells = {
         mitigate = function()
             local m = 0
             
-            if Player.talent.pretense_of_instability.ok then
+            if Player.getTalent( "pretense_of_instability" ).ok then
                 local pretenseGain = pretense_duration - Player.buffs.pretense_of_instability.remains()
                 m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
             end
@@ -4853,7 +4853,7 @@ local brm_spells = {
             end
             
             -- Pretense of Instability
-            if Player.talent.pretense_of_instability.ok then
+            if Player.getTalent( "pretense_of_instability" ).ok then
                 local pretenseGain = pretense_duration - Player.buffs.pretense_of_instability.remains()
                 m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
             end
@@ -4910,7 +4910,7 @@ local brm_spells = {
         end,    
         
         ready = function()
-            return Player.talent.special_delivery.ok
+            return Player.getTalent( "special_delivery" ).ok
         end,
     } ),
 
@@ -4919,11 +4919,11 @@ local brm_spells = {
         background = true,
         
         ready = function()
-            return Player.talent.press_the_advantage.ok
+            return Player.getTalent( "press_the_advantage" ).ok
         end,
         
         brew_cdr = function()
-            return Player.talent.press_the_advantage.effectN( 1 ).seconds
+            return Player.getTalent( "press_the_advantage" ).effectN( 1 ).seconds
         end,
         
         tick_trigger = {
@@ -4955,7 +4955,7 @@ local brm_spells = {
             return max( 0, duration )
         end,
         ready = function()
-            return Player.talent.weapons_of_order.ok and Player.findAura( 387184 )
+            return Player.getTalent( "weapons_of_order" ).ok and Player.findAura( 387184 )
         end,
     },
 
