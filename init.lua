@@ -3348,10 +3348,18 @@ local ww_spells = {
         ww_mastery = true,
          
         chi_gain = function()
+            if Player.is_beta() then
+                return Player.talent.glory_of_the_dawn.effectN( 3 ).base_value     
+            end
+            
             return Player.talent.glory_of_the_dawn.effectN( 2 ).base_value 
         end,
         
         trigger_rate = function() 
+            if Player.is_beta() then
+                return Player.talent.glory_of_the_dawn.effectN( 2 ).roll * Player.haste
+            end
+            
             return Player.talent.glory_of_the_dawn.effectN( 3 ).roll 
         end,
         
