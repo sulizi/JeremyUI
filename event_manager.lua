@@ -1334,9 +1334,13 @@ function(event, ...)
                                     
                                     if _driver.result then
                                     
+                                        local count = nil
+                                        
                                         if type( enabled ) == "function" then
-                                            enabled = enabled( driverName )
+                                            enabled, count = enabled( driverName )
                                         end
+                                        
+                                        count = count or 1
                                         
                                         -- Allow multiple identical triggers
                                         spell = gsub( spell, "%-.*", "" )    
@@ -1344,39 +1348,40 @@ function(event, ...)
                                         if enabled 
                                         and spells[ spell ] 
                                         and spellRaw( spell ) > 0 then
-                                            
-                                            local callback_stack = {}
-                                            local stack_driver = nil
-                                            for cb in gsub( _stack .. "->", "%s+", "" ):gmatch( "(.-)->" ) do
-                                                insert( callback_stack, {
-                                                   name = cb,
-                                                   spell = spells[ cb ] or nil,
-                                                   driverName = stack_driver,
-                                                   result = spells[ cb ] and spells[ cb ].result or nil,
-                                                } )
-                                                stack_driver = cb
+                                            for iter = 1, count do
+                                                local callback_stack = {}
+                                                local stack_driver = nil
+                                                for cb in gsub( _stack .. "->", "%s+", "" ):gmatch( "(.-)->" ) do
+                                                    insert( callback_stack, {
+                                                       name = cb,
+                                                       spell = spells[ cb ] or nil,
+                                                       driverName = stack_driver,
+                                                       result = spells[ cb ] and spells[ cb ].result or nil,
+                                                    } )
+                                                    stack_driver = cb
+                                                end
+                                                
+                                                local _this = {}
+    
+                                                _this.state = {
+                                                    -- Pass driver callbacks to trigger
+                                                    callback_stack = callback_stack,
+                                                    callback_name = _driverName,
+                                                    callback = _driver,
+                                                    result = _driver.result,
+                                                }
+                                                
+                                                _this.stack = _stack
+                                                
+                                                _this.spell = spell
+                                                _this.onTick = periodic
+                                                _this.icd = spells[spell].icd or 0
+                                                _this.rate = spells[spell].trigger_rate or 1
+                                                if type( _this.rate ) == "function" then
+                                                    _this.rate = _this.rate( driverName )
+                                                end
+                                                trigger_spells[ #trigger_spells + 1 ] =  _this
                                             end
-                                            
-                                            local _this = {}
-
-                                            _this.state = {
-                                                -- Pass driver callbacks to trigger
-                                                callback_stack = callback_stack,
-                                                callback_name = _driverName,
-                                                callback = _driver,
-                                                result = _driver.result,
-                                            }
-                                            
-                                            _this.stack = _stack
-                                            
-                                            _this.spell = spell
-                                            _this.onTick = periodic
-                                            _this.icd = spells[spell].icd or 0
-                                            _this.rate = spells[spell].trigger_rate or 1
-                                            if type( _this.rate ) == "function" then
-                                                _this.rate = _this.rate( driverName )
-                                            end
-                                            trigger_spells[ #trigger_spells + 1 ] =  _this
                                         end
                                     end
                                 end

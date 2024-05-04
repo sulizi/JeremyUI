@@ -709,11 +709,12 @@ aura_env.CPlayer = {
         return t
     end,
     
-    makeBuff = function( spellID, name )
+    makeBuff = function( spellID, name, init )
         local self = aura_env.CPlayer
         
         if not name or not self.buffs[ name ] then
             local buff = LibDBCache:find_spell( spellID ) 
+            local _init = init or {}
             
             name = name or buff.tokenName
             
@@ -736,6 +737,12 @@ aura_env.CPlayer = {
                     local data = self.findAura( spellID )
                     return data and data.stacks or 0 
                 end
+                
+                buff._max_stacks = buff.max_stacks
+                buff.max_stacks = init.max_stacks or function()
+                    return buff._max_stacks
+                end
+                
                 self.buffs[ name ] = buff
             else
                 print( "Unable to make buff " .. spellID )
@@ -881,7 +888,16 @@ Player.makeBuff( 129914, "power_strikes" )
 Player.makeBuff( 337482, "pressure_point" )
 Player.makeBuff( 152173, "serenity" )
 Player.makeBuff( 137639, "storm_earth_and_fire" )
-Player.makeBuff( 202090, "teachings_of_the_monastery" )
+Player.makeBuff( 202090, "teachings_of_the_monastery", {
+    max_stacks = function()
+        local self = Player.buff.teachings_of_the_monastery
+        local ms = self._max_stacks
+        
+        ms = ms + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 3 ).base_value
+        
+        return ms
+    end,
+} )
 Player.makeBuff( 393039, "the_emperors_capacitor" )
 Player.makeBuff( 242387, "thunderfist" )
 Player.makeBuff( 195321, "transfer_the_power" )
@@ -2100,8 +2116,7 @@ aura_env.auraEffectForSpell = function ( spellID, periodic )
 end
 
 ------------------------------------------------
--- Class Helper Functions
--- TODO: ToTM State Function
+-- Class specific state helper functions
 ------------------------------------------------
 
 local CurrentCraneStacks = function( state )
@@ -2245,7 +2260,7 @@ local IsFlowingMomentumKicks = function( state )
     end
 end
 
-local IsBlackoutProc = function ( state )
+local IsBlackoutProc = function( state )
     
     if not state then
         return Player.buffs.bok_proc.up()
@@ -2267,7 +2282,7 @@ local IsBlackoutProc = function ( state )
              
             if cb.name == "spinning_crane_kick" and docj_stacks > 0 then
                 if Player.getTalent( "sequenced_strikes" ).ok then
-                    bok_stacks = min( Player.buffs.bok_proc.max_stacks, bok_stacks + 1 )
+                    bok_stacks = min( Player.buffs.bok_proc.max_stacks(), bok_stacks + 1 )
                 end
                 
                 docj_stacks = max( 0, docj_stacks - 1 )
@@ -2278,6 +2293,35 @@ local IsBlackoutProc = function ( state )
         
         return bok_proc
     end
+end
+
+local GetTotMStacks = function( state )
+    
+    if not Player.getTalent( "\1" ).ok then
+        return 0
+    end
+    
+    if not state then
+        return Player.buffs.teachings_of_the_monastery.stacks()
+    else
+        local totm_stacks = Player.buffs.teachings_of_the_monastery.stacks()
+        local max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks()
+        
+        for cb_idx, cb in ipairs( state.callback_stack ) do
+            if cb_idx == #state.callback_stack then
+                break
+            end
+            
+            if cb.name == "tiger_palm" then
+                totm_stacks = math.min( max_stacks, totm_stacks + 1 )
+            elseif cb.name == "whirling_dragon_punch" then
+                totm_stacks = math.min( max_stacks, totm_stacks + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )
+            elseif cb.name == "blackout_kick" then
+                totm_stacks = 0
+            end
+        end
+        return totm_stacks
+    end    
 end
 
 -- --------- --
@@ -2674,12 +2718,7 @@ local ww_spells = {
                     local remaining = aura_env.getCooldown( 107428 ) -- RSK
                     if remaining > 0 then
                         local targets = min( aura_env.target_count, 1 + Player.talent.shadowboxing_treads.effectN( 1 ).base_value )
-                        local totm_stacks = Player.buffs.teachings_of_the_monastery.stacks()
-                        local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks
-                        
-                        if ( state and state.callback.spellID == 100780 ) then
-                            totm_stacks = min( totm_max_stacks, totm_stacks + 1 )
-                        end
+                        local totm_stacks = GetTotMStacks( state )
                         
                         cdr = cdr + ( min( 1, Player.talent.teachings_of_the_monastery.effectN( 1 ).roll * targets * ( 1 + totm_stacks ) ) * remaining )
                     end
@@ -2733,31 +2772,13 @@ local ww_spells = {
                 local totm_stacks = 0
                 
                 if Player.talent.teachings_of_the_monastery.ok then
-                    local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks
-                    totm_stacks = min( totm_max_stacks, Player.buffs.teachings_of_the_monastery.stacks() + ( driver == "tiger_palm" and 1 or 0 ) )
+                    local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks()
+                    totm_stacks = Player.buffs.teachings_of_the_monastery.stacks() + ( driver == "tiger_palm" and 1 or 0 )
+                    totm_stacks = totm_stacks + ( driver == "whirling_dragon_punch" and Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value or 0 )
+                    totm_stacks = min( totm_max_stacks, totm_stacks )
                 end
                 
-                return totm_stacks > 0
-            end,
-            ["blackout_kick_totm-2"] = function( driver )
-                local totm_stacks = 0
-                
-                if Player.talent.teachings_of_the_monastery.ok then
-                    local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks
-                    totm_stacks = min( totm_max_stacks, Player.buffs.teachings_of_the_monastery.stacks() + ( driver == "tiger_palm" and 1 or 0 ) )
-                end
-                
-                return totm_stacks > 1
-            end,
-            ["blackout_kick_totm-3"] = function( driver )
-                local totm_stacks = 0
-                
-                if Player.talent.teachings_of_the_monastery.ok then
-                    local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks
-                    totm_stacks = min( totm_max_stacks, Player.buffs.teachings_of_the_monastery.stacks() + ( driver == "tiger_palm" and 1 or 0 ) )
-                end
-                
-                return totm_stacks > 2
+                return totm_stacks > 0, totm_stacks
             end,
             ["resonant_fists"] = true,
         },    
@@ -2772,9 +2793,13 @@ local ww_spells = {
         
         action_multiplier = function ( )
             local am = 1
+            
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end        
+            end    
+            
+            am = am * Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 2 ).mod
+            
             return am
         end,        
         
@@ -2830,9 +2855,13 @@ local ww_spells = {
         
         action_multiplier = function ( )
             local am = 1
+            
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end        
+            end
+            
+            am = am * Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 2 ).mod
+            
             return am
         end,  
         
