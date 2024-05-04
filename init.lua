@@ -2249,8 +2249,8 @@ local IsBlackoutProc = function ( state )
     if not state then
         return Player.buffs.bok_proc.up()
     else
-        local bok_proc = Player.buffs.bok_proc.up()
-        local docj = Player.buffs.dance_of_chiji.up()
+        local bok_stacks = Player.buffs.bok_proc.stacks()
+        local docj_stacks = Player.buffs.dance_of_chiji.stacks()
         
         local _next = nil
         local _, stack = ipairs( state.callback_stack )
@@ -2264,14 +2264,14 @@ local IsBlackoutProc = function ( state )
             local cb = stack[ cb_idx ] 
              _next = stack [ cb_idx + 1 ]
              
-            if cb.name == "spinning_crane_kick" and docj then
+            if cb.name == "spinning_crane_kick" and docj_stacks > 0 then
                 if Player.getTalent( "sequenced_strikes" ).ok then
-                    bok_proc = true
+                    bok_stacks = min( Player.buffs.bok_proc.max_stacks, bok_stacks + 1 )
                 end
                 
-                docj = false
+                docj_stacks = max( 0, docj_stacks - 1 )
             elseif cb.name == "blackout_kick" and _next.name ~= "energy_burst" then
-                bok_proc = false
+                bok_stacks = max( 0, bok_stacks - 1 )
             end
         end
         
