@@ -1765,9 +1765,15 @@ aura_env.global_modifier = function( callback, future, real )
         -- Passive Talents
         gm = gm * Player.getTalent( "ferocity_of_xuen" ).effectN( 1 ).mod
         
+        -- Chi Proficiency
         if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 1 ) )
             gm = gm * Player.getTalent( "chi_proficiency" ).effectN( 1 ).mod
         end
+    
+        -- Martial Instincts
+        if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "martial_instincts" ).effectN( 1 ) )
+            gm = gm * Player.getTalent( "martial_instincts" ).effectN( 1 ).mod
+        end    
         
         -- cached base 
         if callback == Player.default_action then
