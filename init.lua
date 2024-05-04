@@ -1707,9 +1707,8 @@ aura_env.global_modifier = function( callback, future, real )
     if callback_type == "smart_heal" or callback_type == "self_heal" then
         
         -- Passive Talents (globally)
-        local chi_proficiency = Player.getTalent( "chi_proficiency" )
-        if LibDBCache:spell_affected_by_effect( callback.spellID, chi_proficiency.effectN( 2 ) )
-            gm = gm * chi_proficiency.effectN( 2 ).mod
+        if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 2 ) )
+            gm = gm * Player.getTalent( "chi_proficiency" ).effectN( 2 ).mod
         end
                 
         
@@ -1748,9 +1747,8 @@ aura_env.global_modifier = function( callback, future, real )
         -- Passive Talents
         gm = gm * Player.talent.ferocity_of_xuen.effectN( 1 ).mod
         
-        local chi_proficiency = Player.getTalent( "chi_proficiency" )
-        if LibDBCache:spell_affected_by_effect( callback.spellID, chi_proficiency.effectN( 1 ) )
-            gm = gm * chi_proficiency.effectN( 1 ).mod
+        if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 1 ) )
+            gm = gm * Player.getTalent( "chi_proficiency" ).effectN( 1 ).mod
         end
         
         -- cached base 
@@ -2523,6 +2521,8 @@ local ww_spells = {
             
             am = am * Player.talent.shadowboxing_treads.effectN( 2 ).mod
             
+            am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
+            
             return am
         end,
         
@@ -2583,6 +2583,8 @@ local ww_spells = {
             if IsBlackoutReinforcement( state ) then
                 am = am * Player.buffs.blackout_reinforcement.effectN( 1 ).mod
             end
+            
+            am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
             
             return am
         end,
@@ -3760,6 +3762,8 @@ local brm_spells = {
             am = am * Player.talent.fluidity_of_motion.effectN( 2 ).mod
             
             am = am * Player.talent.elusive_footwork.effectN( 2 ).mod
+            
+            am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
             
             return am
         end,
