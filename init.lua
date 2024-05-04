@@ -2260,6 +2260,35 @@ local IsFlowingMomentumKicks = function( state )
     end
 end
 
+local IsDanceProc = function( state )
+    if not Player.getTalent( "dance_of_chiji" ).ok then
+        return false
+    end
+    
+    if not state then
+        return Player.buffs.dance_of_chiji.up()
+    else
+        local docj_stacks = Player.buffs.dance_of_chiji.stacks()
+        local max_stacks = Player.buffs.dance_of_chiji.max_stacks()
+        
+        for cb_idx, cb in ipairs( state.callback_stack ) do
+            if cb_idx == #state.callback_stack then
+                break
+            end
+            
+            if cb.name == "whirling_dragon_punch" then
+                if Player.getTalent( "revolving_whirl" ).ok then
+                    docj_stacks = min( max_stacks, docj_stacks + 1 )
+                end
+            elseif cb.name == "spinning_crane_kick" and docj_stacks > 0 then
+                docj_stacks = max( 0, docj_stacks - 1 )
+            end    
+
+        end
+        return docj_stacks > 0
+    end  
+end
+
 local IsBlackoutProc = function( state )
     
     if not state then
@@ -2286,6 +2315,10 @@ local IsBlackoutProc = function( state )
                 end
                 
                 docj_stacks = max( 0, docj_stacks - 1 )
+            elseif cb.name == "whirling_dragon_punch" then
+                if Player.getTalent( "revolving_whirl" ).ok then
+                    docj_stacks = min( Player.buffs.dance_of_chiji.max_stacks(), docj_stacks + 1 )
+                end
             elseif cb.name == "blackout_kick" and _next.name ~= "energy_burst" then
                 bok_stacks = max( 0, bok_stacks - 1 )
             end
@@ -2542,7 +2575,7 @@ local ww_spells = {
                 am = am * ( 1 + ( motc_stacks * spell.cyclone_strikes.effectN( 1 ).pct ) )
             end
             
-            if Player.buffs.dance_of_chiji.up() then
+            if IsDanceProc( state ) then
                 am = am * Player.getTalent( "dance_of_chiji" ).effectN( 1 ).mod
             end
             
