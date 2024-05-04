@@ -910,7 +910,7 @@ aura_env.combo_strike = {
     [100780] = true,  -- Tiger Palm
     [100784] = true,  -- Blackout Kick
     [107428] = true,  -- Rising Sun Kick
-    [101545] = true,  -- Flying Serpent Kick
+    [101545] = not Player.is_beta(),  -- Flying Serpent Kick
     [113656] = true,  -- Fists of Fury
     [101546] = true,  -- Spinning Crane Kick
     [116847] = true,  -- Rushing Jade Wind
@@ -925,6 +925,7 @@ aura_env.combo_strike = {
     [388193] = true,  -- Jadefire Stomp
     [325216] = true,  -- Bonedust Brew
     [388686] = true,  -- White Tiger Statue
+    [137639] = Player.is_beta(), -- Storm, Earth, and Fire
 }
 
 aura_env.error_margin = 0.05
@@ -2657,6 +2658,11 @@ local ww_spells = {
         end,
         
         target_multiplier = function( target_count )
+            if Player.is_beta() then
+                local chain_targets = min( 0, target_count - 1 )
+                return 1 + ( chain_targets * Player.getTalent( "shadowboxing_treads" ).effectN( 3 ).pct )
+            end
+            
             return target_count
         end,
         
