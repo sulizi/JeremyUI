@@ -2980,7 +2980,15 @@ local ww_spells = {
         copied_by_sef = true,
         affected_by_serenity = true,
         
-        action_multiplier = function ( )
+        motc_gain = function()
+            if Player.is_beta() and Player.getTalent( "rushing_jade_wind" ) then
+                return 5
+            end
+            
+            return 0
+        end,
+        
+        action_multiplier = function( state )
             local am = 1
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
@@ -3002,6 +3010,9 @@ local ww_spells = {
         trigger = {
             ["thunderfist"] = true,
             ["strike_of_the_windlord_mh"] = true,
+            ["rushing_jade_wind"] = function()
+                return Player.is_beta() and Player.getTalent( "rushing_jade_wind" )
+            end,
         },
     
         tick_trigger = {
@@ -3016,19 +3027,21 @@ local ww_spells = {
     } ),
 
     ["rushing_jade_wind"] = Player.createAction( 116847, {
-        callbacks = {
+        callbacks = not Player.is_beta() and {
             -- Chi generators
             "tiger_palm", -- also MotC and Mastery eval.
             "expel_harm", -- also Mastery eval.
             "chi_burst",
-        },
+        } or nil,
+        
+        background = Player.is_beta(),
         
         damageID = 148187,
         base_tick_rate = 0.75, -- TODO: Better buff handling
-        hasted_cooldown = true,
+        hasted_cooldown = true, -- Remove in tww
         
         ww_mastery = true,
-        usable_during_sck = true,     
+        usable_during_sck = true, -- remove in tww     
         copied_by_sef = true,
         affected_by_serenity = true,
         trigger_etl = true,
