@@ -3126,11 +3126,17 @@ local ww_spells = {
                 am = am * ( 1 + Player.getTalent( "path_of_jade" ).effectN( 1 ).pct * poj_targets )
             end
             
+            am = am * Player.getTalent( "singularly_focused_jade" ).effectN( 2 ).mod
+            
             return am
         end,
         
         target_count = function()
-            return aura_env.learnedFrontalTargets( 388201 )
+            local targets = aura_env.learnedFrontalTargets( 388201 )
+            
+            targets = max( 1, targets + Player.getTalent( "singularly_focused_jade" ).effectN( 1 ).base_value )
+            
+            return targets
         end,
         
         target_multiplier = function( target_count )
