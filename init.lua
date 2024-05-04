@@ -1706,6 +1706,13 @@ aura_env.global_modifier = function( callback, future, real )
     
     if callback_type == "smart_heal" or callback_type == "self_heal" then
         
+        -- Passive Talents (globally)
+        local chi_proficiency = Player.getTalent( "chi_proficiency" )
+        if LibDBCache:spell_affected_by_effect( callback.spellID, chi_proficiency.effectN( 2 ) )
+            gm = gm * chi_proficiency.effectN( 2 ).mod
+        end
+                
+        
         -- Self Healing
         if callback.type == "self_heal" then
             
@@ -1740,6 +1747,11 @@ aura_env.global_modifier = function( callback, future, real )
         
         -- Passive Talents
         gm = gm * Player.talent.ferocity_of_xuen.effectN( 1 ).mod
+        
+        local chi_proficiency = Player.getTalent( "chi_proficiency" )
+        if LibDBCache:spell_affected_by_effect( callback.spellID, chi_proficiency.effectN( 1 ) )
+            gm = gm * chi_proficiency.effectN( 1 ).mod
+        end
         
         -- cached base 
         if callback == Player.default_action then
