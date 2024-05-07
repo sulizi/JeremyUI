@@ -865,9 +865,6 @@ end
 -- TODO: Make this a player function
 -- ------------------------------------------------------------------------------
 
-
-local buff = {}
-
 -- items
 Player.makeBuff( 426553, "annihilating_flame" )
 
@@ -880,10 +877,12 @@ Player.makeBuff( 390105, "save_them_all" )
 Player.makeBuff( 424454, "blackout_reinforcement" )
 Player.makeBuff( 116768, "bok_proc" )
 Player.makeBuff( 337571, "chi_energy" )
+Player.makeBuff( 450380, "chi_wave" )
 Player.makeBuff( 325202, "dance_of_chiji" )
 Player.makeBuff( 394949, "fists_of_flowing_momentum" )
 Player.makeBuff( 196741, "hit_combo" )
 Player.makeBuff( 394944, "kicks_of_flowing_momentum" )
+Player.makeBuff( 451457, "martial_mixture" )
 Player.makeBuff( 129914, "power_strikes" )
 Player.makeBuff( 337482, "pressure_point" )
 Player.makeBuff( 152173, "serenity" )
@@ -2123,6 +2122,7 @@ end
 
 ------------------------------------------------
 -- Class specific state helper functions
+-- TODO: This is getting cumbersome, it should be automated
 ------------------------------------------------
 
 local CurrentCraneStacks = function( state )
@@ -2352,15 +2352,49 @@ local GetTotMStacks = function( state )
             end
             
             if cb.name == "tiger_palm" then
-                totm_stacks = math.min( max_stacks, totm_stacks + 1 )
+                totm_stacks = min( max_stacks, totm_stacks + 1 )
             elseif cb.name == "whirling_dragon_punch" then
-                totm_stacks = math.min( max_stacks, totm_stacks + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )
+                totm_stacks = min( max_stacks, totm_stacks + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )
             elseif cb.name == "blackout_kick" then
                 totm_stacks = 0
             end
         end
         return totm_stacks
     end    
+end
+
+local MartialMixtureStacks( state )
+
+    if not Player.getTalent( "martial_mixture" ).ok then
+        return 0
+    end
+    
+    if not state then
+        return Player.buffs.martial_mixture.stacks()
+    else
+        local stacks = Player.buffs.martial_mixture.stacks()
+        local max_stacks = Player.buffs.martial_mixture.max_stacks()
+        local totm_stacks = Player.buffs.teachings_of_the_monastery.stacks()
+        local max_totm_stacks = Player.buffs.teachings_of_the_monastery.max_stacks()
+        
+        for cb_idx, cb in ipairs( state.callback_stack ) do
+            if cb_idx == #state.callback_stack then
+                break
+            end
+            
+            if cb.name == "tiger_palm" then
+                stacks = 0
+                totm_stacks = min( max_totm_stacks, totm_stacks + 1 )
+            elseif cb.name == "whirling_dragon_punch" then
+                totm_stacks = min( max_totm_stacks, totm_stacks + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )                
+            elseif cb.name == "blackout_kick" then
+                stacks = min( max_stacks, stacks + ( cb.result.target_count * ( 1 + totm_stacks ) )
+                totm_stacks = 0
+            end
+        end
+        return stacks
+    end  
+
 end
 
 -- --------- --
@@ -2517,8 +2551,7 @@ local ww_spells = {
         trigger = {
             ["glory_of_the_dawn"] = true,
             ["chi_wave"] = function()
-                -- Todo: Replace with buff.up()
-                return Player.findAura( 450380 )
+                return Player.buffs.chi_wave.up()
             end,
         },
     
@@ -2732,6 +2765,8 @@ local ww_spells = {
             if IsBlackoutProc( state ) then
                 am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
             end
+            
+            am = am * ( 1 + MartialMixtureStacks( state ) * Player.buffs.martial_mixture.effectN( 1 ).pct )
             
             return am
         end,
@@ -3313,7 +3348,8 @@ local ww_spells = {
         end,
     },
 
-    ["flying_serpent_kick"] = Player.createAction( 101545, {
+    -- Can remove this in TWW since it's not longer useful rotationally
+    ["flying_serpent_kick"] = Player.createAction( Player.is_beta() and nil or 101545, {
 
         damageID = Player.is_beta() and 123586 or nil,
 
@@ -3882,8 +3918,7 @@ local brm_spells = {
             end,
             ["weapons_of_order_debuff"] = true,
             ["chi_wave"] = function()
-                -- Todo: Replace with buff.up()
-                return Player.findAura( 450380 )
+                return Player.buffs.chi_wave.up()
             end,
         },
     
