@@ -2475,17 +2475,22 @@ local ww_spells = {
                 
                 -- Momentum Boost's damage buff is solved using an algebraic series formula
                 -- Possibly look at implementing an inherent tick_multiplier method at some point?
+                local ticks = floor( self.ticks() )
                 
-                local ticks = self.ticks() - 1 -- The first tick will be unbuffed 
-                local targets = self.target_count()
-                local max_stacks = Player.buffs.momentum_boost.max_stacks()
-                local uncapped = ticks * targets <= max_stacks and ticks or floor( max_stacks / targets )
-                local capped = ticks - uncapped
-                
-                local m = Player.buffs.momentum_boost.effectN( 1 ).pct / ( ticks + 1 ) -- Multiplier divided by *TOTAL* ticks for this action
-                local momentum = ( uncapped / 2 ) * ( 2 * ( targets * m ) + ( uncapped - 1 ) * ( targets * m ) ) + ( max_stacks * m ) * capped
-                
-                am = am * ( 1 + momentum )
+                if ticks > 1 then
+                    local targets = self.target_count()
+                    
+                    local max_stacks = Player.buffs.momentum_boost.max_stacks()
+                    
+                    -- The first tick will be unbuffed 
+                    local uncapped = ( ticks - 1 ) * targets <= max_stacks and ( ticks - 1 ) or floor( max_stacks / targets )
+                    local capped = ticks - 1 - uncapped
+                    
+                    local m = Player.buffs.momentum_boost.effectN( 1 ).pct / ticks -- Effect value divided by *TOTAL* ticks for this action
+                    local momentum = ( uncapped / 2 ) * ( 2 * ( targets * m ) + ( uncapped - 1 ) * ( targets * m ) ) + ( max_stacks * m ) * capped
+                    
+                    am = am * ( 1 + momentum )
+                end
             end
             
             return am
