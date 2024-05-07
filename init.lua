@@ -2485,7 +2485,7 @@ local ww_spells = {
                 local m = Player.buffs.momentum_boost.effectN( 1 ).pct / ( ticks + 1 ) -- Multiplier divided by *TOTAL* ticks for this action
                 local momentum = ( uncapped / 2 ) * ( 2 * ( targets * m ) + ( uncapped - 1 ) * ( targets * m ) ) + ( max_stacks * m ) * capped
                 
-                am = am * momentum
+                am = am * ( 1 + momentum )
             end
             
             return am
