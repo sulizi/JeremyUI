@@ -45,6 +45,7 @@ local math = math
 local pow = math.pow
 local max = math.max
 local min = math.min
+local floor = math.floor
 local next = next 
 local pairs = pairs
 local print = print
@@ -883,6 +884,7 @@ Player.makeBuff( 394949, "fists_of_flowing_momentum" )
 Player.makeBuff( 196741, "hit_combo" )
 Player.makeBuff( 394944, "kicks_of_flowing_momentum" )
 Player.makeBuff( 451457, "martial_mixture" )
+Player.makeBuff( 451297, "momentum_boost" )
 Player.makeBuff( 129914, "power_strikes" )
 Player.makeBuff( 337482, "pressure_point" )
 Player.makeBuff( 152173, "serenity" )
@@ -2447,7 +2449,7 @@ local ww_spells = {
         affected_by_serenity = true,
         trigger_etl = true,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             local am = 1
             
             am = am * Player.getTalent( "flashing_fists" ).effectN( 1 ).mod
@@ -2464,7 +2466,27 @@ local ww_spells = {
             
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end        
+            end 
+            
+            if Player.getTalent( "momentum_boost" ).ok then
+                
+                -- Momentum Boost's first effect, increase damage by n% of haste
+                am = am * ( 1 + ( Player.haste * Player.getTalent( "momentum_boost" ).effectN( 1 ).pct ) )
+                
+                -- Momentum Boost's damage buff is solved using an algebraic series formula
+                -- Possibly look at implementing an inherent tick_multiplier method at some point?
+                
+                local ticks = self.ticks() - 1 -- The first tick will be unbuffed 
+                local targets = self.target_count()
+                local max_stacks = Player.buffs.momentum_boost.max_stacks()
+                local uncapped = ticks * targets <= max_stacks and ticks or floor( max_stacks / targets )
+                local capped = ticks - uncapped
+                
+                local m = Player.buffs.momentum_boost.effectN( 1 ).pct / ( ticks + 1 ) -- Multiplier divided by *TOTAL* ticks for this action
+                local momentum = ( uncapped / 2 ) * ( 2 * ( targets * m ) + ( uncapped - 1 ) * ( targets * m ) ) + ( max_stacks * m ) * capped
+                
+                am = am * momentum
+            end
             
             return am
         end,
@@ -2530,7 +2552,7 @@ local ww_spells = {
             return cm
         end,   
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = 1
             
             am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
@@ -2605,7 +2627,7 @@ local ww_spells = {
             return 0
         end,
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = 1
             
             local motc_stacks = CurrentCraneStacks( state )
@@ -2672,7 +2694,7 @@ local ww_spells = {
             return cm
         end,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             local am = 1
             
             am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
@@ -2751,7 +2773,7 @@ local ww_spells = {
             return cm
         end,   
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = 1
             
             am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
@@ -2865,7 +2887,7 @@ local ww_spells = {
         copied_by_sef = true,
         trigger_etl = true,
         
-        action_multiplier = function ( )
+        action_multiplier = function( self, state )
             local am = 1
             
             if Player.set_pieces[ 31 ] >= 4 then
@@ -2927,7 +2949,7 @@ local ww_spells = {
             return true            
         end,
         
-        action_multiplier = function ( )
+        action_multiplier = function( self, state )
             local am = 1
             
             if Player.set_pieces[ 31 ] >= 4 then
@@ -2970,7 +2992,7 @@ local ww_spells = {
         copied_by_sef = true,
         affected_by_serenity = true,
         
-        action_multiplier = function ( )
+        action_multiplier = function( self, state )
             local am = 1
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
@@ -3023,7 +3045,7 @@ local ww_spells = {
             return 0
         end,
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = 1
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
@@ -3130,7 +3152,7 @@ local ww_spells = {
         ignore_armor = true,
         ww_mastery = true,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             local am = 1
             
             if Player.getTalent( "path_of_jade" ).ok then 
@@ -3166,7 +3188,7 @@ local ww_spells = {
             return Player.getTalent( "jadefire_stomp" ).ok and aura_env.fight_remains > 5 and Player.moving == false
         end,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             local am = 1
             
             if Player.getTalent( "path_of_jade" ).ok then 
@@ -3217,7 +3239,7 @@ local ww_spells = {
         copied_by_sef = true,    
         ww_mastery = true,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             local am = 1
             
             local combat_wisdom = Player.is_beta() and Player.getTalent( "combat_wisdom" ) or Player.getTalent( "power_strikes" )
@@ -3303,7 +3325,7 @@ local ww_spells = {
             return chi
         end,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             local h = 1
             
             h = h * Player.getTalent( "vigorous_expulsion" ).effectN( 1 ).mod
@@ -3398,7 +3420,7 @@ local ww_spells = {
         trigger_etl = true,
         ww_mastery = false,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             if Player.buffs.chi_energy.up() then
                 return ( 1 + Player.buffs.chi_energy.stacks() * spell.chi_energy.effectN( 1 ).pct )
             end
@@ -3454,7 +3476,7 @@ local ww_spells = {
         copied_by_sef = true,    
         ww_mastery = true,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             local am = 1
             
             if Player.buffs.the_emperors_capacitor.up() then
@@ -3506,7 +3528,7 @@ local ww_spells = {
         
         trigger_etl = true,
 
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             return Player.getTalent( "resonant_fists" ).rank 
         end,
         
@@ -3771,7 +3793,7 @@ local brm_spells = {
         background = true,
         damageID = 124507,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             local spheres = GetSpellCount( 322101 )
             return spheres
         end,
@@ -3852,7 +3874,7 @@ local brm_spells = {
         
         background = true,
 
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
             
             am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
@@ -3894,7 +3916,7 @@ local brm_spells = {
         
         usable_during_sck = true,
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = 1
             
             am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
@@ -3928,7 +3950,7 @@ local brm_spells = {
         background = true,
         skip_calcs = true, -- Uses state result
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = Player.getTalent( "charred_passions" ).effectN( 1 ).pct
             if state then
                 local result = state.result
@@ -3963,7 +3985,7 @@ local brm_spells = {
 
         usable_during_sck = true, 
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             local am = 1
             
             am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
@@ -4040,7 +4062,7 @@ local brm_spells = {
             return min( 1, cr )
         end,    
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = 1
             
             am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
@@ -4120,7 +4142,7 @@ local brm_spells = {
             return not ( Player.getTalent( "press_the_advantage" ).ok )
         end,
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = 1
             
             if IsBlackoutCombo( state ) then
@@ -4263,7 +4285,7 @@ local brm_spells = {
     ["resonant_fists"] = Player.createAction( 389578, {
         background = true,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             return Player.getTalent( "resonant_fists" ).rank 
         end,
         
@@ -4284,7 +4306,7 @@ local brm_spells = {
         background = true,
         base_tick_rate = 2,
         
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             return Player.getTalent( "press_the_advantage" ).effectN( 4 ).mod
         end,
         
@@ -4304,7 +4326,7 @@ local brm_spells = {
     ["pta_keg_smash"] = Player.createAction( 121253, {
         background = true,
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
             
             am = am * Player.getTalent( "stormstouts_last_keg" ).effectN( 1 ).mod
@@ -4386,7 +4408,7 @@ local brm_spells = {
         
         usable_during_sck = true,
 
-        action_multiplier = function()
+        action_multiplier = function( self, state )
             local am = 1
             
             am = am * Player.getTalent( "stormstouts_last_keg" ).effectN( 1 ).mod
@@ -4535,7 +4557,7 @@ local brm_spells = {
             return Player.getTalent( "exploding_keg" ).effectN( 4 ).ap_coefficient
         end,
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             
             if not state then
                 return 1
@@ -4596,7 +4618,7 @@ local brm_spells = {
         
         usable_during_sck = true, 
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = 1
             
             -- BUG: BoC buffs the initial hit as well as the periodic
@@ -4677,7 +4699,7 @@ local brm_spells = {
         background = true,
         base_tick_rate = 2,
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = 1
             
             if IsBlackoutCombo( state ) then
@@ -5056,7 +5078,7 @@ local brm_spells = {
         background = true,
         skip_calcs = true, -- Uses state result
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = spell.t31_brm_2pc.effectN( 1 ).pct
 
             if state then
@@ -5080,7 +5102,7 @@ local brm_spells = {
         background = true,
         skip_calcs = true, -- Uses state result
         
-        action_multiplier = function( state )
+        action_multiplier = function( self, state )
             local am = spell.t31_brm_2pc.effectN( 2 ).pct
             if state then
                 local result = state.result

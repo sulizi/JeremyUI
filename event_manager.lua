@@ -1084,7 +1084,7 @@ function(event, ...)
                             -- --------------
                             
                             -- Action Multiplier
-                            tooltip = tooltip * ( action.action_multiplier and action.action_multiplier() or 1 )
+                            tooltip = tooltip * ( action.action_multiplier and action.action_multiplier( action ) or 1 )
                             
                             -- Versatility
                             tooltip = tooltip * Player.vers_bonus
@@ -1320,7 +1320,6 @@ function(event, ...)
                                     driver.trigger["hit_combo"] = ( not mastery_break )
                                 end
                                 
-                                
                                 local trigger_spells = {}
                                 local trigger_exists = {}
 
@@ -1484,8 +1483,8 @@ function(event, ...)
                                         if tick_damage > 0 then
                                             -- Use future trigger state
                                             if spell.action_multiplier then
-                                                local spell_am = spell.action_multiplier()
-                                                local am_delta = spell.action_multiplier( trigger.state )
+                                                local spell_am = spell.action_multiplier( spell )
+                                                local am_delta = spell.action_multiplier( spell, trigger.state )
                                                 if spell_am > 0 then
                                                     am_delta = am_delta / spell_am
                                                 end
