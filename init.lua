@@ -1894,6 +1894,7 @@ aura_env.unitRange = function( unitID )
     return 40
 end
 
+-- TODO: Remove this in TWW
 aura_env.skyreach_modifier = function( callback )
     
     local callback_type = callback.type or "damage"
@@ -2479,7 +2480,6 @@ local ww_spells = {
                 
                 if ticks > 1 then
                     local targets = self.target_count()
-                    
                     local max_stacks = Player.buffs.momentum_boost.max_stacks()
                     
                     -- The first tick will be unbuffed 
@@ -3528,7 +3528,8 @@ local ww_spells = {
         }, 
     } ),
 
-    ["resonant_fists"] = Player.createAction( 389578, {
+    -- TODO: Remove this in TWW
+    ["resonant_fists"] = Player.createAction( Player.is_beta() and nil or 389578, {
         background = true,
         
         trigger_etl = true,
@@ -3929,6 +3930,15 @@ local brm_spells = {
             return am
         end,
         
+        mitigate = function()
+            local m = 0
+            
+            if Player.getTalent( "strike_at_dawn" ).ok then
+                -- physical damage mitigated from one second of Elusive Brawler
+                m = dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
+            end
+        end,        
+        
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
@@ -4287,7 +4297,8 @@ local brm_spells = {
         end,
     } ),
 
-    ["resonant_fists"] = Player.createAction( 389578, {
+    -- TODO: Remove this in TWW
+    ["resonant_fists"] = Player.createAction( Player.is_beta() and nil or 389578, {
         background = true,
         
         action_multiplier = function( self, state )
