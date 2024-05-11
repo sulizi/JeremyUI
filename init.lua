@@ -714,10 +714,11 @@ aura_env.CPlayer = {
         local self = aura_env.CPlayer
         
         if not name or not self.buffs[ name ] then
-            local buff = LibDBCache:find_spell( spellID ) 
+            local _spell = LibDBCache:find_spell( spellID )
+            local buff = {}
             local _init = init or {}
             
-            name = name or buff.tokenName
+            name = name or _spell.tokenName
             
             if name then
                 buff.spellID = spellID
@@ -739,10 +740,12 @@ aura_env.CPlayer = {
                     return data and data.stacks or 0 
                 end
                 
-                buff._max_stacks = buff.max_stacks
-                buff.max_stacks = init.max_stacks or function()
+                buff._max_stacks = _spell.max_stacks
+                buff.max_stacks = _init.max_stacks or function()
                     return buff._max_stacks
                 end
+                
+                buff.effectN = _spell.effectN
                 
                 self.buffs[ name ] = buff
             else
@@ -891,7 +894,7 @@ Player.makeBuff( 152173, "serenity" )
 Player.makeBuff( 137639, "storm_earth_and_fire" )
 Player.makeBuff( 202090, "teachings_of_the_monastery", {
     max_stacks = function()
-        local self = Player.buff.teachings_of_the_monastery
+        local self = Player.buffs.teachings_of_the_monastery
         local ms = self._max_stacks
         
         ms = ms + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 3 ).base_value
@@ -1726,7 +1729,7 @@ aura_env.global_modifier = function( callback, future, real )
     if callback_type == "smart_heal" or callback_type == "self_heal" then
         
         -- Passive Talents (globally)
-        if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 2 ) )
+        if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 2 ) ) then
             gm = gm * Player.getTalent( "chi_proficiency" ).effectN( 2 ).mod
         end
                 
@@ -1767,12 +1770,12 @@ aura_env.global_modifier = function( callback, future, real )
         gm = gm * Player.getTalent( "ferocity_of_xuen" ).effectN( 1 ).mod
         
         -- Chi Proficiency
-        if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 1 ) )
+        if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 1 ) ) then
             gm = gm * Player.getTalent( "chi_proficiency" ).effectN( 1 ).mod
         end
     
         -- Martial Instincts
-        if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "martial_instincts" ).effectN( 1 ) )
+        if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "martial_instincts" ).effectN( 1 ) ) then
             gm = gm * Player.getTalent( "martial_instincts" ).effectN( 1 ).mod
         end    
         
@@ -2366,7 +2369,7 @@ local GetTotMStacks = function( state )
     end    
 end
 
-local MartialMixtureStacks( state )
+local MartialMixtureStacks = function( state )
 
     if not Player.getTalent( "martial_mixture" ).ok then
         return 0
@@ -2391,7 +2394,7 @@ local MartialMixtureStacks( state )
             elseif cb.name == "whirling_dragon_punch" then
                 totm_stacks = min( max_totm_stacks, totm_stacks + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )                
             elseif cb.name == "blackout_kick" then
-                stacks = min( max_stacks, stacks + ( cb.result.target_count * ( 1 + totm_stacks ) )
+                stacks = min( max_stacks, stacks + ( cb.result.target_count * ( 1 + totm_stacks ) ) )
                 totm_stacks = 0
             end
         end
@@ -2714,7 +2717,7 @@ local ww_spells = {
         },        
     } ),
 
-    ["energy_burst"] = Player.createAction( 451498, {
+    ["energy_burst"] = Player.createAction( Player.is_beta() and 451498 or nil, {
         background = true,
         
         chi_gain = function( state )
