@@ -360,7 +360,7 @@ function(event, ...)
                             type         = "channel",
                             name         = "channel_remaining",
                             raw          = Player.channel.raw or 0,
-                            execute_time = Player.channel.remaining,
+                            execute_time = Player.channel.remaining + Player.channel.latency,
                             cb           = Player.channel.action,
                     })
                 end
@@ -1056,6 +1056,16 @@ function(event, ...)
                                 
                                 action_delay = max( action_delay, usable_in )
                                 
+                                -- Check if we're channeling and add channel latency
+                                if Player.channel.remaining and action_delay > Player.channel.remaining then
+                                    local latency = Player.channel.latency or 0
+                                    -- TODO: Generic usable during channel? Is this achievable via the API or spell labels?
+                                    if Player.channel.spellID == 101546 and action.usable_during_sck then
+                                        latency = 0
+                                    end                            
+                                    action_delay = max( action_delay, latency )
+                                end
+                            
                             end
                             
                             -- Calculate total mitigation from action
