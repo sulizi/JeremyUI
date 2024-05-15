@@ -397,9 +397,9 @@ aura_env.RECENT_UPDATE = nil
 aura_env.CURRENT_MARKERS = {}
 
 aura_env.CPlayer = {
-    ability_power = 1,
     action_modifier = 1,
     action_sequence = {},
+    attack_power = 1,
     auraDataByInstance = {},
     auraExclusions = {},    
     auraInstancesByID = {},
@@ -439,15 +439,23 @@ aura_env.CPlayer = {
     haste = 1,
     health_deficit = 0,
     lastFullUpdate = nil,
+    main_hand = {
+        wdps = 0.5,
+        swing_damage = 1,
+        equipped = false,
+    },
     mana = 0,
     mast_bonus = 1,
-    mh_wdps = 1,
     movement_rate = 0,
     movement_t = 0,
     movement_yds = 0,
     moving = false,
     needsFullUpdate = true,    
-    oh_wdps = 0,
+    off_hand = {
+        wdps = 0.5,
+        swing_damage = 1,
+        equipped = false,
+    },    
     primary_stat = 0,
     recent_dtps = 0,
     set_pieces = {},
@@ -456,6 +464,11 @@ aura_env.CPlayer = {
     spell_power = 1,
     stagger = 0,
     vers_bonus = 1,
+    weapon_power = {
+        main_hand   = 1,
+        off_hand    = 1,
+        both        = 1,
+    },
     
     talent = {},
     
@@ -523,7 +536,7 @@ aura_env.CPlayer = {
         local Player = aura_env.CPlayer
         local action = init or {}
         local data          = LibDBCache:find_spell( spellID )
-        local trigger_data  = LibDBCache:find_spell( action.damageID )
+        local trigger_data  = LibDBCache:find_spell( action.triggerSpell )
         
         if not data.found then
             print( "JeremyUI: No data found for " .. spellID .. " while creating action." )
@@ -531,33 +544,40 @@ aura_env.CPlayer = {
         
         if not trigger_data.found then
             trigger_data = nil
-            if action.damageID then
-                print( "JeremyUI: No data found for " .. action.damageID .. " while creating action." )
+            if action.triggerSpell then
+                print( "JeremyUI: No data found for " .. action.triggerSpell .. " while creating action." )
             end
         end
         
         action.data         = data
         action.trigger_data = trigger_data
         
-        local _damage_data = trigger_data or data
+        local initialize_value = function ( data, default )
+            if data ~= nil then
+                return data
+            end
+            return default
+        end
+        
+        local _tick_data = initialize_value( trigger_data, data )
         
         action.spellID      = spellID
-        action.replaces     = action.replaces or data.replaces
-        action.background   = action.background or false
-        action.channeled    = action.channeled or data.channeled
-        action.delay_aa     = action.delay_aa or data.delay_auto_attack
+        action.replaces     = initialize_value( action.replaces, data.replaces )
+        action.background   = initialize_value( action.background, false )
+        action.channeled    = initialize_value( action.channeled, data.channeled )
+        action.delay_aa     = initialize_value( action.delay_aa, data.delay_auto_attack )
         
-        action.icd              = action.icd or data.icd
-        action.duration         = action.duration or data.duration
-        action.duration_hasted  = action.duration_hasted or data.duration_hasted
-        action.trigger_rate     = action.trigger_rate or data.trigger_rate
-        action.tick_zero        = action.tick_zero or data.tick_zero
-        action.dot_hasted       = action.dot_hasted or data.dot_hasted
+        action.icd              = initialize_value( action.icd, data.icd )
+        action.duration         = initialize_value( action.duration, data.duration )
+        action.duration_hasted  = initialize_value( action.duration_hasted, data.duration_hasted )
+        action.trigger_rate     = initialize_value( action.trigger_rate, data.trigger_rate )
+        action.tick_zero        = initialize_value( action.tick_zero, data.tick_zero )
+        action.dot_hasted       = initialize_value( action.dot_hasted, data.dot_hasted )
         
         -- Use triggered spell data
-        action.ignore_armor     = action.ignore_armor or _damage_data.ignores_armor
-        action.may_miss         = action.may_miss or _damage_data.may_miss
-        action.may_crit         = action.may_crit or _damage_data.may_crit
+        action.ignore_armor     = initialize_value( action.ignore_armor, _tick_data.ignores_armor )
+        action.may_miss         = initialize_value( action.may_miss, _tick_data.may_miss )
+        action.may_crit         = initialize_value( action.may_crit, _tick_data.may_crit )
         
         local effect_type = function( e )
             if e.is_heal then
@@ -573,13 +593,13 @@ aura_env.CPlayer = {
             local iter = 1
             local effect = 0
             while ( effect ~= nil ) do
-                effect = _damage_data.effectN( iter )
+                effect = _tick_data.effectN( iter )
                 if effect and effect.ap_coefficient then
                     action.ap = function()
                         return effect.ap_coefficient
                     end
-                    action.is_periodic = action.is_periodic or effect.is_periodic
-                    action.type = action.type or effect_type( effect )
+                    action.is_periodic  = initialize_value( action.is_periodic, effect.is_periodic )
+                    action.type         = initialize_value( action.type, effect_type( effect ) )
                     break
                 end
                 iter = iter + 1
@@ -590,26 +610,32 @@ aura_env.CPlayer = {
             local iter = 1
             local effect = 0
             while ( effect ~= nil ) do
-                effect = _damage_data.effectN( iter )
+                effect = _tick_data.effectN( iter )
                 if effect and effect.sp_coefficient then
                     action.sp = function() 
                         return effect.sp_coefficient
                     end
-                    action.is_periodic = action.is_periodic or effect.is_periodic 
-                    action.type = action.type or effect_type( effect )
+                    action.is_periodic  = initialize_value( action.is_periodic, effect.is_periodic  )
+                    action.type         = initialize_value( action.type, effect_type( effect ) )
                     break
                 end
                 iter = iter + 1
             end            
         end
         
-        action.type = action.type or "damage"
+        if not action.ap then
+            action.ap_type = "NONE"
+        else
+            action.ap_type = initialize_value( action.ap_type, "MAINHAND" )
+        end
+        
+        action.type = initialize_value( action.type, "damage" )
         
         if not action.ticks and action.duration and action.base_tick_rate and action.base_tick_rate > 0 then
             action.ticks = action.duration / action.base_tick_rate
         end
         
-        local ticks = action.ticks or 1
+        local ticks = initialize_value( action.ticks, 1 )
         if type( ticks ) ~= "function" then
             action.ticks = function()
                 if action.channeled and action.canceled then
@@ -640,16 +666,16 @@ aura_env.CPlayer = {
         
         -- Cast Time / Execute Time functions
         
-        action.cast_time = action.cast_time or function()
+        action.cast_time = initialize_value( action.cast_time, function() 
             if action.background then 
                 return 0
             end
             
             local cast_time_ms = select( 4, GetSpellInfo( action.spellID ) ) or 0
             return cast_time_ms / 1000
-        end
+        end )
         
-        action.execute_time = action.execute_time or function()
+        action.execute_time = initialize_value( action.execute_time, function()
             if action.background then
                 return 0
             end
@@ -665,7 +691,7 @@ aura_env.CPlayer = {
             end
             
             return max( gcd, action.cast_time() )
-        end
+        end )
         
         return action
     end,
@@ -2443,7 +2469,7 @@ local ww_spells = {
             "blackout_kick", -- CDR        
         },
         
-        damageID = 117418,
+        triggerSpell = 117418,
         
         ticks = 5,
         hasted_cooldown = true,
@@ -2528,7 +2554,8 @@ local ww_spells = {
             "fists_of_fury_cancel", -- Pressure Point / T29 + T32 Set
         },
         
-        damageID = 185099, -- This spell is really weird and triggers 185099 for the damage event even though it's not channeled
+        ap_type = "BOTH",
+        triggerSpell = 185099, -- This spell is really weird and triggers 185099 for the damage event even though it's not channeled
         
         hasted_cooldown = true,
         
@@ -2614,12 +2641,8 @@ local ww_spells = {
             "flying_serpent_kick", -- Mastery eval.
         },
         
-        damageID = 107270,
-
-        ap = function() 
-            return spell.sck_tick.effectN( 1 ).ap_coefficient 
-        end,
-        
+        ap_type = "BOTH",
+        triggerSpell = 107270,
         ticks = 4,
         
         copied_by_sef = true,
@@ -2750,6 +2773,8 @@ local ww_spells = {
             "strike_of_the_windlord", -- CDR (T31)
             "whirling_dragon_punch", -- CDR (T31)
         },
+        
+        ap_type = "BOTH",
         
         usable_during_sck = true,       
         copied_by_sef = true,
@@ -2918,7 +2943,7 @@ local ww_spells = {
             "rising_sun_kick", -- Spell activation        
         },
         
-        damageID = 158221,
+        triggerSpell = 158221,
         ticks = 3,
         hasted_cooldown = true,
         
@@ -3026,7 +3051,7 @@ local ww_spells = {
     } ),
 
     -- TODO: May need to separate OH hit into a triggered spell at some point, currently not necessary
-    -- Just setting DamageID as the OH hit, createAction handles the rest
+    -- Just setting triggerSpell as the OH hit, createAction handles the rest
     ["strike_of_the_windlord"] = Player.createAction( 392983, {
         callbacks = {
             -- Chi generators
@@ -3037,7 +3062,8 @@ local ww_spells = {
             "blackout_kick", -- CDR (Tier 31)        
         },
         
-        damageID = 395521, -- OH hit
+        ap_type = "OFFHAND",
+        triggerSpell = 395521, -- OH hit
         
         ww_mastery = true,
         usable_during_sck = true,   
@@ -3101,7 +3127,7 @@ local ww_spells = {
         
         background = Player.is_beta(),
         
-        damageID = 148187,
+        triggerSpell = 148187,
         base_tick_rate = 0.75, -- TODO: Better buff handling
         hasted_cooldown = true, -- Remove in tww
         
@@ -3185,7 +3211,7 @@ local ww_spells = {
 
     ["jadefire_stomp"] = Player.createAction( 388193, {
 
-        damageID = 388207, 
+        triggerSpell = 388207, 
 
         usable_during_sck = true,       
         trigger_etl = true,
@@ -3275,7 +3301,7 @@ local ww_spells = {
 
     ["chi_burst"] = Player.createAction( 123986, {
 
-        damageID = 148135,
+        triggerSpell = 148135,
         
         trigger_etl = true,
         copied_by_sef = true,   
@@ -3304,7 +3330,7 @@ local ww_spells = {
 
     ["chi_wave"] = Player.createAction( Player.is_beta() and 450391 or 115098, {
         background = Player.is_beta(),
-        damageID = 132467,
+        triggerSpell = 132467,
         ticks = 4, -- 4 Damage Bounces
         
         ww_mastery = true,
@@ -3381,7 +3407,7 @@ local ww_spells = {
     -- Can remove this in TWW since it's not longer useful rotationally
     ["flying_serpent_kick"] = Player.createAction( Player.is_beta() and nil or 101545, {
 
-        damageID = Player.is_beta() and 123586 or nil,
+        triggerSpell = Player.is_beta() and 123586 or nil,
 
         ww_mastery = true,
 
@@ -3573,7 +3599,7 @@ local ww_spells = {
     -- TODO: Refactor this to debuff at some point?
     ["touch_of_karma"] = Player.createAction( 122470, {
 
-        damageID = 124280,
+        triggerSpell = 124280,
 
         trigger_etl = false,
         
@@ -3687,7 +3713,7 @@ local ww_spells = {
 
     ["white_tiger_statue"] = Player.createAction( 388686, {
 
-        damageID = 389541, -- (Claw of the White Tiger)
+        triggerSpell = 389541, -- (Claw of the White Tiger)
         base_tick_rate = 2,
         
         trigger_etl = false,
@@ -3800,7 +3826,7 @@ local brm_spells = {
 
     ["healing_sphere"] = Player.createAction( 224863, {
         background = true,
-        damageID = 124507,
+        triggerSpell = 124507,
         
         action_multiplier = function( self, state )
             local spheres = GetSpellCount( 322101 )
@@ -3831,7 +3857,7 @@ local brm_spells = {
             -- Healing Spheres
             -- These are pulled in and added to the base amount before modifiers
             local spheres = GetSpellCount( 322101 )
-            h = h + ( 3 * Player.ability_power * spheres )
+            h = h + ( 3 * player.attack_power * spheres )
             
             h = h * Player.getTalent( "vigorous_expulsion" ).effectN( 1 ).mod
             
@@ -3881,6 +3907,7 @@ local brm_spells = {
 
     ["pta_rising_sun_kick"] = Player.createAction( 185099, {
         
+        ap_type = "BOTH",
         background = true,
 
         action_multiplier = function( self, state )
@@ -3920,7 +3947,8 @@ local brm_spells = {
 
     ["rising_sun_kick"] = Player.createAction( 107428, {
 
-        damageID = 185099, -- This spell is weird and triggers a secondary damage event
+        ap_type = "BOTH",
+        triggerSpell = 185099, -- This spell is weird and triggers a secondary damage event
         hasted_cooldown = true,
         
         usable_during_sck = true,
@@ -3940,6 +3968,8 @@ local brm_spells = {
                 -- physical damage mitigated from one second of Elusive Brawler
                 m = dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
             end
+            
+            return m
         end,        
         
         tick_trigger = {
@@ -3998,6 +4028,8 @@ local brm_spells = {
         callbacks = {
             "breath_of_fire", -- Charred Passions        
         },
+    
+        ap_type = "BOTH",
         
         replaces = 100784, -- Missing in Spell Data
 
@@ -4029,7 +4061,7 @@ local brm_spells = {
             local amount = 0
             
             if Player.getTalent( "staggering_strikes" ).ok then
-                amount = Player.ability_power or 0
+                amount = player.attack_power or 0
                 amount = amount * min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
                 amount = amount * Player.getTalent( "staggering_strikes" ).effectN( 2 ).pct
             end
@@ -4071,7 +4103,8 @@ local brm_spells = {
             "breath_of_fire", -- Charred Passions        
         },
         
-        damageID = 107270,
+        ap_type = "BOTH",
+        triggerSpell = 107270,
         ticks = 4,
         
         critical_rate = function()
@@ -4128,7 +4161,7 @@ local brm_spells = {
             "chi_burst",
         },
         
-        damageID = 148187,
+        triggerSpell = 148187,
         base_tick_rate = 0.75, -- TODO: Better buff handling
         hasted_cooldown = true,
         
@@ -4189,7 +4222,7 @@ local brm_spells = {
 
     ["chi_burst"] = Player.createAction( 123986, {
 
-        damageID = 148135,
+        triggerSpell = 148135,
         
         target_count = function()
             return aura_env.target_count
@@ -4208,7 +4241,7 @@ local brm_spells = {
     ["chi_wave"] = Player.createAction( Player.is_beta() and 450391 or 115098, {
         
         background = Player.is_beta(),
-        damageID = 132467,
+        triggerSpell = 132467,
         ticks = 4, -- 4 Damage Bounces
         usable_during_sck = true,   
         
@@ -4258,7 +4291,7 @@ local brm_spells = {
 
     ["white_tiger_statue"] = Player.createAction( 388686, {
 
-        damageID = 389541, -- (Claw of the White Tiger)
+        triggerSpell = 389541, -- (Claw of the White Tiger)
         base_tick_rate = 2,
         
         usable_during_sck = true,
@@ -4942,7 +4975,7 @@ local brm_spells = {
             
             local m = tooltip_array[ 1 ] 
                 -- Fallback to AP formula if tooltip is unavailable
-                or ( Player.ability_power * cb_apmod * Player.vers_bonus )
+                or ( player.attack_power * cb_apmod * Player.vers_bonus )
             
             if m > 0 then
             
@@ -5191,8 +5224,10 @@ aura_env.initSpecialization = function()
 end
 
 aura_env.initGear = function()
-    local mainhand = GetInventoryItemLink( "player", 16 )
-    local offhand = GetInventoryItemLink( "player", 17 )
+
+    -- ----------------------------
+    -- Set Items
+    -- ----------------------------
     
     local tier_slots = { 1, 3, 5, 7, 10 }
     local tier_ids = { 
@@ -5243,56 +5278,60 @@ aura_env.initGear = function()
     
     Player.set_pieces = set_pieces
     
-    local mh_dps = 0
-    local oh_dps = 0
+    -- ----------------------------
+    -- Attack Power and Spell Power
+    -- ----------------------------
+ 
+    Player.attack_power = UnitAttackPower( "player" )
     
-    if mainhand then
-        local mainhand_stats = GetItemStats( mainhand )
-        if mainhand_stats then
-            mh_dps = mainhand_stats[ "ITEM_MOD_DAMAGE_PER_SECOND_SHORT" ] or 0
-        end
+     -- TODO:
+     -- Automate these auras
+    if GetSpecialization() == 2 then  -- Mistweaver
+        aura_env.spell_power = UnitStat( "player", 4 ) -- Equal to Intellect
+    else   
+        if Player.spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"] then
+            aura_env.spell_power = Player.attack_power * spell.windwalker_monk.effectN( 13 ).mod
+        elseif Player.spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"] then
+            aura_env.spell_power = Player.attack_power * spell.brewmaster_monk.effectN( 18 ).mod
+        end       
     end
-    if offhand then
-        local offhand_stats = GetItemStats( offhand )
-        if offhand_stats then
-            oh_dps = offhand_stats[ "ITEM_MOD_DAMAGE_PER_SECOND_SHORT" ] or 0
-        end
-    end 
     
-    if mh_dps == 0 then
-        Player.ability_power = 1
-        Player.mh_wdps = 0
-        Player.oh_wdps = 0
-    else
-        local ap = UnitAttackPower( "player" )
-        local mh_ap = ( mh_dps * 6 ) + ap
-        local mh_oh_ap = ( mh_dps * 4 ) + ( oh_dps * 2 ) + ap
-        
-        local dw = not IsEquippedItemType( "Two-Hand" )
-        
-        Player.mh_wdps = ( mh_dps + ap / 6 ) * ( dw and 2.6 or 3.6 ) 
-        Player.oh_wdps = ( oh_dps + ap / 6 ) * ( dw and 2.6 or 0 ) / 2
-        
-        -- Mistweaver
-        if GetSpecialization() == 2 then
-            aura_env.spell_power = UnitStat( "player", 4 ) -- Equal to Intellect
-            Player.ability_power = aura_env.spell_power * spell.mistweaver_monk.effectN( 4 ).mod
-        else
-            
-            if oh_dps > 0 then
-                Player.ability_power = mh_oh_ap
-            else
-                Player.ability_power = mh_ap * 0.98
-            end   
-            
-            if Player.spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"] then
-                aura_env.spell_power = Player.ability_power * spell.windwalker_monk.effectN( 13 ).mod
-            elseif Player.spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"] then
-                aura_env.spell_power = Player.ability_power * spell.brewmaster_monk.effectN( 18 ).mod
-            end
-        end
-        
-    end
+    -- ----------------------------
+    -- Weapon Stats
+    -- ----------------------------
+    
+    local WEAPON_POWER_COEFFICIENT = 6
+    local weapon_power_mod = 1 / WEAPON_POWER_COEFFICIENT
+    local normalized_speed = IsEquippedItemType( "Two-Hand" ) and 3.6 or 2.6
+    
+    local mainhand_stats = GetItemStats( GetInventoryItemLink( "player", 16 ) or "" )
+    local offhand_stats = GetItemStats( GetInventoryItemLink( "player", 17 ) or "" )
+    local mh_wdps = ( mainhand_stats and mainhand_stats[ "ITEM_MOD_DAMAGE_PER_SECOND_SHORT" ] ) or 0.5 -- From SimC: Unequipped counts as 0.5 WDPS
+    local oh_wdps = ( offhand_stats and offhand_stats[ "ITEM_MOD_DAMAGE_PER_SECOND_SHORT" ]  ) or 0.5 -- From SimC: Unequipped counts as 0.5 WDPS
+
+    Player.main_hand = {
+        wdps = mh_wdps,
+        swing_damage = ( mh_wdps * normalized_speed ) + ( normalized_speed * weapon_power_mod * Player.attack_power ),
+        equipped = mainhand_stats and true or false,
+    }
+
+    Player.off_hand = {
+        wdps = mh_wdps,
+        swing_damage = ( oh_wdps * normalized_speed ) + ( normalized_speed * weapon_power_mod * Player.attack_power ),
+        equipped = mainhand_stats and true or false,
+    }    
+
+    Player.weapon_power = {
+        main_hand   = mh_wdps * WEAPON_POWER_COEFFICIENT,
+        off_hand    = oh_wdps * WEAPON_POWER_COEFFICIENT,
+        both        = ( ( mh_wdps + ( oh_wdps / 2 ) ) * ( 2 / 3 ) ) * WEAPON_POWER_COEFFICIENT,
+        none        = 0,
+    }
+    
+    
+    -- ----------------------------
+    -- Secondary Stats
+    -- ----------------------------    
     
     Player.crit_bonus = ( GetCritChance() / 100 )
     Player.vers_bonus = 1 + ( GetCombatRatingBonus( 29 ) / 100 )
@@ -5311,6 +5350,8 @@ SetCVar( "UberTooltips", 1 )
 SetCVar( "threatWarning", 3 )
 SetCVar( "ActionButtonUseKeyDown", 1 )
 SetCVar( "cameraDistanceMaxZoomFactor", 2.6 ) 
+
+BNToastFrame:SetPoint ( "Left", 0, 0 ) 
 
 aura_env.initGear()
 aura_env.initSpecialization()

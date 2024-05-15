@@ -943,12 +943,30 @@ function(event, ...)
                             action.pvp_sp_value = ( type( action.sp ) == "function" and action.sp() or action.sp ) or 0
                         end
                         
-                        local ap      = Player.is_pvp and action.pvp_ap_value or action.pve_ap_value
-                        local sp      = Player.is_pvp and action.pvp_sp_value or action.pve_sp_value
+                        local ap_mod  = Player.is_pvp and action.pvp_ap_value or action.pve_ap_value
+                        local sp_mod  = Player.is_pvp and action.pvp_sp_value or action.pve_sp_value
                         local ticks   = ( type( action.ticks ) == "function" and action.ticks() or action.ticks ) or 1
                         
+                        local function composite_attack_power = function( ap_type )
+                            
+                            local two_handed_weapon = IsEquippedItemType( "Two-Hand" )
+                            local weapon_power = Player.weapon_power.main_hand
+
+                            if ap_type == "BOTH" and not two_handed_weapon then
+                                weapon_power = Player.weapon_power.both
+                            elseif ap_type == "OFFHAND" and not two_handed_weapon then
+                                weapon_power = Player.weapon_power.off_hand
+                            elseif ap_type == "NONE" then
+                                weapon_power = Player.weapon_power.none
+                            end
+                            
+                            return floor( Player.attack_power + weapon_power + 0.5 ) * ( two_handed_weapon and 0.98 or 1 )
+                        end
+                        
+                        local attack_power = composite_attack_power( action.ap_type )
+                    
                         local tooltip = 
-                        max( ( action.action_multiplier ~= nil and 1 or 0 ), ticks * ( sp > 0 and ( sp * aura_env.spell_power ) or ( ap * Player.ability_power ) ) )
+                        max( ( action.action_multiplier ~= nil and 1 or 0 ), ticks * ( sp_mod > 0 and ( sp_mod * aura_env.spell_power ) or ( attack_power * ap_mod ) ) )
                         
                         local action_targets    = max( 1, min( 20, ( action.target_count and action.target_count() ) or 1 ) )
                         local action_cooldown   = aura_env.actionBaseCooldown( action )
@@ -1084,7 +1102,7 @@ function(event, ...)
                                 -- Mitigation
                                 local mitigation = stagger_reduction
                                 if action.mitigate and type( action.mitigate ) == "function" then
-                                    mitigation = mitigation + action.mitigate( state )
+                                    mitigation = mitigation + ( action.mitigate( state ) or 0 )
                                 end
                                 
                                 return mitigation
@@ -1103,7 +1121,7 @@ function(event, ...)
                             -- these sometimes change in PvP so we will cache both
                             if not action.aura_modifier_pve and not Player.is_pvp
                             or not action.aura_modifier_pvp and Player.is_pvp then
-                                local total_aura_effect = aura_env.auraEffectForSpell( action.damageID or spellID )
+                                local total_aura_effect = aura_env.auraEffectForSpell( action.triggerSpell or spellID )
                                 
                                 if Player.is_pvp then
                                     action.aura_modifier_pvp = total_aura_effect
@@ -1227,10 +1245,10 @@ function(event, ...)
                             -- AA Loss
                             if action.delay_aa then
                                 
-                                local mh_dmg = Player.mh_wdps * Player.vers_bonus
-                                local oh_dmg = Player.oh_wdps * Player.vers_bonus
+                                local mh_dmg = Player.main_hand.swing_damage * Player.vers_bonus
+                                local oh_dmg = Player.off_hand.swing_damage * Player.vers_bonus
                                 
-                                local mh_miss = oh_dmg > 0 and 0.81 or 1
+                                local mh_miss = Player.off_hand.equipped and 0.81 or 1
                                 local oh_miss = 0.81
                                 
                                 local mainSpeed, offSpeed = UnitAttackSpeed( "player" );
