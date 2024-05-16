@@ -395,6 +395,7 @@ end
 aura_env.RECENT_DURATION = 3
 aura_env.RECENT_UPDATE = nil
 aura_env.CURRENT_MARKERS = {}
+local AUTO_ATTACK = 6603
 
 aura_env.CPlayer = {
     action_modifier = 1,
@@ -538,7 +539,7 @@ aura_env.CPlayer = {
         local data          = LibDBCache:find_spell( spellID )
         local trigger_data  = LibDBCache:find_spell( action.triggerSpell )
         
-        if not data.found then
+        if spellID ~= AUTO_ATTACK and not data.found then
             print( "JeremyUI: No data found for " .. spellID .. " while creating action." )
         end
         
@@ -561,11 +562,12 @@ aura_env.CPlayer = {
         
         local _tick_data = initialize_value( trigger_data, data )
         
-        action.spellID      = spellID
-        action.replaces     = initialize_value( action.replaces, data.replaces )
-        action.background   = initialize_value( action.background, false )
-        action.channeled    = initialize_value( action.channeled, data.channeled )
-        action.delay_aa     = initialize_value( action.delay_aa, data.delay_auto_attack )
+        action.spellID          = spellID
+        action.replaces         = initialize_value( action.replaces, data.replaces )
+        action.background       = initialize_value( action.background, false )
+        action.channeled        = initialize_value( action.channeled, data.channeled )
+        action.delay_aa         = initialize_value( action.delay_aa, data.delay_auto_attack )
+        action.starts_combat    = initialize_value( action.starts_combat, data.starts_combat )
         
         action.icd              = initialize_value( action.icd, data.icd )
         action.duration         = initialize_value( action.duration, data.duration )
@@ -692,6 +694,11 @@ aura_env.CPlayer = {
             
             return max( gcd, action.cast_time() )
         end )
+        
+        action.trigger = action.trigger or {}
+        action.trigger[ "auto_attack" ] = function()
+            return InCombatLockdown() or action.starts_combat
+        end,
         
         return action
     end,
@@ -1814,6 +1821,14 @@ aura_env.global_modifier = function( callback, future, real )
         if callback.may_miss then
             local enemy_level = target_count == 1 and UnitLevel( "target" ) or Combat.avg_level
             local miss = enemy_level > 0 and min( 1, max( 0, 0.03 + ( ( enemy_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
+            
+            -- Auto attack miss penalty
+            if callback.spellID == AUTO_ATTACK then
+                if Player.off_hand.equipped then
+                    miss = miss + 0.19
+                end
+            end
+            
             gm = gm * ( 1 - miss )
         end      
         
@@ -2459,6 +2474,78 @@ local ww_spells = {
         end,      
     } ),
 
+    ["mainhand_attack"] = Player.createAction( AUTO_ATTACK, {
+        background = true,
+        school = 0x1,
+        may_miss = true,
+        may_crit = true,
+        ap_type = "NONE",
+
+        trigger_rate = function( state )
+            if state.callback.delay_aa then
+               return 0
+            else
+                local duration = state.result.execute_time
+                local swing_timer = select( 1, UnitAttackSpeed( "player" ) ) or 2.6       
+                
+                return duration / swing_timer
+            end
+        end,
+        
+        bonus_da = function()
+            return Player.main_hand.swing_damage
+        end,
+        
+        trigger = {
+            ["thunderfist_single"] = function()
+                return Player.buffs.thunderfist.up()
+            end,
+        },
+    } ),
+
+    ["offhand_attack"] = Player.createAction( AUTO_ATTACK, {
+        background = true,
+        school = 0x1,
+        may_miss = true,
+        may_crit = true,
+        ap_type = "NONE",
+        
+        trigger_rate = function( state )
+            if state.callback.delay_aa then
+               return 0
+            else
+                local duration = state.result.execute_time
+                local swing_timer = select( 2, UnitAttackSpeed( "player" ) ) or 2.6       
+                
+                return duration / swing_timer
+            end
+        end,
+        
+        bonus_da = function()
+            return Player.off_hand.swing_damage
+        end,
+        
+        trigger = {
+            ["thunderfist_single"] = function()
+                return Player.buffs.thunderfist.up()
+            end,
+        },        
+    } ),
+
+    ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
+        ready = function()
+            return aura_env.unitRange( "target" ) < 8 
+        end,
+        trigger = {
+            ["mainhand_attack"] = function()
+                return Player.main_hand.equipped 
+            end,
+            ["offhand_attack"] = function()
+                return Player.off_hand.equipped
+            end,            
+        },
+    } ),
+
     ["fists_of_fury"] = Player.createAction( 113656, {
         callbacks = {
             -- Chi generators
@@ -2644,6 +2731,7 @@ local ww_spells = {
         ap_type = "BOTH",
         triggerSpell = 107270,
         ticks = 4,
+        delay_aa = not Player.is_beta(),
         
         copied_by_sef = true,
         affected_by_serenity = true,
@@ -2708,6 +2796,10 @@ local ww_spells = {
         copied_by_sef = true,
         trigger_etl = true,
         ww_mastery = false,
+        
+        trigger_rate = function( state )
+            return GetTotMStacks( state )
+        end,
         
         critical_rate = function()
             local cr = Player.crit_bonus
@@ -2897,17 +2989,8 @@ local ww_spells = {
     
         tick_trigger = {
             ["ancient_lava"] = true,  
-            ["blackout_kick_totm"] = function( driver )
-                local totm_stacks = 0
-                
-                if Player.getTalent( "teachings_of_the_monastery" ).ok then
-                    local totm_max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks()
-                    totm_stacks = Player.buffs.teachings_of_the_monastery.stacks() + ( driver == "tiger_palm" and 1 or 0 )
-                    totm_stacks = totm_stacks + ( driver == "whirling_dragon_punch" and Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value or 0 )
-                    totm_stacks = min( totm_max_stacks, totm_stacks )
-                end
-                
-                return totm_stacks > 0, totm_stacks
+            ["blackout_kick_totm"] = function()
+                return Player.getTalent( "teachings_of_the_monastery" ).ok
             end,
             ["resonant_fists"] = true,
         },    
@@ -3824,6 +3907,74 @@ local brm_spells = {
         end,      
     } ),
 
+    ["mainhand_attack"] = Player.createAction( AUTO_ATTACK, {
+        background = true,
+        school = 0x1,
+        may_miss = true,
+        may_crit = true,
+        ap_type = "NONE",
+
+        trigger_rate = function( state )
+            if state.callback.delay_aa then
+               return 0
+            else
+                local duration = state.result.execute_time
+                local swing_timer = select( 1, UnitAttackSpeed( "player" ) ) or 2.6       
+                
+                return duration / swing_timer
+            end
+        end,
+        
+        bonus_da = function()
+            return Player.main_hand.swing_damage
+        end,
+        
+        trigger = {
+            ["press_the_advantage"] = true,
+        },
+    } ),
+
+    ["offhand_attack"] = Player.createAction( AUTO_ATTACK, {
+        background = true,
+        school = 0x1,
+        may_miss = true,
+        may_crit = true,
+        ap_type = "NONE",
+        
+        trigger_rate = function( state )
+            if state.callback.delay_aa then
+               return 0
+            else
+                local duration = state.result.execute_time
+                local swing_timer = select( 2, UnitAttackSpeed( "player" ) ) or 2.6       
+                
+                return duration / swing_timer
+            end
+        end,
+        
+        bonus_da = function()
+            return Player.off_hand.swing_damage
+        end,
+        
+        trigger = {
+            ["press_the_advantage"] = true,
+        },        
+    } ),
+
+    ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
+        ready = function()
+            return aura_env.unitRange( "target" ) < 8 
+        end,
+        trigger = {
+            ["mainhand_attack"] = function()
+                return Player.main_hand.equipped 
+            end,
+            ["offhand_attack"] = function()
+                return Player.off_hand.equipped
+            end,            
+        },
+    } ),
+
     ["healing_sphere"] = Player.createAction( 224863, {
         background = true,
         triggerSpell = 124507,
@@ -4004,7 +4155,7 @@ local brm_spells = {
                 local result = state.result
                 
                 if result and result.damage > 0 then
-                    local tick_value = result.damage / state.tick_count
+                    local tick_value = result.damage / state.count
                     
                     am = am * tick_value
                 end
@@ -4106,6 +4257,7 @@ local brm_spells = {
         ap_type = "BOTH",
         triggerSpell = 107270,
         ticks = 4,
+        delay_aa = true, -- Missing from spell data
         
         critical_rate = function()
             local cr = Player.crit_bonus
@@ -5137,7 +5289,7 @@ local brm_spells = {
                 local result = state.result
                 
                 if result and result.damage > 0 then
-                    local tick_value = result.damage / state.tick_count 
+                    local tick_value = result.damage / state.count 
                     
                     am = am * tick_value
                 end
@@ -5160,7 +5312,7 @@ local brm_spells = {
                 local result = state.result
                 
                 if result and result.damage > 0 then
-                    local tick_value = result.damage / state.tick_count
+                    local tick_value = result.damage / state.count
                     
                     am = am * tick_value
                 end
