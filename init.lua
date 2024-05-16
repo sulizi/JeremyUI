@@ -4808,30 +4808,36 @@ local brm_spells = {
                 local dot_time = 0
                 local dot_rate = 0
                 
-                for _, callback in ( state.callback_stack ) do
-                    local execute_time = callback.result.execute_time
-                    local delay = callback.result.delay
+                for cb_idx, callback in ipairs( state.callback_stack ) do
+                    if cb_idx == #state.callback_stack then
+                        break
+                    end         
                     
-                    dot_time = max( 0, dot_time - execute_time - delay )
+                    if callback.result then
+                        local execute_time = callback.result.execute_time
+                        local delay = callback.result.delay
+                        
+                        dot_time = max( 0, dot_time - execute_time - delay )
                     
-                    if callback.name == "exploding_keg" then
-                        if dot_time > 0 then
-                            local ek_ticks = min( Player.getTalent( "exploding_keg" ).duration, dot_time ) / dot_rate
-                            return ek_ticks
-                        end
-                        return 1
-                    else
-                        if callback.is_periodic and callback.duration then
-                            local ticks = callback.ticks
-                            local duration = callback.duration
-                            
-                            if callback.duration_hasted then
-                                duration = duration / Player.haste
+                        if callback.name == "exploding_keg" then
+                            if dot_time > 0 then
+                                local ek_ticks = min( Player.getTalent( "exploding_keg" ).duration, dot_time ) / dot_rate
+                                return ek_ticks
                             end
-                            
-                            if duration > execute_time then
-                                dot_time = duration - execute_time
-                                dot_rate = duration / ticks
+                            return 1
+                        else
+                            if callback.is_periodic and callback.duration then
+                                local ticks = callback.ticks
+                                local duration = callback.duration
+                                
+                                if callback.duration_hasted then
+                                    duration = duration / Player.haste
+                                end
+                                
+                                if duration > execute_time then
+                                    dot_time = duration - execute_time
+                                    dot_rate = duration / ticks
+                                end
                             end
                         end
                     end
