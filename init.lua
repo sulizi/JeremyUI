@@ -4746,10 +4746,7 @@ local brm_spells = {
         tick_trigger = {
             ["charred_dreams_heal"] = true,   
             ["resonant_fists"] = true,
-            ["exploding_keg_proc"] = function( driver )
-                -- Force this until I have better handling of DoT effects triggered from buffs
-                return driver == "rushing_jade_wind"
-            end,
+            ["exploding_keg_proc"] = true, -- to pass the buff to the state function
         },
     } ),
 
@@ -4761,51 +4758,49 @@ local brm_spells = {
             return Player.getTalent( "exploding_keg" ).effectN( 4 ).ap_coefficient
         end,
         
-        action_multiplier = function( self, state )
+        trigger_rate = function( state )
+            -- State function to determine the residual ticks from DoTs applied prior to Exploding Keg in the call stack
+            -- e.g, Rushing Jade Wind -> Exploding Keg -> Exploding Keg Proc
             
-            if not state then
+            if Player.buffs.exploding_keg.up() then
                 return 1
             end
             
-            if state.callback_name == "exploding_keg" then
+            if state then
+                local dot_time = 0
+                local dot_rate = 0
                 
-                for _, cb in ipairs( state.callback_stack ) do
-                    if cb.name == "exploding_keg" then
-                        break
-                    end
+                for _, callback in ( state.callback_stack ) do
+                    local execute_time = callback.result.execute_time
+                    local delay = callback.result.delay
                     
-                    -- Once again forcing ticks here until I have better handling of DoT effects triggered from buffs
-                    if cb.name == "rushing_jade_wind" then
-                        local rjw_ticks = cb.result.ticks
-                        local rjw_duration = 9 / Player.haste
-                        local ek_ticks = rjw_ticks / rjw_duration * 3
-                        
-                        -- return ticks to simulate the increase in damage
-                        return ek_ticks
+                    dot_time = max( 0, dot_time - execute_time - delay )
+                    
+                    if callback.name == "exploding_keg" then
+                        if dot_time > 0 then
+                            local ek_ticks = min( Player.getTalent( "exploding_keg" ).duration, dot_time ) / dot_rate
+                            return ek_ticks
+                        end
+                        return 1
+                    else
+                        if callback.is_periodic and callback.duration then
+                            local ticks = callback.ticks
+                            local duration = callback.duration
+                            
+                            if callback.duration_hasted then
+                                duration = duration / Player.haste
+                            end
+                            
+                            if duration > execute_time then
+                                dot_time = duration - execute_time
+                                dot_rate = duration / ticks
+                            end
+                        end
                     end
                 end
-            
-                return 0
-            end
-
-            local result = state.result or nil
-            
-            if not result then
-                return 0
-            end
-
-            local remaining = Player.buffs.exploding_keg.remains()
-            
-            if result.delay >= remaining then
-                return 0
             end
             
-            local time_total = result.delay + result.execute_time
-            if time_total > remaining then
-                return remaining / time_total
-            end
-
-            return 1
+            return 0
         end,
         
         tick_trigger = {
