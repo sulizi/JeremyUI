@@ -4046,7 +4046,7 @@ local brm_spells = {
             -- Healing Spheres
             -- These are pulled in and added to the base amount before modifiers
             local spheres = GetSpellCount( 322101 )
-            h = h + ( 3 * player.attack_power * spheres )
+            h = h + ( 3 * Player.attack_power * spheres )
             
             h = h * Player.getTalent( "vigorous_expulsion" ).effectN( 1 ).mod
             
@@ -4250,7 +4250,7 @@ local brm_spells = {
             local amount = 0
             
             if Player.getTalent( "staggering_strikes" ).ok then
-                amount = player.attack_power or 0
+                amount = Player.attack_power or 0
                 amount = amount * min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
                 amount = amount * Player.getTalent( "staggering_strikes" ).effectN( 2 ).pct
             end
@@ -5160,7 +5160,7 @@ local brm_spells = {
             
             local m = tooltip_array[ 1 ] 
                 -- Fallback to AP formula if tooltip is unavailable
-                or ( player.attack_power * cb_apmod * Player.vers_bonus )
+                or ( Player.attack_power * cb_apmod * Player.vers_bonus )
             
             if m > 0 then
             
