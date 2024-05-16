@@ -1409,7 +1409,7 @@ function(event, ...)
                                     local spell = spells[ trigger.spell ]
                                     local spell_result = spell.result
                                     
-                                    local tick_count = trigger.count
+                                    local tick_count = trigger.state.count
                                     local duration = result.execute_time 
                                     
                                     local tick_damage = ( spell_result.damage or 0 ) / trigger.state.ticks
@@ -1819,7 +1819,6 @@ function(event, ...)
             local ow = {}
             
             if n > 0 then
-                
                 debugprofilestart()
                 
                 local scale_mode = 1

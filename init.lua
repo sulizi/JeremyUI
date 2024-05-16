@@ -698,7 +698,7 @@ aura_env.CPlayer = {
         action.trigger = action.trigger or {}
         action.trigger[ "auto_attack" ] = function()
             return InCombatLockdown() or action.starts_combat
-        end,
+        end
         
         return action
     end,
@@ -2482,14 +2482,22 @@ local ww_spells = {
         ap_type = "NONE",
 
         trigger_rate = function( state )
-            if state.callback.delay_aa then
-               return 0
-            else
-                local duration = state.result.execute_time
-                local swing_timer = select( 1, UnitAttackSpeed( "player" ) ) or 2.6       
-                
-                return duration / swing_timer
+            local duration = 0
+            local swing_timer = select( 1, UnitAttackSpeed( "player" ) ) or 2.6 
+            local _, stack = ipairs( state.callback_stack )
+            for cb_idx = 1, #stack do
+                if cb_idx == #stack then
+                    break
+                end   
+                local callback = stack[ cb_idx ] 
+                if callback.result then
+                    if not callback.delay_aa and callback.result.execute_time then
+                        duration = duration + callback.result.execute_time
+                    end
+                end
             end
+            
+            return duration / swing_timer
         end,
         
         bonus_da = function()
@@ -2511,14 +2519,22 @@ local ww_spells = {
         ap_type = "NONE",
         
         trigger_rate = function( state )
-            if state.callback.delay_aa then
-               return 0
-            else
-                local duration = state.result.execute_time
-                local swing_timer = select( 2, UnitAttackSpeed( "player" ) ) or 2.6       
-                
-                return duration / swing_timer
+            local duration = 0
+            local swing_timer = select( 2, UnitAttackSpeed( "player" ) ) or 2.6 
+            local _, stack = ipairs( state.callback_stack )
+            for cb_idx = 1, #stack do
+                if cb_idx == #stack then
+                    break
+                end   
+                local callback = stack[ cb_idx ] 
+                if callback.result then
+                    if not callback.delay_aa and callback.result.execute_time then
+                        duration = duration + callback.result.execute_time
+                    end
+                end
             end
+            
+            return duration / swing_timer
         end,
         
         bonus_da = function()
@@ -2533,9 +2549,12 @@ local ww_spells = {
     } ),
 
     ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
+        skip_calcs = true, -- This is just the script that triggers the individual hits
+        
         ready = function()
             return aura_env.unitRange( "target" ) < 8 
         end,
+        
         trigger = {
             ["mainhand_attack"] = function()
                 return Player.main_hand.equipped 
@@ -3915,14 +3934,22 @@ local brm_spells = {
         ap_type = "NONE",
 
         trigger_rate = function( state )
-            if state.callback.delay_aa then
-               return 0
-            else
-                local duration = state.result.execute_time
-                local swing_timer = select( 1, UnitAttackSpeed( "player" ) ) or 2.6       
-                
-                return duration / swing_timer
+            local duration = 0
+            local swing_timer = select( 1, UnitAttackSpeed( "player" ) ) or 2.6 
+            local _, stack = ipairs( state.callback_stack )
+            for cb_idx = 1, #stack do
+                if cb_idx == #stack then
+                    break
+                end   
+                local callback = stack[ cb_idx ] 
+                if callback.result then
+                    if not callback.delay_aa and callback.result.execute_time then
+                        duration = duration + callback.result.execute_time
+                    end
+                end
             end
+            
+            return duration / swing_timer
         end,
         
         bonus_da = function()
@@ -3942,14 +3969,22 @@ local brm_spells = {
         ap_type = "NONE",
         
         trigger_rate = function( state )
-            if state.callback.delay_aa then
-               return 0
-            else
-                local duration = state.result.execute_time
-                local swing_timer = select( 2, UnitAttackSpeed( "player" ) ) or 2.6       
-                
-                return duration / swing_timer
+            local duration = 0
+            local swing_timer = select( 2, UnitAttackSpeed( "player" ) ) or 2.6 
+            local _, stack = ipairs( state.callback_stack )
+            for cb_idx = 1, #stack do
+                if cb_idx == #stack then
+                    break
+                end   
+                local callback = stack[ cb_idx ] 
+                if callback.result then
+                    if not callback.delay_aa and callback.result.execute_time then
+                        duration = duration + callback.result.execute_time
+                    end
+                end
             end
+            
+            return duration / swing_timer
         end,
         
         bonus_da = function()
@@ -3958,13 +3993,16 @@ local brm_spells = {
         
         trigger = {
             ["press_the_advantage"] = true,
-        },        
+        },     
     } ),
 
     ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
+        skip_calcs = true, -- This is just the script that triggers the individual hits
+        
         ready = function()
             return aura_env.unitRange( "target" ) < 8 
         end,
+        
         trigger = {
             ["mainhand_attack"] = function()
                 return Player.main_hand.equipped 
