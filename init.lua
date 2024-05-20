@@ -41,6 +41,7 @@ local IsPlayerSpell = IsPlayerSpell
 local IsSpellInRange = IsSpellInRange
 local IsUsableSpell = IsUsableSpell
 local LibStub = LibStub
+local UnitAttackSpeed = UnitAttackSpeed
 local math = math
 local pow = math.pow
 local max = math.max
@@ -2249,8 +2250,7 @@ local IsBlackoutCombo = function( state )
             }
             
             local _, stack = ipairs( state.callback_stack )
-            local cb_idx = 1
-            
+
             for cb_idx = 1, #stack do
                 if cb_idx == #stack then
                     break
@@ -2362,18 +2362,15 @@ local IsBlackoutProc = function( state )
         local bok_stacks = Player.buffs.bok_proc.stacks()
         local docj_stacks = Player.buffs.dance_of_chiji.stacks()
         
-        local _next = nil
         local _, stack = ipairs( state.callback_stack )
-        local cb_idx = 1
-        
+       
         for cb_idx = 1, #stack do
             if cb_idx == #stack then
                 break
             end
             
             local cb = stack[ cb_idx ] 
-             _next = stack [ cb_idx + 1 ]
-             
+  
             if cb.name == "spinning_crane_kick" and docj_stacks > 0 then
                 if Player.getTalent( "sequenced_strikes" ).ok then
                     bok_stacks = min( Player.buffs.bok_proc.max_stacks(), bok_stacks + 1 )
@@ -2389,7 +2386,7 @@ local IsBlackoutProc = function( state )
             end
         end
         
-        return bok_proc
+        return bok_stacks > 0
     end
 end
 
@@ -4212,6 +4209,8 @@ local brm_spells = {
             local m = 0
             
             if Player.getTalent( "strike_at_dawn" ).ok then
+                local eb_stacks = 1
+                
                 -- physical damage mitigated from one second of Elusive Brawler
                 m = dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
             end
@@ -4740,7 +4739,7 @@ local brm_spells = {
         brew_cdr = function()
             local cdr = 3
             
-            if IsBlackoutCombo( state ) then
+            if IsBlackoutCombo( state ) then -- TODO: State passed to brew_cdr
                 cdr = cdr + Player.getTalent( "blackout_combo" ).effectN( 3 ).base_value
             end
             

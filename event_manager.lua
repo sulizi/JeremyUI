@@ -82,7 +82,6 @@ function(event, ...)
     local tostring = tostring
     local type = type
     local UnitAffectingCombat = UnitAffectingCombat
-    local UnitAttackSpeed = UnitAttackSpeed
     local UnitAuraSlots = UnitAuraSlots
     local UnitChannelInfo = UnitChannelInfo
     local UnitExists = UnitExists
@@ -1080,7 +1079,6 @@ function(event, ...)
                             local actionMitigation = function( action, state )
                                 
                                 local state = state or nil
-                                local mitigation = 0
                                 
                                  -- Stagger
                                 local stagger_reduction = 0
