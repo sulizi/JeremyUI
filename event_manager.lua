@@ -250,8 +250,7 @@ function(event, ...)
             tbl.mana_cost     = tbl.mana_cost or 0
             tbl.t_amp         = tbl.t_amp or 1.0
             tbl.delay         = max( 0, tbl.delay or 0 )
-            tbl.mastery_break = tbl.mastery_break or false 
-            
+
             -- Snapshot Channel Information
             if tbl.cb and tbl.raw > 0 and Player.channel.spellID and Player.channel.spellID == tbl.cb.spellID then
                 Player.channel.action = tbl.cb
@@ -969,8 +968,7 @@ function(event, ...)
                         
                         local attack_power = composite_attack_power( action.ap_type )
                     
-                        local tooltip = 
-                        max( ( action.action_multiplier ~= nil and 1 or 0 ), ticks * ( sp_mod > 0 and ( sp_mod * aura_env.spell_power ) or ( attack_power * ap_mod ) ) )
+                        local tooltip = ticks * ( sp_mod > 0 and ( sp_mod * aura_env.spell_power ) or ( attack_power * ap_mod ) )
                         
                         local action_targets    = max( 1, min( 20, ( action.target_count and action.target_count() ) or 1 ) )
                         local action_cooldown   = aura_env.actionBaseCooldown( action )
@@ -987,18 +985,6 @@ function(event, ...)
                         
                         if ready and action.ready then
                             ready = action.ready()
-                        end
-                        
-                        local mastery = 1
-                        local mastery_break = false
-                        
-                        if action.ww_mastery then
-                            if Player.last_combo_strike ~= spellID then
-                                mastery = Player.mast_bonus
-                            else
-                                mastery = 1
-                                mastery_break = true
-                            end
                         end
                         
                         local execute_time = action.execute_time and action.execute_time() or aura_env.base_execute_time( spellID ) 
@@ -1116,7 +1102,7 @@ function(event, ...)
                             -- --------------
                             
                             -- Action Multiplier
-                            tooltip = tooltip * ( action.action_multiplier and action.action_multiplier( action ) or 1 )
+                            tooltip = tooltip * Player.action_multiplier( action )
                             
                             -- Cache spec auras
                             -- these sometimes change in PvP so we will cache both
@@ -1139,7 +1125,7 @@ function(event, ...)
                             
                             -- Damage value
                             local damage = action_type == "damage" and tooltip or 0
-                            damage = ( damage * mastery ) + bonus_damage
+                            damage = damage + bonus_damage
                             
                             -- Self-healing value
                             local healing = action_type == "self_heal" and tooltip or 0
@@ -1289,10 +1275,6 @@ function(event, ...)
                                 
                                 driver.trigger = driver.trigger or {}
                                 driver.tick_trigger = driver.tick_trigger or {}
-                                
-                                if driver.ww_mastery then
-                                    driver.trigger["hit_combo"] = ( not mastery_break )
-                                end
                                 
                                 local trigger_spells = {}
                                 local trigger_exists = {}
@@ -1455,22 +1437,15 @@ function(event, ...)
                                     end
                                     
                                     if tick_damage > 0 then
+                                        
                                         -- Use future trigger state
-                                        if spell.action_multiplier then
-                                            local spell_am = spell.action_multiplier( spell )
-                                            local am_delta = spell.action_multiplier( spell, trigger.state )
-                                            if spell_am > 0 then
-                                                am_delta = am_delta / spell_am
-                                            end
-                                            
-                                            tick_damage = tick_damage * am_delta
+                                        local spell_am = Player.action_multiplier( spell )
+                                        local am_delta = Player.action_multiplier( spell, trigger.state )
+                                        if spell_am > 0 then
+                                            am_delta = am_delta / spell_am
                                         end
-                                        
-                                        -- Reevaluate mastery
-                                        if spell.ww_mastery and Player.last_combo_strike == spell.spellID then
-                                            tick_damage = tick_damage * Player.mast_bonus
-                                        end
-                                        
+                                        tick_damage = tick_damage * am_delta
+
                                         -- Because this is a background ability that triggers from another action
                                         -- we need to modify the spawn delta here
                                         if tick_damage > 1 and spell.background and spell.target_multiplier then
@@ -1780,7 +1755,6 @@ function(event, ...)
                                     execute_time = execute_time,
                                     background = action.background,
                                     t_amp = temporary_amplifiers,
-                                    mastery_break = mastery_break,
                                     combo_base = combo_base,
                             })
                         end
@@ -1943,11 +1917,6 @@ function(event, ...)
                     or ( spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"]  and v.mana_cost > Player.mana )
                     or ( spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  and v.energy_cost > Player.energy ) then
                         jeremy.rank[ v.name ] = 0
-                    elseif v.mastery_break
-                    and aura_env.fight_remains > 1
-                    and v.name ~= "touch_of_death" 
-                    and ( v.name ~= "spinning_crane_kick" or Player.bdb_targets == 0 ) then
-                        jeremy.rank[ v.name ] = 0                               
                     else
                         local action_name = gsub( v.combo_base and v.combo_base or v.name, "_cancel", "" )
                         jeremy.rank[ action_name ] = jeremy.rank[ action_name ] or k

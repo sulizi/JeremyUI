@@ -497,6 +497,18 @@ aura_env.CPlayer = {
     
     -- 
     
+    action_multiplier = function( action, state )
+        local am = 1
+        
+        if action.action_multiplier then
+            am = action.action_multiplier( action, state )
+        end
+        
+        return am
+    end,
+
+    --
+    
     auraExists = function ( spellId, callback )
         -- if found return callback function or true
         -- otherwise false
@@ -2444,6 +2456,66 @@ local MartialMixtureStacks = function( state )
 
 end
 
+local IsComboStrike = function( action, state )
+    -- Returns:
+    -- 1: Boolean, true if combo strike
+    -- 2: Hit Combo stacks
+    
+    if not action.ww_mastery then
+        return false, 0
+    end
+    
+    local last_cs = Player.last_combo_strike
+    local hit_combo = Player.buffs.hit_combo.stacks()
+    
+    if state then
+        for cb_idx, cb in ipairs( state.callback_stack ) do
+            if cb_idx == #state.callback_stack then
+                break
+            end
+            
+            if aura_env.combo_strike[ cb.spellID ] then
+                if Player.talent.hit_combo.ok then
+                    if last_cs ~= cb.spellID then
+                        hit_combo = math.min( Player.buffs.hit_combo.max_stacks(), hit_combo + 1 )
+                    else
+                        hit_combo = 0
+                    end
+                end
+                last_cs = cb.spellID
+            end
+        end
+    end
+    
+    return ( last_cs == action.spellID ), hit_combo
+end
+------------------------------------------------
+
+------------------------------------------------
+-- Player function overrides
+------------------------------------------------
+
+Player.action_multiplier = function( action, state )
+    local am = 1
+    
+    if action.action_multiplier then
+        am = action.action_multiplier( action, state )
+    end
+    
+    if Player.spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"]  then
+        -- WW Mastery and Hit Combo effects
+        local cs, hit_combo = IsComboStrike( action, state )
+        if cs then
+            am = am * Player.mast_bonus
+            am = am * ( 1 + hit_combo * Player.buffs.hit_combo.effectN( 1 ).pct )
+        end
+    end
+    
+    return am
+end
+    
+------------------------------------------------
+
 -- --------- --
 -- WW Spells
 -- --------- --
@@ -2492,7 +2564,7 @@ local ww_spells = {
                 local callback = stack[ cb_idx ] 
                 if callback.result then
                     if not callback.delay_aa and callback.result.execute_time then
-                        duration = duration + callback.result.execute_time
+                        duration = duration + callback.result.execute_time + callback.result.delay
                     end
                 end
             end
@@ -2529,7 +2601,7 @@ local ww_spells = {
                 local callback = stack[ cb_idx ] 
                 if callback.result then
                     if not callback.delay_aa and callback.result.execute_time then
-                        duration = duration + callback.result.execute_time
+                        duration = duration + callback.result.execute_time + callback.result.delay
                     end
                 end
             end
@@ -3865,20 +3937,6 @@ local ww_spells = {
             )
         end,        
     } ),
-
-    -- TODO: Refactor with better proper buffs
-    ["hit_combo"] = {
-        type = "damage_buff",
-        spellID = 196741,
-        pct = function()
-            return ( min( 6, Player.buffs.hit_combo.stacks() ) * Player.buffs.hit_combo.effectN( 1 ).pct )
-        end,
-        base_duration = 9,
-        duration = 9,
-        ready = function()
-            return Player.getTalent( "hit_combo" ).ok
-        end,
-    },
 }
 
 -- --------- -- 
@@ -3944,7 +4002,7 @@ local brm_spells = {
                 local callback = stack[ cb_idx ] 
                 if callback.result then
                     if not callback.delay_aa and callback.result.execute_time then
-                        duration = duration + callback.result.execute_time
+                        duration = duration + callback.result.execute_time + callback.result.delay
                     end
                 end
             end
@@ -3979,7 +4037,7 @@ local brm_spells = {
                 local callback = stack[ cb_idx ] 
                 if callback.result then
                     if not callback.delay_aa and callback.result.execute_time then
-                        duration = duration + callback.result.execute_time
+                        duration = duration + callback.result.execute_time + callback.result.delay
                     end
                 end
             end
