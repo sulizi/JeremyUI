@@ -2083,7 +2083,7 @@ end
 local function generateChannels( actions )
 
     for action, init in pairs( actions ) do
-        if init.channeled then
+        if init.channeled and not init.canceled then
             local canceled_name = action .. "_cancel"
             if not actions[ canceled_name ] then
                 local _init = deepcopy( init )
@@ -2130,7 +2130,13 @@ local function generateCallbacks( spells )
                             _init.trigger[ action ] = true
                             _init.ready = function() 
                                 if not base_spell.background and IsSpellKnown( base_spell.replaces or base_spell.spellID ) then
-                                    return base_spell.callback_ready and base_spell.callback_ready( callback ) or cb_spell.ready
+                                    if base_spell.callback_ready then
+                                        return base_spell.callback_ready( callback )
+                                    elseif cb_spell.ready then
+                                        return cb_spell.ready()
+                                    else
+                                        return true
+                                    end
                                 else
                                     return false
                                 end
@@ -2484,7 +2490,7 @@ local IsComboStrike = function( action, state )
         end
     end
     
-    return ( last_cs == action.spellID ), hit_combo
+    return ( last_cs ~= action.spellID ), hit_combo
 end
 ------------------------------------------------
 
@@ -3862,10 +3868,6 @@ local ww_spells = {
             da_mod = da_mod * Player.getTalent( "meridian_strikes" ).effectN( 1 ).mod
             
             da_mod = da_mod * Player.getTalent( "forbidden_technique" ).effectN( 2 ).mod
-            
-            if Player.last_combo_strike ~= 322109 then
-                da_mod = da_mod * Player.mast_bonus
-            end
             
             local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" ) 
             
