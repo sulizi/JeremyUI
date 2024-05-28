@@ -1034,15 +1034,6 @@ function(event, ...)
                             }
                         elseif ready then 
                             
-                            -- Check if we're channeling and add channel latency
-                            if Player.channel.spellID and not action.background then
-                                local latency = Player.channel.latency or 0
-                                if Player.channel.spellID == 101546 and action.usable_during_sck then
-                                    latency = 0
-                                end                            
-                                action_delay = max( action_delay, latency )
-                            end
-                            
                             -- Action is not ready but is also not a background action
                             if not action.background then --and not IsUsableSpell( spellID ) then
                                 
@@ -1472,9 +1463,11 @@ function(event, ...)
                                     -- Driver is a channeled ability and trigger is not background action
                                     if driver.channeled and not spell.background then
                                         local latency = Player.channel.latency or 0
+                                        -- Currently only relevant instance of this is spinning crane kick but use a generic action variable at some point
                                         local use_during_channel = driver.spellID == 101546 and spell.usable_during_sck 
                                         if use_during_channel then
                                             latency = 0
+                                            
                                             local gcd     = aura_env.gcd( driver.spellID )
                                             local base_et = driver.execute_time and driver.execute_time() or aura_env.base_execute_time( driver.spellID )
                                             execute_time = execute_time - ( base_et - gcd )
