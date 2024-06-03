@@ -1127,7 +1127,7 @@ function(event, ...)
                             -- Versatility
                             damage          = damage * Player.vers_bonus
                             healing         = healing * Player.vers_bonus
-                            group_healing   =  group_healing * Player.vers_bonus
+                            group_healing   = group_healing * Player.vers_bonus
                             
                             -- Critical modifiers
                             local crit_damage        = 0
@@ -1159,106 +1159,34 @@ function(event, ...)
                                 healing         = healing + crit_healing
                                 group_healing   = group_healing + crit_group_healing
                             end
+
+                            -- Target Effects
+                            local temporary_amplifiers = 1
+                            local temporaryAmplifiers = function( action )
+                                return global_modifier( action, action_delay ) * targetAuraEffect( action, action_delay )                                
+                            end
                             
-                            -- Target Multiplier
                             local target_multiplier = 1
+                            local targetMultiplier = function( action )
+                                local mul = 1
                             
-                            if action_type == "smart_heal" then
-                                target_multiplier = 0
-                                for t_it = 1, action_targets do
-                                    local target = aura_env.healer_targets[ t_it ]
-                                    target_multiplier = target_multiplier + ( action.target_multiplier and action.target_multiplier( target ) or 1 )
-                                end
-                            elseif action.target_multiplier then
-                                target_multiplier = action.target_multiplier( action_targets )
-                            end
-                            
-                            -- Target Auras
-                            local temporary_amplifiers = global_modifier( action, action_delay ) * targetAuraEffect( action, action_delay )
-                            
-                            -- Cache curent player amplifier
-                            if name == default_action then
-                                Player.action_modifier = temporary_amplifiers
-                            end
-                            
-                            -- Add spawn delta
-                            -- weight of holding expensive CDs for upcoming add phase
-                            local spawn_delta = 1
-                            if damage > 1 then
-                                if action.target_multiplier 
-                                and action_type == "damage"
-                                and not action.background 
-                                and ( not Player.channel.spellID or Player.channel.spellID ~= spellID )
-                                and name ~= "touch_of_death" then
-                                    local cooldown = aura_env.actionBaseCooldown( action )
-                                    if cooldown > 0 then
-                                        for _, raid_event in pairs( aura_env.raid_events ) do
-                                            local error = ( 1 - aura_env.error_margin )
-                                            local count = raid_event.count
-                                            local t = max( 1, floor( raid_event.adds_in - Player.gcd_remains ) )
-                                            if count > action_targets and cooldown > t and t > action_delay then
-                                                local delta_tm 
-                                                = action.target_multiplier( count ) / action.target_multiplier( action_targets )
-                                                local delta_fm 
-                                                = aura_env.forwardModifier( spells[name], t ) / aura_env.forwardModifier( spells[name] )
-                                                local delta_cm 
-                                                = t / cooldown
-                                                spawn_delta = min( spawn_delta, 1 / ( delta_tm / delta_fm / delta_cm / error ) )
-                                            end
-                                        end
+                                if action_type == "smart_heal" then
+                                    mul = 0
+                                    for t_it = 1, action_targets do
+                                        local target = aura_env.healer_targets[ t_it ]
+                                        mul = mul + ( action.target_multiplier and action.target_multiplier( target ) or 1 )
                                     end
+                                elseif action.target_multiplier then
+                                    mul = action.target_multiplier( action_targets )
                                 end
+                                return mul
                             end
-                            
-                            damage = damage * target_multiplier * temporary_amplifiers * spawn_delta
-                            healing = healing * temporary_amplifiers
-                            group_healing = group_healing * target_multiplier * temporary_amplifiers
-                            
-                            -- Expel Harm
-                            if name == "expel_harm" then
-                                -- Only Healing config option for Brewmaster
-                                if spec ~= 1 or aura_env.config.eh_mode ~= 2 then
-                                    local eh_damage = max( 1, 0.1 * healing )
-                                    damage = damage + eh_damage
-                                end
-                            end             
-                            
-                            -- -----------------------------------------------------
-                            
-                            local result = {
-                                callback                = action,
-                                ticks                   = ticks,
-                                target_count            = action_targets,
-                                damage                  = damage,
-                                self_healing            = healing,
-                                group_healing           = group_healing,
-                                mitigation              = mitigation,
-                                crit_rate               = crit_rate,
-                                crit_mod                = crit_mod,
-                                critical_damage         = crit_damage,
-                                critical_healing        = crit_healing,
-                                critical_group_healing  = crit_group_healing,
-                                execute_time            = execute_time,
-                                delay                   = action_delay,
-                            }
-                            
-                            -- Cache result
-                            action.result = result
-                            
-                            -- Action post-process events
-                            aura_env.actionPostProcessor( result )
-                            
-                            damage = result.damage
-                            healing = result.self_healing
-                            group_healing = result.group_healing
-                            mitigation = result.mitigation
-                            crit_rate = result.crit_rate
-                            crit_mod = result.crit_mod
                             
                             -- Ability triggers ( GotD, Resonant Fists, etc., also used for combos )
                             local applyTriggerSpells = function( )
                                 local damage_out, healing_out, group_heal_out, mitigate_out = 0, 0, 0, 0
                                 local trigger_chi_gain = 0
+                                local trigger_time, trigger_delay = 0, 0
                                 local driver = action
                                 local driverName = combo_base or name
                                 
@@ -1393,7 +1321,7 @@ function(event, ...)
                                     -- Trigger is non-background action with execute time
                                     local trigger_et = spell.time_total or spell.base_execute_time or 0
                                     if trigger_et > 0 and not spell.background then
-                                        execute_time = execute_time + trigger_et
+                                        trigger_time = trigger_time + trigger_et
                                     end
                                     
                                     -- Trigger has cost
@@ -1426,39 +1354,24 @@ function(event, ...)
                                     end
                                     
                                     if tick_damage > 0 then
-                                        
                                         -- Use future trigger state
                                         local spell_am = Player.action_multiplier( spell )
                                         local am_delta = Player.action_multiplier( spell, trigger.state )
                                         if spell_am > 0 then
                                             am_delta = am_delta / spell_am
                                         end
+                                    
                                         tick_damage = tick_damage * am_delta
-
-                                        -- Because this is a background ability that triggers from another action
-                                        -- we need to modify the spawn delta here
-                                        if tick_damage > 1 and spell.background and spell.target_multiplier then
-                                            local t_spawn_delta = 1
-                                            local cooldown = aura_env.actionBaseCooldown( driver )
-                                            if cooldown > 0 then
-                                                for _, raid_event in pairs( aura_env.raid_events ) do
-                                                    local error = ( 1 - aura_env.error_margin )
-                                                    local count = raid_event.count
-                                                    local t = max( 1, floor( raid_event.adds_in - Player.gcd_remains ) )
-                                                    if count > action_targets and cooldown > t and t > action_delay then
-                                                        local delta_tm 
-                                                        = spell.target_multiplier( count ) / spell.target_multiplier( action_targets )
-                                                        local delta_fm 
-                                                        = aura_env.forwardModifier( spell, t ) / aura_env.forwardModifier( spell )
-                                                        local delta_cm 
-                                                        = t / cooldown
-                                                        t_spawn_delta = min( t_spawn_delta, 1 / ( delta_tm / delta_fm / delta_cm / error ) )
-                                                    end
-                                                end
-                                            end
-                                            tick_damage = tick_damage * t_spawn_delta
-                                        end
                                     end
+                                    
+                                    -- Background spell multipliers
+                                    if spell.background then
+                                        local spell_target_multiplier = targetMultiplier( spell )
+                                        local spell_temporary_amplifiers = temporaryAmplifiers( spell )
+                                        tick_damage = tick_damage * spell_target_multiplier * spell_temporary_amplifiers
+                                        tick_healing = tick_healing * spell_temporary_amplifiers
+                                        tick_group_heal = tick_group_heal * spell_target_multiplier * spell_temporary_amplifiers
+                                    end                                    
                                     
                                     -- Driver is a channeled ability and trigger is not background action
                                     if driver.channeled and not spell.background then
@@ -1470,9 +1383,9 @@ function(event, ...)
                                             
                                             local gcd     = aura_env.gcd( driver.spellID )
                                             local base_et = driver.execute_time and driver.execute_time() or aura_env.base_execute_time( driver.spellID )
-                                            execute_time = execute_time - ( base_et - gcd )
+                                            trigger_time = trigger_time - ( base_et - gcd )
                                         end                            
-                                        action_delay = max( action_delay, latency )
+                                        trigger_delay = max( action_delay, latency ) - action_delay
                                     end
                                     
                                     
@@ -1510,7 +1423,7 @@ function(event, ...)
                                         local trigger_cd  = aura_env.actionBaseCooldown( spell )
                                         action_cooldown   = max( action_cooldown, trigger_cd )
                                         action_cd_remains = max ( action_cd_remains, trigger_cd_remains )
-                                        action_delay      = max( action_delay, action_cd_remains )
+                                        trigger_delay     = max( action_delay, action_cd_remains ) - action_delay
                                         start_cooldown[ #start_cooldown + 1] = trigger.spell
                                     end
                                     
@@ -1522,60 +1435,197 @@ function(event, ...)
                                     
                                 end
                                 
-                                cost          = cost - trigger_chi_gain
-                                damage        = damage + damage_out
-                                healing       = healing + healing_out
-                                mitigation    = mitigation + mitigate_out
-                                group_healing = group_healing + group_heal_out
+                                return {
+                                    cost = 0 - trigger_chi_gain,
+                                    damage = damage_out,
+                                    self_healing = healing_out,
+                                    mitigation = mitigate_out,
+                                    group_healing = group_heal_out,
+                                    execute_time = trigger_time,
+                                    delay = trigger_delay,
+                                }
                             end
-                            --
+                        
+                            local resultMatrix = {}
+                            local timeMatrix = { action_delay }
+                            local targetMatrix = { [ action_delay ] = action_targets }
+                            local triggerResults = {}
+                            local cacheResults = function( t )
+                                resultMatrix[ t ] = {
+                                    amplifier               = temporary_amplifiers,
+                                    callback                = action,
+                                    ticks                   = ticks,
+                                    target_count            = action_targets,
+                                    damage                  = damage,
+                                    self_healing            = healing,
+                                    group_healing           = group_healing,
+                                    mitigation              = mitigation,
+                                    crit_rate               = crit_rate,
+                                    crit_mod                = crit_mod,
+                                    critical_damage         = crit_damage,
+                                    critical_healing        = crit_healing,
+                                    critical_group_healing  = crit_group_healing,
+                                    execute_time            = execute_time,
+                                    delay                   = action_delay,
+                                    trigger_results         = triggerResults,
+                                    cost                    = cost,
+                                }
+                            end
+                            
                             if not action.background then
-                                applyTriggerSpells( )
-                            end
-                            --
-                            
-                             -- Healing Caps
-                            healing = min( healing, Player.health_deficit )
-                            healing = max( healing, 0 )
-                            
-                            local groupdeficit = 0
-                            for t_it = 1, action_targets do
-                                groupdeficit = groupdeficit + ( aura_env.healer_targets[ t_it ] and aura_env.healer_targets[ t_it ].deficit or 0 )
-                            end
-                            
-                            group_healing = min( group_healing, groupdeficit )
-                            group_healing = max( group_healing, 0 )
-                            
-                            -- Damage Caps
-                            if action_targets == 1 and aura_env.targetHealthRemaining > 0 then
-                                damage = min ( aura_env.targetHealthRemaining, damage )
-                            end
-                            
-                            if aura_env.combatHealthRemaining > 0 then
-                                damage = min ( aura_env.combatHealthRemaining, damage )
-                            end
-                            
-                            -- -----------------------------------------------------
-                            
-                            -- Adjust damage / heal value based on option sliders
-                            local adjusted = damage
-                            
-                            if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  then
-                                adjusted = ( adjusted * brewmaster_dmg_ratio ) 
-                                + ( ( healing + mitigation ) * brewmaster_heal_ratio )
-                                
-                                -- Exploding Keg         
-                                if Player.findAura( 325153 ) then 
-                                    adjusted = damage
+                                -- Raid Events
+                                if  action_type == "damage" and name ~= "touch_of_death"
+                                and action_cooldown > 0
+                                and action.target_multiplier 
+                                and ( not Player.channel.spellID or Player.channel.spellID ~= spellID ) then
+                                    for _, raid_event in pairs( aura_env.raid_events ) do
+                                        local count = raid_event.count
+                                        local t = floor( raid_event.adds_in )
+                                        if count > action_targets and action_cooldown > t and t > action_delay then
+                                            timeMatrix[ #timeMatrix + 1 ] = t
+                                            targetMatrix[ t ] = count
+                                        end
+                                    end
                                 end
-                            elseif spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"]  then
-                                -- TODO: Make this variable
-                                local mistweaver_heal_ratio = 0.5
-                                local mistweaver_dmg_ratio = 0.5
                                 
-                                adjusted = ( adjusted * mistweaver_dmg_ratio ) + ( ( healing + group_healing ) * mistweaver_heal_ratio )
+                                local base_damage = damage
+                                local base_healing = healing
+                                local base_ghealing = group_healing
+                                
+                                for _, delay in pairs( timeMatrix ) do
+
+                                    action_delay = delay
+                                    action_targets = targetMatrix[ delay ]
+                                    
+                                    -- Target Multiplier
+                                    target_multiplier = targetMultiplier( action )
+                                    
+                                    -- Target Auras
+                                    temporary_amplifiers = temporaryAmplifiers( action )
+                                    
+                                    damage = base_damage * target_multiplier * temporary_amplifiers
+                                    healing = base_healing * temporary_amplifiers
+                                    group_healing = base_ghealing * target_multiplier * temporary_amplifiers
+                                    
+                                    -- Expel Harm
+                                    -- TODO: Move to post processor
+                                    if name == "expel_harm" then
+                                        -- Only Healing config option for Brewmaster
+                                        if spec ~= 1 or aura_env.config.eh_mode ~= 2 then
+                                            local eh_damage = max( 1, 0.1 * healing )
+                                            damage = damage + eh_damage
+                                        end
+                                    end            
+                                    
+                                    triggerResults = applyTriggerSpells( )
+                                    
+                                    cacheResults( action_delay )
+                                end
+                            else
+                                cacheResults( action_delay )
+                            end
+                        
+                            local tmpD = nil
+                            local resultIdx = 0
+                            local adjusted = 0
+                            
+                            for idx, results in pairs( resultMatrix ) do
+
+                                results.result_base = { }
+                                for k, v in pairs( results ) do
+                                    results.result_base[ k ] = v
+                                end
+                                
+                                -- Post-processing effects
+                                aura_env.actionPostProcessor( results )
+                                
+                                -- Trigger effects
+                                for k, v in pairs( results.trigger_results ) do
+                                    if results[ k ] then
+                                        results[ k ] = results[ k ] + v
+                                    end
+                                end
+                            
+                                -- Healing Caps
+                                results.self_healing = min( results.self_healing, Player.health_deficit )
+                                results.self_healing = max( results.self_healing, 0 )
+                                
+                                local groupdeficit = 0
+                                for t_it = 1, action_targets do
+                                    groupdeficit = groupdeficit + ( aura_env.healer_targets[ t_it ] and aura_env.healer_targets[ t_it ].deficit or 0 )
+                                end
+                                
+                                results.group_healing = min( results.group_healing, groupdeficit )
+                                results.group_healing = max( results.group_healing, 0 )
+                                
+                                -- Damage Caps
+                                if results.target_count == 1 and aura_env.targetHealthRemaining > 0 then
+                                    results.damage = min ( aura_env.targetHealthRemaining, results.damage )
+                                end
+                                
+                                if aura_env.combatHealthRemaining > 0 then
+                                    results.damage = min ( aura_env.combatHealthRemaining, results.damage )
+                                end
+                                
+                                -- -----------------------------------------------------
+                                
+                                -- Adjust damage / heal value based on option sliders
+                                local D = results.damage
+                                
+                                if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  then
+                                    D = ( D * brewmaster_dmg_ratio ) 
+                                    + ( ( results.healing + results.mitigation ) * brewmaster_heal_ratio )
+                                    
+                                    -- Exploding Keg         
+                                    if Player.findAura( 325153 ) then 
+                                        D = damage
+                                    end
+                                elseif spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"]  then
+                                    -- TODO: Make this variable
+                                    local mistweaver_heal_ratio = 0.5
+                                    local mistweaver_dmg_ratio = 0.5
+                                    
+                                    D = ( D * mistweaver_dmg_ratio ) + ( ( results.self_healing + results.group_healing ) * mistweaver_heal_ratio )
+                                end
+                                
+                                results.adjusted = D
+                                
+                                D = D / max( 1, 1 + results.execute_time + results.delay ) 
+                                
+                                if not tmpD or tmpD < D then
+                                    tmpD = D
+                                    resultIdx = idx
+                                end
                             end
                             
+                            local result = resultMatrix[ resultIdx ]
+
+                            adjusted                = result.adjusted or 0
+                            cost                    = result.cost
+                            ticks                   = result.ticks
+                            action_targets          = result.target_count
+                            damage                  = result.damage
+                            healing                 = result.self_healing
+                            group_healing           = result.group_healing
+                            mitigation              = result.mitigation
+                            crit_rate               = result.crit_rate
+                            crit_mod                = result.crit_mod
+                            crit_damage             = result.critical_damage
+                            crit_healing            = result.critical_healing
+                            crit_group_healing      = result.critical_group_healing
+                            execute_time            = result.execute_time
+                            action_delay            = result.delay                           
+                            temporary_amplifiers    = result.amplifier
+                            
+                            action.result = result.result_base
+                            
+                            -- Cache curent player amplifier
+                            if name == default_action then
+                                Player.action_modifier = temporary_amplifiers
+                            end       
+                            
+                             -- -----------------------------------------------------
+                        
                             -- Generic Brew CDR
                             if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"] and action.brew_cdr then
                                 local brew_cdr = action.brew_cdr or 0 
@@ -1681,7 +1731,7 @@ function(event, ...)
                                             
                                             local energy_deficit = Player.energy_max - Player.energy
                                             
-                                            local net_energy = energy_cost - ( Player.eps * execute_time )
+                                            local net_energy = energy_cost - ( Player.eps * ( execute_time + action_delay ) )
                                             net_energy = min( energy_deficit, net_energy )
                                             net_energy = max( 0 - Player.energy, net_energy)
                                             
@@ -1821,7 +1871,7 @@ function(event, ...)
                         for i = 1, n do
                             local action = list[ i ]
                             if not action or not action.cb or not action.cb.spellID 
-                            or action.background or action.raw <= 0
+                            or action.background or action.raw <= 0 or action.delay > t
                             or not IsSpellKnown( action.cb.replaces or action.cb.spellID ) then
                                 list[ i ]         = nil
                                 validActions[ i ] = nil
