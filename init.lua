@@ -41,7 +41,6 @@ local IsPlayerSpell = IsPlayerSpell
 local IsSpellInRange = IsSpellInRange
 local IsUsableSpell = IsUsableSpell
 local LibStub = LibStub
-local UnitAttackSpeed = UnitAttackSpeed
 local math = math
 local pow = math.pow
 local max = math.max
@@ -2368,6 +2367,7 @@ local IsBlackoutProc = function( state )
         local bok_stacks = Player.buffs.bok_proc.stacks()
         local docj_stacks = Player.buffs.dance_of_chiji.stacks()
         
+        local next = nil
         local _, stack = ipairs( state.callback_stack )
        
         for cb_idx = 1, #stack do
@@ -2376,6 +2376,7 @@ local IsBlackoutProc = function( state )
             end
             
             local cb = stack[ cb_idx ] 
+            _next = stack [ cb_idx + 1 ]
   
             if cb.name == "spinning_crane_kick" and docj_stacks > 0 then
                 if Player.getTalent( "sequenced_strikes" ).ok then
@@ -2549,6 +2550,27 @@ local ww_spells = {
         end,      
     } ),
 
+    ["dual_threat"] = Player.createAction( 451823, {
+        background = true,
+        
+        --ww_mastery = TODO
+        --copied_by_sef = TODO
+        --trigger_etl = TODO
+        
+        triggerSpell = 451839,
+        trigger_rate = function( state )
+            return Player.getTalent( "dual_threat" ).effectN( 1 ).pct
+        end,
+        
+        bonus_da = function()
+            return -1 * Player.main_hand.swing_damage
+        end,
+        
+        ready = function()
+            return Player.getTalent( "dual_threat" ).ok
+        end,
+    }),
+
     ["mainhand_attack"] = Player.createAction( AUTO_ATTACK, {
         background = true,
         school = 0x1,
@@ -2583,6 +2605,7 @@ local ww_spells = {
             ["thunderfist_single"] = function()
                 return Player.buffs.thunderfist.up()
             end,
+            ["dual_threat"] = true,
         },
     } ),
 
@@ -2620,6 +2643,7 @@ local ww_spells = {
             ["thunderfist_single"] = function()
                 return Player.buffs.thunderfist.up()
             end,
+            ["dual_threat"] = true,
         },        
     } ),
 
