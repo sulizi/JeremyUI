@@ -54,11 +54,15 @@ function(event, ...)
     local GetPowerRegen = GetPowerRegen
     local GetRaidTargetIndex = GetRaidTargetIndex
     local GetSpellCharges = GetSpellCharges
-    local GetSpellCooldown = GetSpellCooldown
+    local GetSpellCooldown = GetSpellCooldown or function( spellID )
+        local info = C_Spell.GetSpellCooldown( spellID )
+        return info.startTime, info.duration, info.isEnabled
+    end
     local GetUnitSpeed = GetUnitSpeed
     local global_modifier = aura_env.global_modifier
     local InCombatLockdown = InCombatLockdown
     local ipairs = ipairs
+    local IsEquippedItemType = IsEquippedItemType or C_Item.IsEquippedItemType
     local IsMounted = IsMounted
     local IsSpellKnown = IsSpellKnown
     local LE_SCENARIO_TYPE_CHALLENGE_MODE = LE_SCENARIO_TYPE_CHALLENGE_MODE
@@ -82,7 +86,7 @@ function(event, ...)
     local tostring = tostring
     local type = type
     local UnitAffectingCombat = UnitAffectingCombat
-    local UnitAuraSlots = UnitAuraSlots
+    local UnitAuraSlots = UnitAuraSlots or C_UnitAuras.GetAuraSlots
     local UnitChannelInfo = UnitChannelInfo
     local UnitExists = UnitExists
     local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs

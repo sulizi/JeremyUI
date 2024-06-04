@@ -15,17 +15,30 @@ local GetCritChance = GetCritChance
 local GetDetailedItemLevelInfo = GetDetailedItemLevelInfo
 local GetDodgeChance = GetDodgeChance
 local GetInventoryItemLink = GetInventoryItemLink
-local GetItemStats = GetItemStats
+local GetItemStats = GetItemStats or C_Item.GetItemStats
 local GetMasteryEffect = GetMasteryEffect
 local getmetatable = getmetatable
 local GetParryChance = GetParryChance
 local GetSpecialization = GetSpecialization
 local GetSpellBaseCooldown = GetSpellBaseCooldown
 local GetSpellCharges = GetSpellCharges
-local GetSpellCooldown = GetSpellCooldown
+local GetSpellCooldown = GetSpellCooldown or function( spellID )
+    local info = C_Spell.GetSpellCooldown( spellID )
+    return info.startTime, info.duration, info.isEnabled
+end
 local GetSpellCount = GetSpellCount
 local GetSpellDescription = GetSpellDescription
-local GetSpellInfo = GetSpellInfo
+local GetSpellInfo = GetSpellInfo or function( spellID )
+    if not spellID then
+        return nil
+    end
+    
+    local spellInfo = C_Spell.GetSpellInfo( spellID )
+    
+    if spellInfo then
+      return spellInfo.name, nil, spellInfo.iconID, spellInfo.castTime, spellInfo.minRange, spellInfo.maxRange, spellInfo.spellID, spellInfo.originalIconID
+    end
+end
 local GetSpellPowerCost = GetSpellPowerCost
 local _GetTime = GetTime
 local GetTime = function()
@@ -33,8 +46,8 @@ local GetTime = function()
 end
 local InCombatLockdown = InCombatLockdown
 local ipairs = ipairs
-local IsEquippedItem = IsEquippedItem
-local IsEquippedItemType = IsEquippedItemType
+local IsEquippedItem = IsEquippedItem or C_Item.IsEquippedItem
+local IsEquippedItemType = IsEquippedItemType or C_Item.IsEquippedItemType
 local IsInInstance = IsInInstance
 local IsInRaid = IsInRaid
 local IsPlayerSpell = IsPlayerSpell
@@ -1930,7 +1943,13 @@ end
 
 aura_env.unitRange = function( unitID )
     
-    local min_range, max_range = GetRange( unitID )
+    local min_range, max_range = nil, nil
+    
+    if not Player.is_beta() then
+        -- LibRangeCheck is currently bugged in beta, waiting for it to be fixed
+        min_range, max_range = GetRange( unitID )
+    end
+    
     local range = max_range or min_range or nil
     
     if range then
