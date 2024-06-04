@@ -1802,7 +1802,9 @@ aura_env.global_modifier = function( callback, future, real )
         
         -- Armor
         if not callback.ignore_armor then
-            gm = gm * armor
+            -- TODO: Can I use API?
+            local armor_pen = Player.getTalent( "martial_precision" ).effectN( 1 ).pct
+            gm = gm * min( 1, ( armor * max( 0, 1 - armor_pen ) ) )
         end
         
         -- Mystic Touch
@@ -2702,7 +2704,11 @@ local ww_spells = {
             
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end 
+            end
+            
+            am = am * Player.getTalent( "one_versus_many" ).effectN( 2 ).mod
+            
+            am = am * Player.getTalent( "temple_training" ).effectN( 2 ).mod
             
             if Player.getTalent( "momentum_boost" ).ok then
                 
@@ -2890,6 +2896,10 @@ local ww_spells = {
             
             am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
             
+            am = am * Player.getTalent( "efficient_training" ).effectN( 5 ).mod
+            
+            am = am * Player.getTalent( "temple_training" ).effectN( 2 ).mod
+            
             return am
         end,
         
@@ -3017,6 +3027,8 @@ local ww_spells = {
             local cm = 1
             
             cm = cm * Player.getTalent( "hardened_soles" ).effectN( 2 ).mod
+            
+            cm = cm * Player.getTalent( "vigilant_watch" ).effectN( 1 ).mod
             
             return cm
         end,   
@@ -3537,6 +3549,10 @@ local ww_spells = {
             
             am = am * Player.getTalent( "inner_peace" ).effectN( 2 ).mod
             
+            am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
+            
+            am = am * Player.getTalent( "xuens_guidance" ).effectN( 1 ).mod
+            
             return am
         end,
         
@@ -3767,6 +3783,8 @@ local ww_spells = {
             if Player.buffs.the_emperors_capacitor.up() then
                 am = am * ( 1 + Player.buffs.the_emperors_capacitor.stacks() * spell.emperors_capacitor.effectN( 1 ).pct )
             end
+            
+            am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
             
             return am
         end,
@@ -4356,6 +4374,14 @@ local brm_spells = {
         replaces = 100784, -- Missing in Spell Data
 
         usable_during_sck = true, 
+
+        critical_modifier = function()
+            local cm = 1
+            
+            cm = cm * Player.getTalent( "vigilant_watch" ).effectN( 1 ).mod
+            
+            return cm
+        end,  
         
         action_multiplier = function( self, state )
             local am = 1
@@ -4445,6 +4471,10 @@ local brm_spells = {
                 am = am * Player.buffs.counterstrike.effectN( 1 ).mod
             end
             
+            am = am * Player.getTalent( "efficient_training" ).effectN( 5 ).mod
+            
+            am = am * Player.getTalent( "temple_training" ).effectN( 2 ).mod
+            
             return am
         end,
         
@@ -4528,6 +4558,10 @@ local brm_spells = {
             if Player.buffs.counterstrike.up() then
                 am = am * Player.buffs.counterstrike.effectN( 1 ).mod
             end
+            
+            am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
+            
+            am = am * Player.getTalent( "xuens_guidance" ).effectN( 1 ).mod
             
             return am
         end,
@@ -4730,6 +4764,8 @@ local brm_spells = {
                 am = am * ( 1 + ( Player.buffs.counterstrike.effectN( 1 ).pct * press_the_advantage_cs_mod ) )
             end   
             
+            am = am * Player.getTalent( "one_versus_many" ).effectN( 3 ).mod
+            
             return am
         end,
         
@@ -4800,6 +4836,8 @@ local brm_spells = {
             if Player.buffs.double_barrel.up() then
                 am = am * ( 1 + double_barrel_amp )
             end
+            
+            am = am * Player.getTalent( "one_versus_many" ).effectN( 3 ).mod
             
             return am
         end,
