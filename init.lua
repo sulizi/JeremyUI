@@ -2550,6 +2550,7 @@ local ww_spells = {
         end,      
     } ),
 
+    -- TODO: Buff effect
     ["dual_threat"] = Player.createAction( 451823, {
         background = true,
         
@@ -2739,6 +2740,10 @@ local ww_spells = {
             
             return aura_env.targetScale( target_count, spell.fists_of_fury.effectN( 1 ).base_value, 1, spell.fists_of_fury.effectN( 6 ).pct, primary_multiplier )
         end,
+        
+        trigger = {
+            ["jadefire_fists"] = true,
+        },
         
         tick_trigger = {
             ["open_palm_strikes"] = true,
@@ -3410,13 +3415,58 @@ local ww_spells = {
         },        
     } ),    
 
-    ["jadefire_stomp"] = Player.createAction( 388193, {
+    ["jadefire_fists"] = Player.createAction( 457974, {
+        background = true,
+        
+        triggerSpell = 388207,
+        trigger_etl = true,
+        ww_mastery = true,
+        
+        ready = function()
+            return Player.getTalent( "jadefire_fists" ).ok
+        end,
+        
+        action_multiplier = function( self, state )
+            local am = 1
+            
+            if Player.getTalent( "path_of_jade" ).ok then 
+                local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.getTalent( "path_of_jade" ).effectN( 2 ).base_value )
+                am = am * ( 1 + Player.getTalent( "path_of_jade" ).effectN( 1 ).pct * poj_targets )
+            end
+            
+            am = am * Player.getTalent( "singularly_focused_jade" ).effectN( 2 ).mod
+            
+            return am
+        end,
+        
+        target_count = function()
+            local targets = aura_env.learnedFrontalTargets( 388201 )
+            
+            targets = max( 1, targets + Player.getTalent( "singularly_focused_jade" ).effectN( 1 ).base_value )
+            
+            return targets
+        end,
+        
+        target_multiplier = function( target_count )
+            return min( 5, target_count )
+        end,
+        
+        trigger = {
+            ["jadefire_brand"] = true,    
+        },
+    
+        tick_trigger = {
+            ["ancient_lava"] = true,
+            ["resonant_fists"] = true,
+        },        
+    }),
 
+    ["jadefire_stomp"] = Player.createAction( 388193, {
+        
         triggerSpell = 388207, 
 
         usable_during_sck = true,       
         trigger_etl = true,
-        ignore_armor = true,
         ww_mastery = true,
         
         ready = function()
