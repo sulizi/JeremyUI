@@ -2388,7 +2388,7 @@ local IsBlackoutProc = function( state )
         local bok_stacks = Player.buffs.bok_proc.stacks()
         local docj_stacks = Player.buffs.dance_of_chiji.stacks()
         
-        local next = nil
+        local _next = nil
         local _, stack = ipairs( state.callback_stack )
        
         for cb_idx = 1, #stack do
