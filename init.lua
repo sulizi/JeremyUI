@@ -2572,7 +2572,7 @@ local ww_spells = {
     } ),
 
     -- TODO: Buff effect
-    ["dual_threat"] = Player.createAction( 451823, {
+    ["dual_threat"] = Player.createAction( Player.is_beta() and 451823 or nil, {
         background = true,
         
         --ww_mastery = TODO
@@ -3446,7 +3446,7 @@ local ww_spells = {
         },        
     } ),    
 
-    ["jadefire_fists"] = Player.createAction( 457974, {
+    ["jadefire_fists"] = Player.createAction( Player.is_beta() and 457974 or nil, {
         background = true,
         
         triggerSpell = 388207,
@@ -4492,8 +4492,6 @@ local brm_spells = {
             
             am = am * Player.getTalent( "efficient_training" ).effectN( 5 ).mod
             
-            am = am * Player.getTalent( "temple_training" ).effectN( 2 ).mod
-            
             return am
         end,
         
@@ -4580,8 +4578,6 @@ local brm_spells = {
             
             am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
             
-            am = am * Player.getTalent( "xuens_guidance" ).effectN( 1 ).mod
-            
             return am
         end,
         
@@ -4599,6 +4595,14 @@ local brm_spells = {
     ["chi_burst"] = Player.createAction( 123986, {
 
         triggerSpell = 148135,
+
+        action_multiplier = function( self, state )
+            local am = 1
+            
+            am = am * Player.getTalent( "manifestation" ).effectN( 1 ).mod
+        
+            return am
+        end,
         
         target_count = function()
             return aura_env.target_count
@@ -4620,6 +4624,14 @@ local brm_spells = {
         triggerSpell = 132467,
         ticks = 4, -- 4 Damage Bounces
         usable_during_sck = true,   
+        
+        action_multiplier = function( self, state )
+            local am = 1
+            
+            am = am * Player.getTalent( "manifestation" ).effectN( 1 ).mod
+        
+            return am
+        end,
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,  
