@@ -2549,7 +2549,7 @@ local TigersFerocityStacks = function( state )
             
             if cb.name == "tiger_palm" then
                 cur_stacks = 0
-            elseif whitelist[ cb.spell.spellID ] then
+            elseif whitelist[ cb.name ] then
                 cur_stacks = cur_stacks + 1
             end    
         end
