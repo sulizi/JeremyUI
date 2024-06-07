@@ -152,6 +152,9 @@ local spell = {
     t31_ww_2pc  = LibDBCache:find_spell( 422891 ),
     t31_ww_4pc  = LibDBCache:find_spell( 422892 ),
     
+    t33_brm_2pc = LibDBCache:find_spell( 453623),
+    t33_ww_4pc  = LibDBCache:find_spell( 454505 ),
+    
     -- Actions
     blackout_kick       = LibDBCache:find_spell( 100784 ),
     chi_burst           = LibDBCache:find_spell( 148135 ),
@@ -960,6 +963,8 @@ Player.makeBuff( 202090, "teachings_of_the_monastery", {
         return ms
     end,
 } )
+Player.makeBuff( 454485, "tiger_strikes" )
+Player.makeBuff( 454502, "tigers_ferocity" )
 Player.makeBuff( 393039, "the_emperors_capacitor" )
 Player.makeBuff( 242387, "thunderfist" )
 Player.makeBuff( 195321, "transfer_the_power" )
@@ -972,6 +977,7 @@ Player.makeBuff( 389963, "charred_passions" )
 Player.makeBuff( 383800, "counterstrike" )
 Player.makeBuff( 202346, "double_barrel" )
 Player.makeBuff( 325153, "exploding_keg" )
+Player.makeBuff( 457257, "flow_of_battle" )
 Player.makeBuff( 124273, "heavy_stagger" )
 Player.makeBuff( 383696, "hit_scheme" )
 Player.makeBuff( 124275, "light_stagger" )
@@ -2341,7 +2347,7 @@ local IsFlowingMomentumKicks = function( state )
                 break
             end
             
-            if cb.name == "fists_of_fury" then
+            if cb.name == "fists_of_fury" or cb.name == "fists_of_fury_cancel" then
                 flowing_momentum = true
             elseif cb.name == "rising_sun_kick" then
                 flowing_momentum = false
@@ -2514,6 +2520,44 @@ local IsComboStrike = function( action, state )
     
     return ( last_cs ~= action.spellID ), hit_combo
 end
+
+local TigersFerocityStacks = function( state )
+
+    if Player.set_pieces[ 33 ] < 4 then
+        return 0
+    end
+    
+    if not state then
+        return Player.buffs.tigers_ferocity.stacks()
+    else
+        local whitelist = {
+            ["rising_sun_kick"] = true,
+            ["blackout_kick"] = true,
+            ["fists_of_fury"] = true,
+            ["fist_of_fury_cancel"] = true,
+            ["strike_of_the_windlord"] = true,
+            ["whirling_dragon_punch"] = true,
+        }
+    
+        local cur_stacks = Player.buffs.tigers_ferocity.stacks()
+        local max_stacks = Player.buffs.tigers_ferocity.max_stacks()
+        
+        for cb_idx, cb in ipairs( state.callback_stack ) do
+            if cb_idx == #state.callback_stack then
+                break
+            end
+            
+            if cb.name == "tiger_palm" then
+                cur_stacks = 0
+            elseif whitelist[ cb.spell.spellID ] then
+                cur_stacks = cur_stacks + 1
+            end    
+        end
+        
+        return cur_stacks
+    end  
+end
+
 ------------------------------------------------
 
 ------------------------------------------------
@@ -2534,6 +2578,16 @@ Player.action_multiplier = function( action, state )
             am = am * Player.mast_bonus
             am = am * ( 1 + hit_combo * Player.buffs.hit_combo.effectN( 1 ).pct )
         end
+        
+        -- T33 Windwalker 2PC
+        if Player.buffs.tiger_strikes.up() and LibDBCache:spell_affected_by_effect( action.spellID, Player.buffs.tiger_strikes.effectN( 1 ) ) then
+            am = am * Player.buffs.tiger_strikes.effectN( 1 ).mod
+        end
+        
+        -- T33 Brewmaster 4PC
+        if Player.buffs.flow_of_battle.up() and LibDBCache:spell_affected_by_effect( action.spellID, Player.flow_of_battle.tiger_strikes.effectN( 1 ) ) then
+            am = am * Player.buffs.flow_of_battle.effectN( 1 ).mod
+        end        
     end
     
     return am
@@ -2835,7 +2889,7 @@ local ww_spells = {
             
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end     
+            end
             
             return am
         end,
@@ -3540,6 +3594,15 @@ local ww_spells = {
     } ),
 
     ["tiger_palm"] = Player.createAction( 100780, {
+        callbacks = {
+            -- T33 4PC Generators
+            "rising_sun_kick",
+            "blackout_kick",
+            "fists_of_fury",
+            "fists_of_Fury_cancel",
+            "strike_of_the_windlord",
+            "whirling_dragon_punch",
+        },
 
         chi_gain = function() 
             if Player.is_beta() then
@@ -3572,7 +3635,27 @@ local ww_spells = {
             
             am = am * Player.getTalent( "xuens_guidance" ).effectN( 1 ).mod
             
+            if Player.set_pieces[ 33 ] >= 4 then
+                am = am * ( 1 + ( TigersFerocityStacks( state ) * Player.buffs.tigers_ferocity.effectN( 1 ).pct ) )
+            end
+            
             return am
+        end,
+        
+        target_count = function()
+            if Player.set_pieces[ 33 ] >= 4 then
+                return aura_env.target_count
+            end
+            
+            return 1
+        end,
+
+        target_multiplier = function( target_count )
+            if Player.set_pieces[ 33 ] >= 4 then
+                return aura_env.targetScale( target_count, spell.t33_ww_4pc.effectN( 2 ).base_value, 1, spell.t33_ww_4pc.effectN( 1 ).pct )
+            end
+            
+            return 1
         end,
         
         trigger = {
@@ -4413,6 +4496,10 @@ local brm_spells = {
             
             am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
             
+            if Player.set_pieces[ 33 ] >= 2 then
+                am = am * spell.t33_brm_2pc.effectN( 1 ).mod
+            end
+            
             return am
         end,
         
@@ -4797,6 +4884,10 @@ local brm_spells = {
             
             am = am * Player.getTalent( "one_versus_many" ).effectN( 3 ).mod
             
+            if Player.set_pieces[ 33 ] >= 2 then
+                am = am * spell.t33_brm_2pc.effectN( 1 ).mod
+            end
+            
             return am
         end,
         
@@ -4869,6 +4960,10 @@ local brm_spells = {
             end
             
             am = am * Player.getTalent( "one_versus_many" ).effectN( 3 ).mod
+
+            if Player.set_pieces[ 33 ] >= 2 then
+                am = am * spell.t33_brm_2pc.effectN( 1 ).mod
+            end            
             
             return am
         end,
@@ -5276,6 +5371,9 @@ local brm_spells = {
                 
                 m = dtps * shuffle_granted * shuffle_pct
                 
+                if Player.set_pieces[ 33 ] >= 2 then
+                    m = m + ( dtps * ( -1 * spell.t33_brm_2pc.effectN( 2 ).pct ) )
+                end
             end
             
             return m
@@ -5651,6 +5749,13 @@ aura_env.initGear = function()
             [ "217188" ] = true, -- Head
             [ "217189" ] = true, -- Legs
             [ "217190" ] = true, -- Shoulder
+        },
+        [ 33 ] = {
+            [ "212050" ] = true, -- Chest
+            [ "212048" ] = true, -- Hands
+            [ "212047" ] = true, -- Head
+            [ "212046" ] = true, -- Legs
+            [ "212045" ] = true, -- Shoulder        
         },
     } 
     
