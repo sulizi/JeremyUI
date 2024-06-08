@@ -991,7 +991,7 @@ function(event, ...)
                         end
                         
                         local ready = action.ready()
-                        
+
                         local execute_time = action.execute_time()
                         local chi = action.chi and action.chi() or aura_env.chi_base_cost( action.replaces or spellID )
                         local energy_cost = action.energy and action.energy() or aura_env.energy_base_cost( action.replaces or spellID )
@@ -1576,7 +1576,7 @@ function(event, ...)
                                 
                                 if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  then
                                     D = ( D * brewmaster_dmg_ratio ) 
-                                    + ( ( results.healing + results.mitigation ) * brewmaster_heal_ratio )
+                                    + ( ( results.self_healing + results.mitigation ) * brewmaster_heal_ratio )
                                     
                                     -- Exploding Keg         
                                     if Player.findAura( 325153 ) then 
