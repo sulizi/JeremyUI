@@ -723,10 +723,26 @@ aura_env.CPlayer = {
             return max( gcd, action.cast_time() )
         end )
         
+        -- Trigger Auto Attacks
+        
         action.trigger = action.trigger or {}
         action.trigger[ "auto_attack" ] = function()
             return InCombatLockdown() or action.starts_combat
         end
+        
+        -- Action Ready
+        local ready = initialize_value( ready, function() return true end )
+        action.ready = function()
+            if action.combo and aura_env.fight_remains < execute_time then
+                return false
+            end
+            
+            if ( action.background or action.debuff or IsSpellKnown( action.replaces or action.spellID ) ) then
+                return ready()
+            end
+            
+            return false
+        end,
         
         return action
     end,
@@ -1612,15 +1628,6 @@ aura_env.gcd = function ( spellID )
     end        
     
     return ret_ms / 1000
-end
-
-aura_env.base_execute_time = function( spellID )
-    local cast_time_ms = select( 4, GetSpellInfo( spellID ) )
-    if cast_time_ms and cast_time_ms > 0 then
-        return cast_time_ms / 1000
-    else
-        return aura_env.gcd( spellID )
-    end
 end
 
 aura_env.findUnitAura = function( unitID, spellID, filter )
@@ -2534,7 +2541,7 @@ local TigersFerocityStacks = function( state )
             ["rising_sun_kick"] = true,
             ["blackout_kick"] = true,
             ["fists_of_fury"] = true,
-            ["fist_of_fury_cancel"] = true,
+            ["fists_of_fury_cancel"] = true,
             ["strike_of_the_windlord"] = true,
             ["whirling_dragon_punch"] = true,
         }

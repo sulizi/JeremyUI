@@ -901,7 +901,7 @@ function(event, ...)
                         raw = raw * pct * math.max( 1, buff_duration )
                         raw = math.max ( 0, raw )
                         
-                        if not action.ready or not action.ready() then
+                        if not action.ready() then
                             raw = 0
                         end
                         
@@ -945,34 +945,40 @@ function(event, ...)
                             action.pvp_sp_value = ( type( action.sp ) == "function" and action.sp() or action.sp ) or 0
                         end
                         
-                        local ap_mod  = Player.is_pvp and action.pvp_ap_value or action.pve_ap_value
-                        local sp_mod  = Player.is_pvp and action.pvp_sp_value or action.pve_sp_value
+                        local tooltip = 0
                         local ticks   = ( type( action.ticks ) == "function" and action.ticks() or action.ticks ) or 1
-                        
-                        local composite_attack_power = function( ap_type )
-                            
-                            local base_power_mod = 1
-                            local weapon_power = Player.weapon_power.main_hand
 
-                            if IsEquippedItemType( "Two-Hand" ) then
-                                if ap_type == "BOTH" then
-                                    base_power_mod = 0.98
+                        local sp_mod  = Player.is_pvp and action.pvp_sp_value or action.pve_sp_value
+                        
+                        if sp_mod > 0 then
+                            tooltip = ticks * ( sp_mod * aura_env.spell_power )
+                        else
+                            local composite_attack_power = function( ap_type )
+                                
+                                local base_power_mod = 1
+                                local weapon_power = Player.weapon_power.main_hand
+    
+                                if IsEquippedItemType( "Two-Hand" ) then
+                                    if ap_type == "BOTH" then
+                                        base_power_mod = 0.98
+                                    end
+                                elseif ap_type == "BOTH" then
+                                    weapon_power = Player.weapon_power.both
+                                elseif ap_type == "OFFHAND" then
+                                    weapon_power = Player.weapon_power.off_hand
+                                elseif ap_type == "NONE" then
+                                    weapon_power = Player.weapon_power.none
                                 end
-                            elseif ap_type == "BOTH" then
-                                weapon_power = Player.weapon_power.both
-                            elseif ap_type == "OFFHAND" then
-                                weapon_power = Player.weapon_power.off_hand
-                            elseif ap_type == "NONE" then
-                                weapon_power = Player.weapon_power.none
+                                
+                                return floor( Player.attack_power + weapon_power + 0.5 ) * base_power_mod
                             end
                             
-                            return floor( Player.attack_power + weapon_power + 0.5 ) * base_power_mod
+                            local ap_mod  = Player.is_pvp and action.pvp_ap_value or action.pve_ap_value
+                            local attack_power = composite_attack_power( action.ap_type )
+                            
+                            tooltip = ticks * ( attack_power * ap_mod )
                         end
-                        
-                        local attack_power = composite_attack_power( action.ap_type )
-                    
-                        local tooltip = ticks * ( sp_mod > 0 and ( sp_mod * aura_env.spell_power ) or ( attack_power * ap_mod ) )
-                        
+
                         local action_targets    = max( 1, min( 20, ( action.target_count and action.target_count() ) or 1 ) )
                         local action_cooldown   = aura_env.actionBaseCooldown( action )
                         local action_cd_remains = aura_env.getCooldown( spellID )
@@ -984,13 +990,9 @@ function(event, ...)
                             start_cooldown[ #start_cooldown + 1 ] = combo_base
                         end
                         
-                        local ready = action.background or IsSpellKnown( action.replaces or spellID )
+                        local ready = action.ready()
                         
-                        if ready and action.ready then
-                            ready = action.ready()
-                        end
-                        
-                        local execute_time = action.execute_time and action.execute_time() or aura_env.base_execute_time( spellID ) 
+                        local execute_time = action.execute_time()
                         local chi = action.chi and action.chi() or aura_env.chi_base_cost( action.replaces or spellID )
                         local energy_cost = action.energy and action.energy() or aura_env.energy_base_cost( action.replaces or spellID )
                         local mana_cost = action.mana and action.mana() or aura_env.mana_base_cost( action.replaces or spellID )
@@ -1004,10 +1006,6 @@ function(event, ...)
                         
                         action.base_cost = cost or 0
                         action.base_execute_time = execute_time or 0
-                        
-                        if action.combo and aura_env.fight_remains < execute_time then
-                            ready = false
-                        end
                         
                         if not ready then
                             action_set( {
