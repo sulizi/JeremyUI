@@ -680,7 +680,7 @@ aura_env.CPlayer = {
                     if effect
                     and effect.type == 6 -- Aura
                     and effect.subtype == 107 -- Flat modifier
-                    and effect.property = 21 -- Spell Global Cooldown
+                    and effect.property == 21 -- Spell Global Cooldown
                     and LibDBCache:spell_affected_by_effect( action.spellID, effect ) then
                         ret_ms = ret_ms + effect.base_value
                     end
@@ -764,9 +764,9 @@ aura_env.CPlayer = {
         end
         
         -- Action Ready
-        local ready = initialize_value( ready, function() return true end )
+        local ready = initialize_value( action.ready, function() return true end )
         action.ready = function()
-            if action.combo and aura_env.fight_remains < execute_time then
+            if action.combo and aura_env.fight_remains < action.execute_time() then
                 return false
             end
             
@@ -775,7 +775,7 @@ aura_env.CPlayer = {
             end
             
             return false
-        end,
+        end
         
         return action
     end,
@@ -3791,10 +3791,10 @@ local ww_spells = {
     } ),
 
     -- TODO: Generic Actions
-    ["arcane_torrent"] = {
+    ["arcane_torrent"] = Player.createAction( 28730, {
         spellID = 28730,
         chi_gain = function() return 1 end,
-    },
+    } ),
 
     -- Can remove this in TWW since it's not longer useful rotationally
     ["flying_serpent_kick"] = Player.createAction( Player.is_beta() and nil or 101545, {
@@ -3862,28 +3862,22 @@ local ww_spells = {
         end,
     } ),
 
-    -- TODO: Redo Thunderfist with Auto-Attack refactor
-    ["thunderfist_single"] = {
-        spellID = 393566,
-        ap = function()
-            return spell.thunderfist.effectN( 1 ).ap_coefficient
-        end,
+    ["thunderfist_single"] = Player.createAction( 393566, {
         background = true,
         may_crit = true,
         trigger_etl = true,
         ignore_armor = true,
         ww_mastery = false,
-    },
-    ["thunderfist"] = {
-        spellID = 393566,
-        ap = function()
-            return spell.thunderfist.effectN( 1 ).ap_coefficient
-        end,
+    } ),
+
+    ["thunderfist"] = Player.createAction( 393566, {
         background = true,
+        
         may_crit = true,
         trigger_etl = true,
         ignore_armor = true,
         ww_mastery = false,
+        
         target_count = function()
             return aura_env.learnedFrontalTargets( 395521 ) -- SotWL
         end,        
@@ -3893,7 +3887,7 @@ local ww_spells = {
             local stacks = min( 10, stacks_acquired + current_stacks )
             return min( stacks, aura_env.fight_remains / ( UnitAttackSpeed( "player" ) or 4 ) )          
         end,
-    },
+    } ),
 
     ["crackling_jade_lightning"] = Player.createAction( 117952, {
 
