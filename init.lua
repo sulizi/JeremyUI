@@ -2220,13 +2220,14 @@ aura_env.auraEffectForSpell = function ( spellID, periodic )
         local effect = 0
         while ( effect ~= nil ) do
             effect = spec_aura.effectN( it )
-            if effect and effect.affected_spells then
-                if effect.affected_spells[ spellID ] then
-                    local properties = effect.properties
-                    if properties and properties.add_percent_modifier then
-                        if ( periodic and properties.spell_periodic_amount ) or ( not periodic and properties.spell_direct_amount ) then
-                            total_aura_effect = total_aura_effect * ( effect.mod or 1 ) 
-                        end
+            if effect then
+                local properties = effect.properties
+                
+                if properties 
+                and properties.add_percent_modifier
+                and LibDBCache:spell_affected_by_effect( spellID, effect ) then
+                    if ( periodic and properties.spell_periodic_amount ) or ( not periodic and properties.spell_direct_amount ) then
+                        total_aura_effect = total_aura_effect * ( effect.mod or 1 ) 
                     end
                 end
             end
