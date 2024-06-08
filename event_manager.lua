@@ -1383,8 +1383,8 @@ function(event, ...)
                                         if use_during_channel then
                                             latency = 0
                                             
-                                            local gcd     = aura_env.gcd( driver.spellID )
-                                            local base_et = driver.execute_time and driver.execute_time() or aura_env.base_execute_time( driver.spellID )
+                                            local gcd     = driver.gcd()
+                                            local base_et = driver.execute_time()
                                             trigger_time = trigger_time - ( base_et - gcd )
                                         end                            
                                         trigger_delay = max( action_delay, latency ) - action_delay

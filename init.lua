@@ -609,6 +609,9 @@ aura_env.CPlayer = {
         action.may_miss         = initialize_value( action.may_miss, _tick_data.may_miss )
         action.may_crit         = initialize_value( action.may_crit, _tick_data.may_crit )
         
+        
+        -- Parse Effects
+        
         local effect_type = function( e )
             if e.is_heal then
                 if action.target_count then
@@ -661,6 +664,36 @@ aura_env.CPlayer = {
         
         action.type = initialize_value( action.type, "damage" )
         
+        -- GCD Value
+        
+        action.gcd = function()
+            local _, gcd = GetSpellBaseCooldown( action.spellID )
+            local ret_ms = gcd or 0
+        
+            local spec_aura = Player.spec_aura
+            
+            if spec_aura and spec_aura.effectN then
+                local it = 1
+                local effect = 0
+                while ( effect ~= nil ) do
+                    effect = spec_aura.effectN( it )
+                    if effect
+                    and effect.type == 6 -- Aura
+                    and effect.subtype == 107 -- Flat modifier
+                    and effect.property = 21 -- Spell Global Cooldown
+                    and LibDBCache:spell_affected_by_effect( action.spellID, effect ) then
+                        ret_ms = ret_ms + effect.base_value
+                    end
+                    it = it + 1
+                end
+            end
+            
+            local ret_s = max( 0, ret_ms / 1000 )
+            return ret_s
+        end        
+    
+        -- Ticks
+        
         if not action.ticks and action.duration and action.base_tick_rate and action.base_tick_rate > 0 then
             action.ticks = action.duration / action.base_tick_rate
         end
@@ -674,7 +707,7 @@ aura_env.CPlayer = {
                     local ticks_remaining = ticks - ticks_on_cast
                     
                     if ticks_remaining > 0 then
-                        local gcd = aura_env.gcd( action.spellID )
+                        local gcd = action.gcd()
                         local duration = action.duration
                         
                         if duration then
@@ -710,7 +743,7 @@ aura_env.CPlayer = {
                 return 0
             end
             
-            local gcd = aura_env.gcd( action.spellID )
+            local gcd = action.gcd()
 
             if action.channeled and action.duration and not action.canceled then
                 local duration = action.duration
@@ -1613,24 +1646,6 @@ aura_env.mana_base_cost = function( spellID )
         end
     end
     return 0
-end
-
-aura_env.gcd = function ( spellID )
-    local _, gcd = GetSpellBaseCooldown( spellID )
-    local ret_ms = gcd or 0
-    
-    local gcd_flat_modifier = nil
-    if Player.spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"] then
-        gcd_flat_modifier = spell.brewmaster_monk.effectN( 14 )    
-    elseif Player.spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"] then
-        gcd_flat_modifier = spell.windwalker_monk.effectN( 12 )
-    end
-    
-    if LibDBCache:spell_affected_by_effect( spellID, gcd_flat_modifier ) then
-        ret_ms = ret_ms + gcd_flat_modifier.base_value
-    end        
-    
-    return ret_ms / 1000
 end
 
 aura_env.findUnitAura = function( unitID, spellID, filter )
@@ -3778,9 +3793,6 @@ local ww_spells = {
     ["arcane_torrent"] = {
         spellID = 28730,
         chi_gain = function() return 1 end,
-        execute_time = function()
-            return aura_env.gcd( 28730 )
-        end,
     },
 
     -- Can remove this in TWW since it's not longer useful rotationally
@@ -3813,7 +3825,7 @@ local ww_spells = {
             end
             
             -- Waiting on cooldown
-            if aura_env.getCooldown( combo_spellid ) <= aura_env.gcd( 101545 ) + 0.250 then
+            if aura_env.getCooldown( combo_spellid ) <= 1 + 0.250 then -- GCD + Reaction Time
                 return true
             end
             
