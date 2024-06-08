@@ -790,44 +790,47 @@ aura_env.CPlayer = {
     makeBuff = function( spellID, name, init )
         local self = aura_env.CPlayer
         
-        if not name or not self.buffs[ name ] then
-            local _spell = LibDBCache:find_spell( spellID )
-            local buff = {}
-            local _init = init or {}
-            
-            name = name or _spell.tokenName
-            
-            if name then
-                buff.spellID = spellID
-                buff.name = name
-                buff.auraData = function()
-                    local data = self.findAura( spellID )
-                    return data
-                end
-                buff.up = function()
-                    local data = self.findAura( spellID )
-                    return ( data ~= nil )
-                end
-                buff.remains = function()
-                    local data = self.findAura( spellID )
-                    return data and data.remaining or 0
-                end
-                buff.stacks = function()
-                    local data = self.findAura( spellID )
-                    return data and data.stacks or 0 
-                end
-                
-                buff._max_stacks = _spell.max_stacks
-                buff.max_stacks = _init.max_stacks or function()
-                    return buff._max_stacks
-                end
-                
-                buff.effectN = _spell.effectN
-                
-                self.buffs[ name ] = buff
-            else
-                print( "Unable to make buff " .. spellID )
+        if name and self.buffs[ name ] then
+            print( "JeremyUI: cannot create duplicate buff ".. name )
+            return
+        end
+        
+        local _spell = LibDBCache:find_spell( spellID )
+        local buff = {}
+        local _init = init or {}
+        
+        name = name or _spell.tokenName
+        
+        if name then
+            buff.spellID = spellID
+            buff.name = name
+            buff.auraData = function()
+                local data = self.findAura( spellID )
+                return data
             end
+            buff.up = function()
+                local data = self.findAura( spellID )
+                return ( data ~= nil )
+            end
+            buff.remains = function()
+                local data = self.findAura( spellID )
+                return data and data.remaining or 0
+            end
+            buff.stacks = function()
+                local data = self.findAura( spellID )
+                return data and data.stacks or 0 
+            end
+            
+            buff._max_stacks = _spell.max_stacks
+            buff.max_stacks = _init.max_stacks or function()
+                return buff._max_stacks
+            end
+            
+            buff.effectN = _spell.effectN
+            
+            self.buffs[ name ] = buff
+        else
+            print( "JeremyUI: unable to create buff id " .. spellID )
         end
     end,
 }
