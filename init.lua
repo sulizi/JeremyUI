@@ -39,7 +39,6 @@ local GetSpellInfo = GetSpellInfo or function( spellID )
       return spellInfo.name, nil, spellInfo.iconID, spellInfo.castTime, spellInfo.minRange, spellInfo.maxRange, spellInfo.spellID, spellInfo.originalIconID
     end
 end
-local GetSpellPowerCost = GetSpellPowerCost
 local _GetTime = GetTime
 local GetTime = function()
     return aura_env.frameTime or _GetTime()
@@ -120,7 +119,7 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 2.2
+local DBC_Version = 2.3
 local DBC_Critical = 2.2
 local LibDBCache = LibStub( "LibDBCache-1.0", true )
 
@@ -421,8 +420,6 @@ aura_env.CPlayer = {
     auraExclusions = {},    
     auraInstancesByID = {},
     buffs = {}, -- populated by makeBuff
-    chi = 0,
-    chi_max = 0,
     combat = {
         avg_level = 0,
         damage_by_level = 0,
@@ -447,10 +444,6 @@ aura_env.CPlayer = {
     crit_bonus = 1,
     default_action = "spinning_crane_kick",
     dps = 0,
-    energy = 0,
-    energy_max = 0,
-    energy_ttm = 0,
-    eps = 0,
     gcd_duration = 0,
     gcd_remains = 0,
     haste = 1,
@@ -461,7 +454,6 @@ aura_env.CPlayer = {
         swing_damage = 1,
         equipped = false,
     },
-    mana = 0,
     mast_bonus = 1,
     movement_rate = 0,
     movement_t = 0,
@@ -841,8 +833,7 @@ aura_env.CPlayer = {
                 local data = self.findAura( spellID )
                 return data
             end
-            buff.up = function()
-                local data = self.findAura( spellID )
+            buff.up = function() 
                 return ( data ~= nil )
             end
             buff.remains = function()
@@ -865,6 +856,114 @@ aura_env.CPlayer = {
         else
             print( "JeremyUI: unable to create buff id " .. spellID )
         end
+    end,
+    
+    Update = function()
+        local Player = aura_env.CPlayer
+        
+        -- PvP Flag
+        Player.is_pvp = UnitIsPlayer( "target" ) and aura_env.validTarget(  "target" )
+        
+        -- Health Deficit
+        Player.health_deficit = UnitHealthMax( "player" ) - UnitHealth( "player" )
+        
+        -- Primary Stat
+        Player.primary_stat = select( 2, UnitStat( "player", 2 ) )
+        
+        -- Stagger
+        Player.stagger = UnitStagger( "player" ) or 0
+        
+        -- GCD Information
+        local gcd_start = GetSpellCooldown( 61304 )
+        
+        if gcd_start > 0 then
+            Player.gcd_duration = gcdDuration()
+            Player.gcd_remains = Player.gcd_duration - ( GetTime() - gcd_start )    
+        else
+            Player.gcd_duration = 0
+            Player.gcd_remains = 0
+        end
+        
+        -- Resource Information
+        local powerTypePriority = {
+            [ 1 ]   = 17, -- Fury
+            [ 2 ]   = 13, -- Insanity
+            [ 3 ]   = 12, -- Chi
+            [ 4 ]   = 11, -- Maelstrom
+            [ 5 ]   = 9,  -- Holy Power
+            [ 6 ]   = 8,  -- Lunar Power
+            [ 7 ]   = 7,  -- Soul Shards
+            [ 8 ]   = 5,  -- Runes
+            [ 9 ]   = 6,  -- Runic Power
+            [ 10 ]  = 4,  -- Combo Points
+            [ 11 ]  = 3,  -- Energy
+            [ 12 ]  = 2,  -- Focus
+            [ 13 ]  = 1,  -- Range
+            [ 14 ]  = 0,  -- Mana
+        }
+        
+        Player.primary_resource = nil
+        Player.secondary_resource = nil
+        
+        for idx = 1, #powerTypePriority do
+            local powerType = powerTypePriority[ idx ]
+            if Player.primary_resource and Player.secondary_resource then
+                break
+            end
+            local powerMax = UnitPowerMax( "player", powerType )
+            if powerMax > 0 then
+                local powerRegen = ( UnitPowerType( "player" ) == powerType and GetPowerRegen() ) or 0
+                local powerCurrent = UnitPower( "player", powerType ) + ( powerRegen * Player.gcd_remains )
+                local resource = {
+                    type = powerType,
+                    current = powerCurrent,
+                    max = powerMax,
+                    deficit = powerMax - powerCurrent,
+                    regen = powerRegen,
+                }
+                if not Player.primary_resource then
+                    Player.primary_resource = resource
+                else
+                    Player.secondary_resource = resource
+                end
+            end
+        end
+        
+        -- Update Channel Information
+        local _, _, _, channel_start, channel_end, _, _, channelID = UnitChannelInfo( "player" )
+        
+        Player.channel.start = channel_start
+        Player.channel.finish = channel_end
+        Player.channel.spellID = channelID
+        
+        if not Player.channel.spellID then
+            aura_env.tick_update = nil
+            
+            Player.channel.raw = 0
+            Player.channel.ticks = 1
+            Player.channel.action = nil
+            Player.channel.remaining = nil
+            Player.channel.length = nil
+            Player.channel.tick_rate = nil
+            Player.channel.ticks_remaining = nil
+        else
+            
+            Player.channel.remaining = max( 0, ( Player.channel.finish / 1000 ) - GetTime() - Player.gcd_remains )
+            Player.channel.length = ( Player.channel.finish - Player.channel.start ) / 1000
+            Player.channel.tick_rate = Player.channel.length / ( Player.channel.ticks or 1 )
+            Player.channel.ticks_remaining = 1 + floor( Player.channel.remaining / Player.channel.tick_rate )
+            
+            if Player.channel.remaining > 0 and Player.gcd_remains == 0 then
+                aura_env.tick_update = GetTime() + ( Player.channel.remaining % Player.channel.tick_rate )
+            end
+
+        end
+        
+        -- Player Aura Information
+        if Player.needsFullUpdate then
+            Player.secondary_conversion_rate = nil
+            ScanEvents( "UNIT_AURA_FULL_UPDATE", "player" )
+        end            
     end,
 }
 
@@ -1609,43 +1708,6 @@ aura_env.unmarked_targets = function( )
     else
         return 0
     end    
-end
-
-aura_env.chi_base_cost = function( spellID )
-    -- Returns 0 during Serenity
-    local costTable = GetSpellPowerCost( spellID );
-    if costTable then 
-        for _, costInfo in pairs( costTable ) do
-            if costInfo.type == 12 then
-                return costInfo.cost    
-            end
-        end
-    end
-    return 0
-end
-
-aura_env.energy_base_cost = function( spellID )
-    local costTable = GetSpellPowerCost( spellID );
-    if costTable then 
-        for _, costInfo in pairs( costTable ) do
-            if costInfo.type == 3 then
-                return costInfo.cost    
-            end
-        end
-    end
-    return 0
-end
-
-aura_env.mana_base_cost = function( spellID )
-    local costTable = GetSpellPowerCost( spellID );
-    if costTable then 
-        for _, costInfo in pairs( costTable ) do
-            if costInfo.type == 0 then
-                return costInfo.cost    
-            end
-        end
-    end
-    return 0
 end
 
 aura_env.findUnitAura = function( unitID, spellID, filter )
@@ -3796,49 +3858,6 @@ local ww_spells = {
         chi_gain = function() return 1 end,
     } ),
 
-    -- Can remove this in TWW since it's not longer useful rotationally
-    ["flying_serpent_kick"] = Player.createAction( Player.is_beta() and nil or 101545, {
-
-        triggerSpell = Player.is_beta() and 123586 or nil,
-
-        ww_mastery = true,
-
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return target_count
-        end,
-        
-        ready = function()
-            local combo_spellid = Player.last_combo_strike
-            local combo_ready, need_resources = IsUsableSpell( combo_spellid )
-            
-            -- Ready to fire
-            if combo_ready then
-                return true
-            end
-            
-            -- We don't have enough Chi to perform a combo strike
-            if need_resources and aura_env.chi_base_cost( combo_spellid ) > 0 then
-                return false
-            end
-            
-            -- Waiting on cooldown
-            if aura_env.getCooldown( combo_spellid ) <= 1 + 0.250 then -- GCD + Reaction Time
-                return true
-            end
-            
-            return false
-            
-        end,
-        
-        tick_trigger = {
-            ["ancient_lava"] = true,            
-        },        
-    } ),
-
     ["chi_explosion"] = Player.createAction( 393056, {
 
         background = true,
@@ -3864,18 +3883,15 @@ local ww_spells = {
 
     ["thunderfist_single"] = Player.createAction( 393566, {
         background = true,
-        may_crit = true,
+        
         trigger_etl = true,
-        ignore_armor = true,
         ww_mastery = false,
     } ),
 
     ["thunderfist"] = Player.createAction( 393566, {
         background = true,
         
-        may_crit = true,
         trigger_etl = true,
-        ignore_armor = true,
         ww_mastery = false,
         
         target_count = function()

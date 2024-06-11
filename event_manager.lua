@@ -58,6 +58,7 @@ function(event, ...)
         local info = C_Spell.GetSpellCooldown( spellID )
         return info.startTime, info.duration, info.isEnabled
     end
+    local GetSpellPowerCost = GetSpellPowerCost
     local GetUnitSpeed = GetUnitSpeed
     local global_modifier = aura_env.global_modifier
     local InCombatLockdown = InCombatLockdown
@@ -248,9 +249,6 @@ function(event, ...)
             tbl.start_cd      = tbl.starts_cooldown or {}
             tbl.execute_time  = max( 0, tbl.execute_time or 0 )
             tbl.cost          = tbl.cost or 0
-            tbl.chi_cost      = tbl.chi_cost or 0
-            tbl.energy_cost   = tbl.energy_cost or 0
-            tbl.mana_cost     = tbl.mana_cost or 0
             tbl.t_amp         = tbl.t_amp or 1.0
             tbl.delay         = max( 0, tbl.delay or 0 )
 
@@ -264,9 +262,18 @@ function(event, ...)
             local raw_comp = tbl.raw / compression_value
             jeremy.raw[ tbl.name ] = raw_comp > 1 and floor( raw_comp ) or raw_comp 
             if not tbl.background then
+                local deficit = 0
+                
+                if Player.primary_resource then
+                    deficit = Player.primary_resource.deficit
+                    if Player.primary_resource.regen > 0 then
+                        deficit = deficit / Player.primary_resource.regen
+                    end
+                end
+
                 local dpet = tbl.raw / max( 1, 1 + ( tbl.execute_time + tbl.delay )  * rate_time() ) 
                 tbl.d_time = dpet - tbl.cost
-                tbl.d_cost = dpet / max( 1, 1 + tbl.cost )
+                tbl.d_cost = dpet / max( 1, 1 + deficit + tbl.cost )
                 
                 local index = actionhash[ tbl.name ] or #actionlist+1
                 actionlist[ index ] = tbl
@@ -289,89 +296,19 @@ function(event, ...)
             
             profilerStart()
             
-            -- Update these values also in the worker thread
-            Player.health_deficit = UnitHealthMax( "player" ) - UnitHealth( "player" )
-            Player.eps        = GetPowerRegen()
-            Player.mana       = UnitPower( "player" , 0 )
-            Player.energy     = UnitPower( "player" , 3 )
-            Player.energy_max = UnitPowerMax( "player", 3 )
-            Player.chi        = UnitPower( "player" , 12 )
-            Player.chi_max    = UnitPowerMax( "player", 12 )
-            Player.stagger    = UnitStagger( "player" ) or 0
-            
-            Player.primary_stat = select( 2, UnitStat( "player", 2 ) )
-            
-            if Player.needsFullUpdate then
-                ScanEvents( "UNIT_AURA_FULL_UPDATE", "player" )
-            end            
-            
-            local gcd_start = GetSpellCooldown( 61304 )
-            
-            if gcd_start > 0 then
-                Player.gcd_duration = gcdDuration()
-                Player.gcd_remains = Player.gcd_duration - ( frameTime - gcd_start )    
-            else
-                Player.gcd_duration = 0
-                Player.gcd_remains = 0
-            end
-            
-            if Player.eps > 0 then
-                Player.mana       = Player.mana + ( Player.eps * Player.gcd_remains )
-                Player.energy     = Player.energy + ( Player.eps * Player.gcd_remains )
-                Player.energy_ttm = ( Player.energy_max - Player.energy ) / Player.eps      
-            end
-            
-            jeremy.monk_eps         = Player.eps
-            jeremy.monk_mana        = Player.mana
-            jeremy.monk_energy      = Player.energy
-            jeremy.monk_energy_max  = Player.energy_max
-            jeremy.monk_chi         = Player.chi
-            jeremy.monk_chi_max     = Player.chi_max
-            
-            -- Update Channel Information
-            local _, _, _, channel_start, channel_end, _, _, channelID = UnitChannelInfo( "player" )
-            
-            Player.channel.start = channel_start
-            Player.channel.finish = channel_end
-            Player.channel.spellID = channelID
-            
-            if not Player.channel.spellID then
-                aura_env.tick_update = nil
-                
-                Player.channel.raw = 0
-                Player.channel.ticks = 1
-                Player.channel.action = nil
-                Player.channel.remaining = nil
-                Player.channel.length = nil
-                Player.channel.tick_rate = nil
-                Player.channel.ticks_remaining = nil
-            else
-                
-                Player.channel.remaining = max( 0, ( Player.channel.finish / 1000 ) - frameTime - Player.gcd_remains )
-                Player.channel.length = ( Player.channel.finish - Player.channel.start ) / 1000
-                Player.channel.tick_rate = Player.channel.length / ( Player.channel.ticks or 1 )
-                Player.channel.ticks_remaining = 1 + floor( Player.channel.remaining / Player.channel.tick_rate )
-                
-                if Player.channel.remaining > 0 then 
-                    
-                    if Player.gcd_remains == 0 then
-                        aura_env.tick_update = frameTime + ( Player.channel.remaining % Player.channel.tick_rate )
-                    end
-                    
-                    action_set( {
-                            type         = "channel",
-                            name         = "channel_remaining",
-                            raw          = Player.channel.raw or 0,
-                            execute_time = Player.channel.remaining + Player.channel.latency,
-                            cb           = Player.channel.action,
-                    })
-                end
-
-            end
-            
-            Player.is_pvp = UnitIsPlayer( "target" ) and aura_env.validTarget(  "target" )
+            Player.Update()
             
             profilerEnd( "Update Unit Info" )
+            
+            if Player.channel.action then 
+                action_set( {
+                        type         = "channel",
+                        name         = "channel_remaining",
+                        raw          = Player.channel.raw or 0,
+                        execute_time = Player.channel.remaining + Player.channel.latency,
+                        cb           = Player.channel.action,
+                })
+            end
             
             local ParseAuras = function( Enemy, unitID )
                 
@@ -991,21 +928,43 @@ function(event, ...)
                         end
                         
                         local ready = action.ready()
-
                         local execute_time = action.execute_time()
-                        local chi = action.chi and action.chi() or aura_env.chi_base_cost( action.replaces or spellID )
-                        local energy_cost = action.energy and action.energy() or aura_env.energy_base_cost( action.replaces or spellID )
-                        local mana_cost = action.mana and action.mana() or aura_env.mana_base_cost( action.replaces or spellID )
-                        local cost = ( energy_cost / Player.eps )
                         
-                        if spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"]  then
-                            cost = chi
-                        elseif spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"]  then
-                            cost = ( mana_cost / Player.eps )
+                        local cost = nil
+                        local secondary_cost = nil
+                        
+                        if Player.primary_resource then
+                            
+                            if not Player.secondary_resource then
+                                secondary_cost = 0
+                            end
+                            
+                            local costTable = GetSpellPowerCost( action.replaces or spellID )
+                            if costTable then 
+                                for _, costInfo in pairs( costTable ) do
+                                    if cost and secondary_cost then
+                                        break
+                                    end
+                                    
+                                    if not cost and costInfo.type == Player.primary_resource.type then
+                                        cost = costInfo.cost
+                                        if Player.primary_resource.regen > 0 then
+                                            cost = cost / Player.primary_resource.regen
+                                        end
+                                    elseif not secondary_cost and costInfo.type == Player.secondary_resource.type then
+                                        secondary_cost = costInfo.cost
+                                        if Player.secondary_resource.regen > 0 then
+                                            secondary_cost = secondary_cost / Player.secondary_resource.regen
+                                        end
+                                    end
+                                end
+                            end
+                            cost = cost or 0
+                            secondary_cost = secondary_cost or 0
                         end
                         
-                        action.base_cost = cost or 0
-                        action.base_execute_time = execute_time or 0
+                        action.base_cost = cost
+                        action.base_execute_time = execute_time
                         
                         if not ready then
                             action_set( {
@@ -1025,9 +984,6 @@ function(event, ...)
                                     raw = 1,
                                     cost = cost,
                                     execute_time = execute_time,
-                                    chi_cost = chi,
-                                    energy_cost = energy_cost,
-                                    mana_cost = mana_cost,                            
                             } )
                         
                             action.result = {
@@ -1041,10 +997,17 @@ function(event, ...)
                                 
                                 local usable_in = 0
                                 
-                                -- Add energy regen to action delay if low on resources
-                                if energy_cost > 0 and Player.energy < energy_cost then
-                                    local energy_delta = energy_cost - Player.energy
-                                    usable_in = ( energy_delta / Player.eps )
+                                -- Add resource regeneration to action delay if low on resources
+                                if Player.primary_resource and Player.primary_resource.regen > 0 then
+                                    if action.base_cost > 0 and Player.primary_resource.current < action.base_cost then
+                                        local resource_delta = action.base_cost - Player.primary_resource.current
+                                        usable_in = ( resource_delta / Player.primary_resource.regen )
+                                    end
+                                elseif Player.secondary_resource and Player.secondary_resource.regen > 0 then
+                                    if secondary_cost > 0 and Player.secondary_resource.current < secondary_cost then
+                                        local resource_delta = secondary_cost - Player.secondary_resource.current
+                                        usable_in = ( resource_delta / Player.secondary_resource.regen )
+                                    end
                                 end
                                 
                                 -- Add cooldown time to action delay if cooldown is shorter than GCD
@@ -1718,40 +1681,6 @@ function(event, ...)
                             
                             if spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"] then
                                 
-                                -- Serenity / Chi Gains
-                                if serenity and serenity.remaining > action_delay then
-                                    cost = 0
-                                else
-                                    local chi_deficit = Player.chi_max - Player.chi
-                                    
-                                    if chi_deficit > 0 then
-                                        
-                                        local gain = action.chi_gain and action.chi_gain() or 0
-                                        local energy_gain = 0
-                                        
-                                        if energy_cost > 0 and aura_env.fight_remains > 5 then
-                                            
-                                            local energy_deficit = Player.energy_max - Player.energy
-                                            
-                                            local net_energy = energy_cost - ( Player.eps * ( execute_time + action_delay ) )
-                                            net_energy = min( energy_deficit, net_energy )
-                                            net_energy = max( 0 - Player.energy, net_energy)
-                                            
-                                            local tp_gained = net_energy / aura_env.energy_base_cost( spells["tiger_palm"].spellID )
-                                            
-                                            energy_gain = 2 * tp_gained
-                                        end
-                                        
-                                        -- Ability will overcap Chi
-                                        if ( chi_deficit - gain < 0 ) then
-                                            gain = ( gain * -1 ) + ( chi_deficit - energy_gain )
-                                            energy_gain = 0
-                                        end
-                                        
-                                        cost = cost - ( gain + energy_gain )
-                                    end
-                                end
-                                
                                 -- Storm, Earth, and Fire while channeling
                                 -- If you use an action that isn't copied by SEF, while channeling an ability copied by SEF
                                 -- the images will continue to channel
@@ -1773,8 +1702,58 @@ function(event, ...)
                                         end
                                     end
                                 end
-                                
                             end
+                            
+                            -- Resource Gain
+                            local gain = action.chi_gain and action.chi_gain() or 0 -- TODO: Need to rewrite this as generic resource gain somehow
+                            local secondary_gain = 0
+                            
+                            if secondary_cost > 0 and gain > 0 then
+                                local secondary_base_cost = secondary_cost
+                                if Player.secondary_resource.regen > 0 then
+                                    secondary_base_cost = secondary_base_cost * Player.secondary_resource.regen
+                                end
+                                
+                                local rate = gain / secondary_base_cost
+                                
+                                if action_cooldown > 0 then
+                                    rate = rate / action_cooldown
+                                end
+                                if not Player.secondary_conversion_rate or Player.secondary_conversion_rate < rate then
+                                    Player.secondary_conversion_rate = rate
+                                end
+                            end
+                            
+                            if Player.primary_resource then
+                                
+                                if aura_env.fight_remains > 5 then
+                                    if Player.secondary_resource then
+                                        
+                                        if Player.secondary_resource.regen > 0 then
+                                            secondary_gain = secondary_gain + ( Player.secondary_resource.regen * ( execute_time + action_delay ) )
+                                        end
+                                        
+                                        if secondary_gain > 0 and Player.secondary_conversion_rate then
+                                            local capped_resource = secondary_gain - Player.secondary_resource.deficit
+                                            
+                                            if capped_resource > 0 then 
+                                                cost = cost + capped_resource * Player.secondary_conversion_rate
+                                            end
+                                        end
+                                        
+                                        secondary_cost = secondary_cost - secondary_gain
+                                        secondary_cost = max( Player.secondary_resource.deficit * -1, secondary_cost )
+                                    end
+                                    
+                                    if Player.primary_resource.regen > 0 then
+                                        gain = gain + ( Player.primary_resource.regen * ( execute_time + action_delay ) )
+                                    end
+                                end
+                                
+                                cost = cost - gain
+                                cost = max( Player.primary_resource.deficit * -1, cost )
+                            end
+                            
                             
                             action.cost_total = cost
                             action.time_total = execute_time
@@ -1792,9 +1771,7 @@ function(event, ...)
                                     cooldown_remains = action_cd_remains,
                                     starts_cooldown = start_cooldown,
                                     delay = action_delay,
-                                    chi_cost = aura_env.chi_base_cost( spellID ),
-                                    energy_cost = aura_env.energy_base_cost( spellID ),
-                                    mana_cost = aura_env.mana_base_cost( spellID ),
+                                    base_cost = action.base_cost or 0,
                                     execute_time = execute_time,
                                     background = action.background,
                                     t_amp = temporary_amplifiers,
@@ -1827,13 +1804,18 @@ function(event, ...)
             -- -----------------------------------------------------------
             local t = min( 5, aura_env.fight_remains )
             local a = Player.action_modifier
-            local c = ( spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"]  and Player.chi ) 
-            or ( spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"]  and Player.mana / Player.eps ) 
-            or Player.energy / Player.eps
+            local c = 0
             local o = 0
             local s = 0
             local n = #actionlist
             local ow = {}
+            
+            if Player.primary_resource then
+                c = Player.primary_resource.current
+                if Player.primary_resource.regen > 0 then
+                    c = c / Player.primary_resource.regen
+                end
+            end
             
             if n > 0 then
                 debugprofilestart()
@@ -1937,14 +1919,16 @@ function(event, ...)
                     end
                     
                     -- Adjust by cost 
-                    sort( list, function( l, r )
-                            return l.d_cost > r.d_cost
-                    end )
+                    if Player.primary_resource then
+                        sort( list, function( l, r )
+                                return l.d_cost > r.d_cost
+                        end )
+                        
+                        local _, start = next( list )
+                        Player.action_sequence = next( sequence_t ) ~= nil and sequence_t or { start.name }
+                        scale_mode = 0
+                    end
                     
-                    local _, start = next( list )
-                    Player.action_sequence = next( sequence_t ) ~= nil and sequence_t or { start.name }
-                    scale_mode = 0
-           
                     return list
                 end
                 
@@ -1956,9 +1940,7 @@ function(event, ...)
                 for k, v in pairs( actionlist ) do
                     if not v.raw or v.raw == 0 then
                         jeremy.rank[ v.name ] = 0
-                    elseif ( spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"] and v.chi_cost > Player.chi )
-                    or ( spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"]  and v.mana_cost > Player.mana )
-                    or ( spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  and v.energy_cost > Player.energy ) then
+                    elseif v.base_cost and Player.primary_resource and v.base_cost > Player.primary_resource.current then
                         jeremy.rank[ v.name ] = 0
                     else
                         local action_name = gsub( v.combo_base and v.combo_base or v.name, "_cancel", "" )
@@ -2173,35 +2155,6 @@ function(event, ...)
         }
         
         aura_env.CURRENT_MARKERS = {}
-    end
-    
-    if event == "UNIT_POWER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
-        
-        Player.eps        = GetPowerRegen()
-        Player.mana       = UnitPower( "player" , 0 )
-        Player.energy     = UnitPower( "player" , 3 )
-        Player.energy_max = UnitPowerMax( "player", 3 )
-        Player.chi        = UnitPower( "player" , 12 )
-        Player.chi_max    = UnitPowerMax( "player", 12 )
-        
-        
-        local gcd_start = GetSpellCooldown( 61304 )
-        
-        if gcd_start > 0 then
-            Player.gcd_duration = gcdDuration()
-            Player.gcd_remains = Player.gcd_duration - ( frameTime - gcd_start )    
-        else
-            Player.gcd_duration = 0
-            Player.gcd_remains = 0
-        end
-        
-        if Player.eps > 0 then
-            Player.mana       = Player.mana + ( Player.eps * Player.gcd_remains )
-            Player.energy     = Player.energy + ( Player.eps * Player.gcd_remains )
-            Player.energy_ttm = ( Player.energy_max - Player.energy ) / Player.eps     
-        end
-        
-        return true
     end
     
     -- Everything below returns false
