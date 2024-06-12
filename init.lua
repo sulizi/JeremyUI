@@ -119,7 +119,7 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 2.3
+local DBC_Version = 2.4
 local DBC_Critical = 2.2
 local LibDBCache = LibStub( "LibDBCache-1.0", true )
 
