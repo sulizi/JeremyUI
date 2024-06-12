@@ -963,8 +963,9 @@ function(event, ...)
                             secondary_cost = secondary_cost or 0
                         end
                         
-                        action.base_cost = cost
-                        action.base_execute_time = execute_time
+                        action.base_cost            = cost
+                        action.base_secondary_cost  = secondary_cost
+                        action.base_execute_time    = execute_time
                         
                         if not ready then
                             action_set( {
@@ -1150,7 +1151,7 @@ function(event, ...)
                             -- Ability triggers ( GotD, Resonant Fists, etc., also used for combos )
                             local applyTriggerSpells = function( )
                                 local damage_out, healing_out, group_heal_out, mitigate_out = 0, 0, 0, 0
-                                local trigger_chi_gain = 0
+                                local trigger_gain, trigger_cost, trigger_secondary_cost = 0
                                 local trigger_time, trigger_delay = 0, 0
                                 local driver = action
                                 local driverName = combo_base or name
@@ -1290,10 +1291,8 @@ function(event, ...)
                                     end
                                     
                                     -- Trigger has cost
-                                    local trigger_cost = spell.cost_total or spell.base_cost or 0
-                                    if trigger_cost > 0 then
-                                        cost = cost + trigger_cost
-                                    end                                
+                                    trigger_cost            = trigger_cost + ( spell.cost_total or spell.base_cost or 0 )
+                                    trigger_secondary_cost  = trigger_secondary_cost + ( spell.base_secondary_cost or 0 )
                                     
                                     -- set init trigger CD
                                     local trigger_cd_remains = aura_env.getCooldown( spell.spellID )
@@ -1377,7 +1376,7 @@ function(event, ...)
                                                     tick_healing = tick_healing + ( total_cdr / cd * max( 0, ( healing - tick_healing * tick_count ) ) )
                                                     tick_group_heal = tick_group_heal + ( total_cdr / cd * max( 0 , ( group_healing - tick_group_heal * tick_count ) ) )
                                                     tick_mitigate = tick_mitigate + ( total_cdr / cd * max( 0 , ( mitigation - tick_mitigate * tick_count ) ) )
-                                                    trigger_chi_gain = trigger_chi_gain - ( ( chi or 0 ) * total_cdr / cd )
+                                                    trigger_gain = trigger_gain - ( ( chi or 0 ) * total_cdr / cd )
                                                 end                                                
                                             end
                                         end
@@ -1396,12 +1395,13 @@ function(event, ...)
                                     healing_out    = healing_out + ( tick_healing * tick_count ) 
                                     group_heal_out = group_heal_out + ( tick_group_heal * tick_count ) 
                                     mitigate_out   = mitigate_out + ( tick_mitigate * tick_count )
-                                    trigger_chi_gain = trigger_chi_gain + ( tick_count * ( spell.chi_gain and spell.chi_gain( trigger.state ) or 0 ) )
+                                    trigger_gain = trigger_gain + ( tick_count * ( spell.chi_gain and spell.chi_gain( trigger.state ) or 0 ) )
                                     
                                 end
                                 
                                 return {
-                                    cost = 0 - trigger_chi_gain,
+                                    cost = trigger_cost - trigger_gain,
+                                    secondary_cost = trigger_secondary_cost,
                                     damage = damage_out,
                                     self_healing = healing_out,
                                     mitigation = mitigate_out,
@@ -1434,6 +1434,7 @@ function(event, ...)
                                     delay                   = action_delay,
                                     trigger_results         = triggerResults,
                                     cost                    = cost,
+                                    secondary_cost          = secondary_cost,
                                 }
                             end
                             
@@ -1567,6 +1568,7 @@ function(event, ...)
 
                             adjusted                = result.adjusted or 0
                             cost                    = result.cost
+                            secondary_cost          = result.secondary_cost
                             ticks                   = result.ticks
                             action_targets          = result.target_count
                             damage                  = result.damage
@@ -1734,15 +1736,16 @@ function(event, ...)
                                         end
                                         
                                         if secondary_gain > 0 and Player.secondary_conversion_rate then
-                                            local capped_resource = secondary_gain - Player.secondary_resource.deficit
+                                            local capped_resource = secondary_gain - secondary_cost - Player.secondary_resource.deficit
                                             
                                             if capped_resource > 0 then 
-                                                cost = cost + capped_resource * Player.secondary_conversion_rate
+                                                secondary_cost = secondary_cost + capped_resource
                                             end
                                         end
                                         
                                         secondary_cost = secondary_cost - secondary_gain
                                         secondary_cost = max( Player.secondary_resource.deficit * -1, secondary_cost )
+                                        cost = cost + secondary_cost * Player.secondary_conversion_rate
                                     end
                                     
                                     if Player.primary_resource.regen > 0 then
