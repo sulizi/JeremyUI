@@ -745,7 +745,7 @@ aura_env.CPlayer = {
             local gcd = action.gcd()
 
             if action.channeled and action.duration and not action.canceled then
-                return max( duration(), gcd )
+                return max( action.duration(), gcd )
             end
             
             return max( gcd, action.cast_time() )

@@ -1735,7 +1735,7 @@ function(event, ...)
                                             secondary_gain = secondary_gain + ( Player.secondary_resource.regen * ( execute_time + action_delay ) )
                                         end
                                         
-                                        if secondary_gain > 0 and Player.secondary_conversion_rate then
+                                        if secondary_gain > 0 then
                                             local capped_resource = secondary_gain - secondary_cost - Player.secondary_resource.deficit
                                             
                                             if capped_resource > 0 then 
@@ -1745,7 +1745,10 @@ function(event, ...)
                                         
                                         secondary_cost = secondary_cost - secondary_gain
                                         secondary_cost = max( Player.secondary_resource.deficit * -1, secondary_cost )
-                                        cost = cost + secondary_cost * Player.secondary_conversion_rate
+                                        
+                                        if Player.secondary_conversion_rate then
+                                            cost = cost + secondary_cost * Player.secondary_conversion_rate
+                                        end
                                     end
                                     
                                     if Player.primary_resource.regen > 0 then
