@@ -1151,7 +1151,7 @@ function(event, ...)
                             -- Ability triggers ( GotD, Resonant Fists, etc., also used for combos )
                             local applyTriggerSpells = function( )
                                 local damage_out, healing_out, group_heal_out, mitigate_out = 0, 0, 0, 0
-                                local trigger_gain, trigger_cost, trigger_secondary_cost = 0
+                                local trigger_gain, trigger_cost, trigger_secondary_cost = 0, 0, 0
                                 local trigger_time, trigger_delay = 0, 0
                                 local driver = action
                                 local driverName = combo_base or name
