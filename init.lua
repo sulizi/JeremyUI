@@ -588,13 +588,24 @@ aura_env.CPlayer = {
         action.channeled        = initialize_value( action.channeled, data.channeled )
         action.delay_aa         = initialize_value( action.delay_aa, data.delay_auto_attack )
         action.starts_combat    = initialize_value( action.starts_combat, data.starts_combat )
+ 
+        action.tick_zero        = initialize_value( action.tick_zero, data.tick_zero )
+        action.dot_hasted       = initialize_value( action.dot_hasted, data.dot_hasted )        
+        action.base_duration    = initialize_value( action.duration, data.duration )
+        action.duration_hasted  = initialize_value( action.duration_hasted, data.duration_hasted )
+        action.duration         = function()
+            local duration = action.base_duration
+            if action.duration_hasted then
+                duration = duration / Player.haste
+            end            
+            if action.duration_multiplier then
+                duration = duration * action.duration_multiplier()
+            end
+            return duration
+        end
         
         action.icd              = initialize_value( action.icd, data.icd )
-        action.duration         = initialize_value( action.duration, data.duration )
-        action.duration_hasted  = initialize_value( action.duration_hasted, data.duration_hasted )
         action.trigger_rate     = initialize_value( action.trigger_rate, data.trigger_rate )
-        action.tick_zero        = initialize_value( action.tick_zero, data.tick_zero )
-        action.dot_hasted       = initialize_value( action.dot_hasted, data.dot_hasted )
         
         -- Use triggered spell data
         action.ignore_armor     = initialize_value( action.ignore_armor, _tick_data.ignores_armor )
@@ -686,8 +697,8 @@ aura_env.CPlayer = {
     
         -- Ticks
         
-        if not action.ticks and action.duration and action.base_tick_rate and action.base_tick_rate > 0 then
-            action.ticks = action.duration / action.base_tick_rate
+        if not action.ticks and action.base_duration and action.base_tick_rate and action.base_tick_rate > 0 then
+            action.ticks = action.base_duration / action.base_tick_rate
         end
         
         local ticks = initialize_value( action.ticks, 1 )
@@ -703,11 +714,7 @@ aura_env.CPlayer = {
                         local duration = action.duration
                         
                         if duration then
-                            if action.duration_hasted then
-                                duration = duration / Player.haste
-                            end                
-                            
-                            local tick_rate = duration / ticks_remaining
+                            local tick_rate = duration() / ticks_remaining
                             ticks_gcd = max( 0, ( gcd / tick_rate ) )
                         end
                     end
@@ -738,11 +745,7 @@ aura_env.CPlayer = {
             local gcd = action.gcd()
 
             if action.channeled and action.duration and not action.canceled then
-                local duration = action.duration
-                if action.duration_hasted then
-                    duration = duration / Player.haste
-                end
-                return max( duration, gcd )
+                return max( duration(), gcd )
             end
             
             return max( gcd, action.cast_time() )
@@ -3922,6 +3925,22 @@ local ww_spells = {
             am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
             
             return am
+        end,
+        
+        duration_multiplier = function()
+            local dm = 1
+            
+            dm = dm + Player.getTalent( "power_of_the_thunder_king" ).effectN( 2 ).pct
+            
+            return dm
+        end,
+        
+        target_count = function()
+            return 1 + Player.getTalent( "power_of_the_thunder_king" ).effectN( 1 ).base_value
+        end,
+        
+        target_multiplier = function( target_count )
+            return target_count
         end,
         
         tick_trigger = {
