@@ -2922,6 +2922,76 @@ local ww_spells = {
         },
     } ),
 
+    ["glory_of_the_dawn"] = Player.createAction( 392959, {
+        background = true,
+
+        trigger_etl = true,
+        copied_by_sef = true, 
+        ww_mastery = true,
+
+        critical_rate = function()
+            local cr = Player.crit_bonus
+            
+            -- Buff isn't gained until channel ends but still affects RSK if you break the channel with it
+            if ( Player.channel.spellID and Player.channel.spellID == 113656 and Player.getTalent( "xuens_battlegear" ).ok )
+            -- 
+            or Player.buffs.pressure_point.up() then
+                cr = cr + Player.buffs.pressure_point.effectN( 1 ).roll
+            end
+            
+            return min(1, cr)
+        end,
+        
+        critical_modifier = function()
+            local cm = 1
+            
+            cm = cm * Player.getTalent( "rising_star" ).effectN( 2 ).mod
+            
+            return cm
+        end,   
+        
+        action_multiplier = function( self, state )
+            local am = 1
+            
+            am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
+            
+            am = am * Player.getTalent( "rising_star" ).effectN( 1 ).mod
+            
+            return am
+        end,
+        
+        chi_gain = function()
+            if Player.is_beta() then
+                return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).base_value     
+            end
+            
+            return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).base_value 
+        end,
+        
+        trigger_rate = function() 
+            if Player.is_beta() then
+                return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).roll * Player.haste
+            end
+            
+            return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).roll 
+        end,
+        
+        ready = function()
+            return Player.getTalent( "glory_of_the_dawn" ).ok
+        end,
+
+        reduces_cd = {
+            ["fists_of_fury"] = function() 
+                return Player.getTalent( "xuens_battlegear" ).effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
+            end,
+        },
+    
+        tick_trigger = {
+            ["ancient_lava"] = true,            
+        },
+    
+    } ),
+
     ["rising_sun_kick"] = Player.createAction( 107428, {
         callbacks = {
             -- Chi generators
@@ -3946,38 +4016,6 @@ local ww_spells = {
         tick_trigger = {
             ["resonant_fists"] = true,
         },
-    } ),
-
-    ["glory_of_the_dawn"] = Player.createAction( 392959, {
-        background = true,
-
-        trigger_etl = true,
-        copied_by_sef = true, 
-        ww_mastery = true,
-         
-        chi_gain = function()
-            if Player.is_beta() then
-                return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).base_value     
-            end
-            
-            return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).base_value 
-        end,
-        
-        trigger_rate = function() 
-            if Player.is_beta() then
-                return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).roll * Player.haste
-            end
-            
-            return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).roll 
-        end,
-        
-        ready = function()
-            return Player.getTalent( "glory_of_the_dawn" ).ok
-        end,
-        
-        tick_trigger = {
-            ["ancient_lava"] = true,            
-        }, 
     } ),
 
     -- TODO: Remove this in TWW
