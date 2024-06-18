@@ -12,7 +12,7 @@ local C_PaperDollInfo = C_PaperDollInfo
 local GetStaggerPercentage = C_PaperDollInfo.GetStaggerPercentage
 local GetCombatRatingBonus = GetCombatRatingBonus
 local GetCritChance = GetCritChance
-local GetDetailedItemLevelInfo = GetDetailedItemLevelInfo
+local GetDetailedItemLevelInfo = GetDetailedItemLevelInfo or C_Item.GetDetailedItemLevelInfo;
 local GetDodgeChance = GetDodgeChance
 local GetInventoryItemLink = GetInventoryItemLink
 local GetItemStats = GetItemStats or C_Item.GetItemStats
@@ -21,12 +21,12 @@ local getmetatable = getmetatable
 local GetParryChance = GetParryChance
 local GetSpecialization = GetSpecialization
 local GetSpellBaseCooldown = GetSpellBaseCooldown
-local GetSpellCharges = GetSpellCharges
+local GetSpellCharges = GetSpellCharges or WeakAuras.GetSpellCharges
 local GetSpellCooldown = GetSpellCooldown or function( spellID )
     local info = C_Spell.GetSpellCooldown( spellID )
     return info.startTime, info.duration, info.isEnabled
 end
-local GetSpellCount = GetSpellCount
+local GetSpellCount = GetSpellCount or C_Spell.GetSpellCastCount
 local GetSpellDescription = GetSpellDescription
 local GetSpellInfo = GetSpellInfo or function( spellID )
     if not spellID then
@@ -50,8 +50,8 @@ local IsEquippedItemType = IsEquippedItemType or C_Item.IsEquippedItemType
 local IsInInstance = IsInInstance
 local IsInRaid = IsInRaid
 local IsPlayerSpell = IsPlayerSpell
-local IsSpellInRange = IsSpellInRange
-local IsUsableSpell = IsUsableSpell
+local IsSpellInRange = IsSpellInRange or C_Spell.IsSpellInRange
+local IsUsableSpell = IsUsableSpell or C_Spell.IsSpellUsable
 local LibStub = LibStub
 local math = math
 local pow = math.pow
@@ -2039,13 +2039,7 @@ end
 
 aura_env.unitRange = function( unitID )
     
-    local min_range, max_range = nil, nil
-    
-    if not Player.is_beta() then
-        -- LibRangeCheck is currently bugged in beta, waiting for it to be fixed
-        min_range, max_range = GetRange( unitID )
-    end
-    
+    local min_range, max_range = GetRange( unitID )
     local range = max_range or min_range or nil
     
     if range then
@@ -2310,7 +2304,7 @@ end
 
 local CurrentCraneStacks = function( state )
     
-    if not Player.getTalent( "mark_of_the_crane" ).ok then
+    if not Player.is_beta() and not Player.getTalent( "mark_of_the_crane" ).ok then
         return 0
     end
     
@@ -4019,7 +4013,7 @@ local ww_spells = {
     } ),
 
     -- TODO: Remove this in TWW
-    ["resonant_fists"] = Player.createAction( Player.is_beta() and nil or 389578, {
+    ["resonant_fists"] = Player.createAction( not Player.is_beta() and 389578 or nil, {
         background = true,
         
         trigger_etl = true,
@@ -4041,7 +4035,7 @@ local ww_spells = {
         end,
     } ),
 
-    ["open_palm_strikes"] = Player.createAction( 392970, {
+    ["open_palm_strikes"] = Player.createAction( not Player.is_beta() and 392970 or nil, {
         background = true,
         
         chi_gain = function() 
@@ -4899,7 +4893,7 @@ local brm_spells = {
     } ),
 
     -- TODO: Remove this in TWW
-    ["resonant_fists"] = Player.createAction( Player.is_beta() and nil or 389578, {
+    ["resonant_fists"] = Player.createAction( not Player.is_beta() and 389578 or nil, {
         background = true,
         
         action_multiplier = function( self, state )

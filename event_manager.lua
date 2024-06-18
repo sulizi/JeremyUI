@@ -53,12 +53,12 @@ function(event, ...)
     local frameTime = GetTime()
     local GetPowerRegen = GetPowerRegen
     local GetRaidTargetIndex = GetRaidTargetIndex
-    local GetSpellCharges = GetSpellCharges
+    local GetSpellCharges = GetSpellCharges or WeakAuras.GetSpellCharges
     local GetSpellCooldown = GetSpellCooldown or function( spellID )
         local info = C_Spell.GetSpellCooldown( spellID )
         return info.startTime, info.duration, info.isEnabled
     end
-    local GetSpellPowerCost = GetSpellPowerCost
+    local GetSpellPowerCost = GetSpellPowerCost or C_Spell.GetSpellPowerCost
     local GetUnitSpeed = GetUnitSpeed
     local global_modifier = aura_env.global_modifier
     local InCombatLockdown = InCombatLockdown
@@ -2022,7 +2022,8 @@ function(event, ...)
             -- -------------------------------------------------------------
             
             -- Passed Configuration Options
-            jeremy.options = {}        
+            jeremy.options = {}
+            jeremy.is_beta = Player.is_beta()
             jeremy.options.limit = aura_env.config.limit or 5
             jeremy.options.scaling = aura_env.config.scaling_option or 1
             jeremy.options.inverse = ( aura_env.config.inverse == 2 ) or false
