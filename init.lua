@@ -3692,7 +3692,8 @@ local ww_spells = {
         end,
         
         trigger = {
-            ["jadefire_brand"] = true,    
+            ["jadefire_brand"] = true,
+            ["jadefire_stomp_ww"] = true,
         },
     
         tick_trigger = {
@@ -3739,7 +3740,8 @@ local ww_spells = {
         end,
         
         trigger = {
-            ["jadefire_brand"] = true,    
+            ["jadefire_brand"] = true,
+            ["jadefire_stomp_ww"] = true,
         },
     
         tick_trigger = {
@@ -4431,7 +4433,6 @@ local brm_spells = {
 
     ["pta_rising_sun_kick"] = Player.createAction( 185099, {
         
-        ap_type = "BOTH",
         background = true,
 
         action_multiplier = function( self, state )
@@ -4471,7 +4472,6 @@ local brm_spells = {
 
     ["rising_sun_kick"] = Player.createAction( 107428, {
 
-        ap_type = "BOTH",
         triggerSpell = 185099, -- This spell is weird and triggers a secondary damage event
         hasted_cooldown = true,
         
@@ -4554,8 +4554,6 @@ local brm_spells = {
         callbacks = {
             "breath_of_fire", -- Charred Passions        
         },
-    
-        ap_type = "BOTH",
         
         replaces = 100784, -- Missing in Spell Data
 
@@ -4641,7 +4639,6 @@ local brm_spells = {
             "breath_of_fire", -- Charred Passions        
         },
         
-        ap_type = "BOTH",
         triggerSpell = 107270,
         ticks = 4,
         delay_aa = true, -- Missing from spell data
