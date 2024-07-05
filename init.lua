@@ -793,8 +793,8 @@ aura_env.CPlayer = {
         
         if auraData then
             auraData.name = ( cached and cached.data and cached.data.name ) or gsub( lower( auraData.name ), "%s+", "_" )
-            auraData.stacks = auraData.applications or 0            
-            auraData.remaining = ( auraData.expirationTime and auraData.expirationTime - time ) or 0
+            auraData.stacks = auraData.applications or 0          
+            auraData.remaining = math.max( 0, ( auraData.expirationTime and auraData.expirationTime - time ) or 0 ) 
             auraData.duration = auraData.duration or 0
         end
         
@@ -815,6 +815,92 @@ aura_env.CPlayer = {
         return t
     end,
     
+    getBuff = function( name, state )
+        local self = aura_env.CPlayer
+        if state then
+            local buffs = state.buffs
+            
+            if buffs[ name ] then
+                return buffs[ name ]
+            end
+            
+            local base = self.buffs[ name ]
+            
+            if not base then
+                print( "JeremyUI: state attempted to index buff " ..name .. " without initializing" )
+                return nil
+            end
+            
+            -- initialize state table
+            local buff = {}
+            
+            buff.spellID = base.spellID
+            buff.name = name
+            buff.auraData = base.auraData
+            buff.effectN = base.effectN
+            buff._max_stacks = base._max_stacks
+            buff.max_stacks = buff.max_stacks
+            buff.refresh_behavior = base.refresh_behavior
+            buff.duration = base.duration or 0
+            buff._remains = base.remains()
+            buff._stacks = base.stacks()
+            
+            -- initialize state functions
+            
+            buff.remains = function()
+                return max( 0, buff._remains - ( state.time or 0 ) )
+            end
+            
+            buff.stacks = function()
+                local stacks = buff._stacks
+                if buff.remains() > 0 then
+                    stacks = math.max( 1, stacks )
+                end
+                
+                return stacks
+            end
+            
+            buff.up = function()
+                return buff.stacks() > 0
+            end
+            
+            buff.increment = function( count )
+                count = count or 1
+                if buff.refresh_behavior ~= "DISABLED" then
+                    if refresh_behavior == "PANDEMIC" then
+                        buff._remains = buff.duration + min( 0.3 * buff.duration, buff.remains() )
+                    elseif refresh_behavior == "MAX" then
+                        buff._remains = max( buff.duration, buff.remains() )
+                    else 
+                        buff._remains = buff.duration
+                    end
+                end
+                buff._stacks = math.min( buff.max_stacks(), buff._stacks + count )
+            end
+            
+            buff.decrement = function( count )
+                count = count or 1
+                buff._stacks = math.min( 0, buff._stacks - count )
+                if buff._stacks == 0 then
+                    buff._remains = 0
+                end
+            end
+            
+            buff.expire = function()
+                buff._remains = 0
+                buff._stacks = 0
+            end
+            
+            -- ------
+            
+            buffs[ name ] = buff
+            
+            return buff
+        else
+            return self.buffs[ name ]
+        end
+    end,
+    
     makeBuff = function( spellID, name, init )
         local self = aura_env.CPlayer
         
@@ -832,6 +918,7 @@ aura_env.CPlayer = {
         if name then
             buff.spellID = spellID
             buff.name = name
+            buff.refresh_behavior = _init.refresh_behavior or ( buff.pandemic and "PANDEMIC" or "DURATION" )
             buff.auraData = function()
                 local data = self.findAura( spellID )
                 return data
@@ -845,7 +932,11 @@ aura_env.CPlayer = {
             end
             buff.stacks = function()
                 local data = self.findAura( spellID )
-                return data and data.stacks or 0 
+                local stacks = data and data.stacks or 0 
+                if buff.remains() > 0 then
+                    stacks = math.max( 1, stacks )
+                end
+                return stacks
             end
             
             buff._max_stacks = _spell.max_stacks
