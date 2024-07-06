@@ -1216,7 +1216,7 @@ function(event, ...)
                                                 buffs = {},
                                             }
                                             
-                                            _this.rate = spells[spell].trigger_rate or 1
+                                            _this.rate = spells[ spell ].trigger_rate or 1
                                             
                                             if type( _this.rate ) == "function" then
                                                 _this.rate = _this.rate( _this.state )
@@ -1274,20 +1274,30 @@ function(event, ...)
                                 
                                 local getState = function( trigger )
                                     local h = 5381
+                                    local l = nil
                                     local _, stack = ipairs( trigger.state.callback_stack )
                                     for cb_idx = 1, #stack do
                                         local cb = stack[ cb_idx ] 
+                                        l = ( #stack > 1 and h ) or nil
                                         for c in cb.name:gmatch( "." ) do
                                             h = ( bit.lshift( h, 5 ) + h ) + string.byte( c )
                                         end
                                     end
-                                    state_table[ h ] = state_table[ h ] or trigger.state
+                                    if not state_table[ h ] then
+                                        state_table[ h ] = trigger.state
+                                        if ( l and state_table[ l ] ) then
+                                            state_table[ h ].time    = state_table[ l ].time
+                                            state_table[ h ].buffs   = state_table[ l ].buffs
+                                        end
+                                    end
                                     return state_table[ h ]
                                 end    
                                 
                                 for _, trigger in pairs( trigger_spells ) do
                                     
                                     -- TODO:  - Rename shadowed variables
+                                    
+                                    -- Initialization
                                     
                                     local state = getState( trigger )
                                     
@@ -1301,16 +1311,17 @@ function(event, ...)
                                     local tick_count = state.count
                                     local duration = result.execute_time 
                                     
-                                    local tick_damage = ( spell_result.damage or 0 ) / state.ticks
-                                    local tick_healing = ( spell_result.healing or 0 )  / state.ticks
-                                    local tick_group_heal = ( spell_result.group_healing or 0 ) / state.ticks
+                                    local tick_damage = 0
+                                    local tick_healing = 0
+                                    local tick_group_heal = 0
+                                    
+                                    local trigger_mitigate = 0
+                                    local trigger_damage = 0
+                                    local trigger_healing = 0
+                                    local trigger_group_heal = 0
                                 
-                                    -- Trigger is non-background action with execute time
-                                    local trigger_et = spell.time_total or spell.base_execute_time or 0
-                                    if trigger_et > 0 and not spell.background then
-                                        trigger_time = trigger_time + trigger_et
-                                    end
-
+                                    -- REVISIT
+                                    
                                     -- Driver is a channeled ability and trigger is not background action
                                     if driver.channeled and not spell.background then
                                         local latency = Player.channel.latency or 0
@@ -1325,18 +1336,27 @@ function(event, ...)
                                         end                            
                                         trigger_delay = max( action_delay, latency ) - action_delay
                                     end
+                                      
+                                    --
                                     
-                                    state.time = state.time + trigger_time
+                                    local _, stack = ipairs( state.callback_stack )
+                                    if #stack > 1 then
+                                        local _prev     = #stack - 1
+                                        local _prev_cb  = stack[ _prev ]
+                                        if _prev_cb and _prev_cb.spell then
+                                            local _prev_spell = _prev_cb.spell
+                                            if ( not spell.background or not _prev_spell.background ) and _prev_spell.onExecute then
+                                                _prev_spell.onExecute( _prev_spell, state )
+                                            end
+                                        end
+                                    end
                                     
-                                    -- Mitigation, use trigger state
-                                    local tick_mitigate = actionMitigation( spell, state )
-                                                                        
                                     -- Trigger has cost
                                     trigger_cost            = trigger_cost + ( spell.cost_total or spell.base_cost or 0 )
                                     trigger_secondary_cost  = trigger_secondary_cost + ( spell.base_secondary_cost or 0 )
                                     
                                     -- set init trigger CD
-                                    local trigger_cd_remains = aura_env.getCooldown( spell.spellID )
+                                    local trigger_cd_remains = aura_env.getCooldown( spell.spellID ) - state.time
                                     
                                     if not spell.background then
                                         -- Trigger is a non-background action with a cooldown
@@ -1350,32 +1370,61 @@ function(event, ...)
                                             end
                                             trigger_cd_remains = trigger_cd_remains - max( 0, ( driver_cdr or 0 ) )
                                         end
-                                        
-                                        if not IsSpellKnown( spell.replaces or spell.spellID ) or trigger_cd_remains > 0 then
-                                            tick_damage = 0
-                                            tick_healing = 0
-                                            tick_group_heal = 0       
-                                        end
                                     end
                                     
-                                    if tick_damage > 0 then
-                                        -- Use future trigger state
-                                        local spell_am = Player.action_multiplier( spell )
-                                        local am_delta = Player.action_multiplier( spell, state )
-                                        if spell_am > 0 then
-                                            am_delta = am_delta / spell_am
-                                        end
+                                    if not IsSpellKnown( spell.replaces or spell.spellID ) or trigger_cd_remains > 0 then
+                                        tick_damage = 0
+                                        tick_healing = 0
+                                        tick_group_heal = 0       
+                                    else
+                                        tick_damage     = ( spell_result.damage or 0 ) / state.ticks
+                                        tick_healing    = ( spell_result.healing or 0 ) / state.ticks
+                                        tick_group_heal = ( spell_result.group_healing or 0 ) / state.ticks                                        
                                     
-                                        tick_damage = tick_damage * am_delta
+                                        trigger_mitigate = actionMitigation( spell, state )
+                                        
+                                        -- Tick Function
+                                        local ticks_remaining   = tick_count
+                                        local tick_time         = ( spell.time_total or spell.base_execute_time or 0 ) / tick_count
+                                        
+                                        while ticks_remaining > 0 do
+                                            local tick_partition = ticks_remaining < 2 and ticks_remaining or 1
+                                            
+                                            -- Trigger is non-background action with execute time
+                                            if tick_time > 0 and not spell.background then
+                                                state.time = state.time + ( tick_time * tick_partition )
+                                            end
+
+                                            if tick_damage > 0 then
+                                                local spell_am = Player.action_multiplier( spell )
+                                                local am_delta = Player.action_multiplier( spell, state )
+                                                if spell_am > 0 then
+                                                    am_delta = am_delta / spell_am
+                                                end
+                                            
+                                                tick_damage = tick_damage * am_delta
+                                            end
+                                            
+                                            trigger_damage      = trigger_damage + ( tick_damage * tick_partition )
+                                            trigger_healing     = trigger_healing + ( tick_healing * tick_partition )
+                                            trigger_group_heal  = trigger_group_heal + ( tick_group_heal * tick_partition )
+                                            
+                                            if spell.onTick then
+                                                spell.onTick( spell, state )
+                                            end
+                                            
+                                            ticks_remaining = ticks_remaining - tick_partition
+                                        end
+
                                     end
                                     
                                     -- Background spell multipliers
                                     if spell.background then
                                         local spell_target_multiplier = targetMultiplier( spell )
                                         local spell_temporary_amplifiers = temporaryAmplifiers( spell )
-                                        tick_damage = tick_damage * spell_target_multiplier * spell_temporary_amplifiers
-                                        tick_healing = tick_healing * spell_temporary_amplifiers
-                                        tick_group_heal = tick_group_heal * spell_target_multiplier * spell_temporary_amplifiers
+                                        trigger_damage = trigger_damage * spell_target_multiplier * spell_temporary_amplifiers
+                                        trigger_healing = trigger_healing * spell_temporary_amplifiers
+                                        trigger_group_heal = trigger_group_heal * spell_target_multiplier * spell_temporary_amplifiers
                                     end                                    
                                     
                                     -- Trigger reduces cooldown of non-background driver spell
@@ -1397,11 +1446,11 @@ function(event, ...)
                                                 local spell_raw = spellRaw( driverName )
                                                 local trigger_raw = spellRaw( trigger.spell )
                                                 if spell_raw > trigger_raw then
-                                                    tick_damage = tick_damage + ( total_cdr / cd * max( 0, ( damage - tick_damage * tick_count ) ) )
-                                                    tick_healing = tick_healing + ( total_cdr / cd * max( 0, ( healing - tick_healing * tick_count ) ) )
-                                                    tick_group_heal = tick_group_heal + ( total_cdr / cd * max( 0 , ( group_healing - tick_group_heal * tick_count ) ) )
-                                                    tick_mitigate = tick_mitigate + ( total_cdr / cd * max( 0 , ( mitigation - tick_mitigate * tick_count ) ) )
-                                                    trigger_gain = trigger_gain - ( ( chi or 0 ) * total_cdr / cd )
+                                                    trigger_damage      = trigger_damage + ( total_cdr / cd * max( 0, damage - trigger_damage ) )
+                                                    trigger_healing     = trigger_healing + ( total_cdr / cd * max( 0, healing - trigger_healing ) )
+                                                    trigger_group_heal  = trigger_group_heal + ( total_cdr / cd * max( 0, group_healing - trigger_group_heal ) )
+                                                    trigger_mitigate    = trigger_mitigate + ( total_cdr / cd * max( 0, mitigation - trigger_mitigate ) )
+                                                    trigger_gain        = trigger_gain - ( ( chi or 0 ) * total_cdr / cd )
                                                 end                                                
                                             end
                                         end
@@ -1416,11 +1465,12 @@ function(event, ...)
                                         start_cooldown[ #start_cooldown + 1] = trigger.spell
                                     end
                                     
-                                    damage_out     = damage_out + ( tick_damage * tick_count )
-                                    healing_out    = healing_out + ( tick_healing * tick_count ) 
-                                    group_heal_out = group_heal_out + ( tick_group_heal * tick_count ) 
-                                    mitigate_out   = mitigate_out + ( tick_mitigate * tick_count )
-                                    trigger_gain = trigger_gain + ( tick_count * ( spell.chi_gain and spell.chi_gain( state ) or 0 ) )
+                                    damage_out     = damage_out + trigger_damage
+                                    healing_out    = healing_out + trigger_healing 
+                                    group_heal_out = group_heal_out + trigger_group_heal
+                                    mitigate_out   = mitigate_out + trigger_mitigate
+                                    trigger_gain   = trigger_gain + ( tick_count * ( spell.chi_gain and spell.chi_gain( state ) or 0 ) )
+                                    trigger_time   = state.time
                                     
                                 end
                                 

@@ -839,7 +839,7 @@ aura_env.CPlayer = {
             buff.auraData = base.auraData
             buff.effectN = base.effectN
             buff._max_stacks = base._max_stacks
-            buff.max_stacks = buff.max_stacks
+            buff.max_stacks = base.max_stacks
             buff.refresh_behavior = base.refresh_behavior
             buff.duration = base.duration or 0
             buff._remains = base.remains()
@@ -918,7 +918,10 @@ aura_env.CPlayer = {
         if name then
             buff.spellID = spellID
             buff.name = name
+            
+            buff.duration = _spell.duration or 0
             buff.refresh_behavior = _init.refresh_behavior or ( buff.pandemic and "PANDEMIC" or "DURATION" )
+            
             buff.auraData = function()
                 local data = self.findAura( spellID )
                 return data
@@ -2434,50 +2437,6 @@ local CurrentCraneStacks = function( state )
         end
         
         return motc_stacks
-    end
-end
-
-local IsBlackoutCombo = function( state )
-    if not state then
-        return Player.buffs.blackout_combo.up()
-    else
-        local blackout_combo = Player.buffs.blackout_combo.up()
-        
-        if Player.getTalent( "blackout_combo" ).ok then
-            
-            local _next = nil
-            local consume_boc = { 
-                ["tiger_palm"] = true, 
-                ["pta_keg_smash"] = true, 
-                ["pta_rising_sun_kick"] = true, 
-                ["breath_of_fire"] = function() return ( _next.name ~= "breath_of_fire_periodic" ) end,
-                ["breath_of_fire_periodic"] = true,
-                ["keg_smash"] = function() return ( _next.name ~= "pta_keg_smash" ) end, 
-                ["celestial_brew"] = true, 
-                ["purifying_brew"] = true, 
-            }
-            
-            local _, stack = ipairs( state.callback_stack )
-
-            for cb_idx = 1, #stack do
-                if cb_idx == #stack then
-                    break
-                end
-                
-                local cb = stack[ cb_idx ] 
-                _next = stack [ cb_idx + 1 ]
-                
-                if cb.name == "blackout_kick" then
-                    blackout_combo = true
-                else
-                    local consume = consume_boc[ cb.name ]
-                    if type( consume ) == "function" and consume() or consume == true then
-                        blackout_combo = false
-                    end
-                end
-            end
-        end        
-        return blackout_combo
     end
 end
 
@@ -4532,8 +4491,8 @@ local brm_spells = {
             am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
             
             -- TP Modifiers
-            if IsBlackoutCombo( state ) then
-                am = am * ( 1 + ( Player.buffs.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
+            if Player.getBuff( "blackout_combo", state ).up() then
+                am = am * ( 1 + ( Player.getBuff( "blackout_combo", state ).effectN( 5 ).pct * press_the_advantage_boc_mod ) )
             end           
             
             am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct * press_the_advantage_fp_mod ) )
@@ -4547,7 +4506,11 @@ local brm_spells = {
         
         brew_cdr = function()
             return Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds 
-        end,  
+        end,
+
+        onExecute = function( self, state )
+            Player.getBuff( "blackout_combo", state ).expire()
+        end,           
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,
@@ -4706,6 +4669,10 @@ local brm_spells = {
             return dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
         end,
         
+        onExecute = function( self, state )
+            Player.getBuff( "blackout_combo", state ).increment()
+        end,
+        
         trigger = {
             ["shuffle"] = true,
         },
@@ -4819,13 +4786,13 @@ local brm_spells = {
         usable_during_sck = true,  
         
         ready = function()
-            return not ( Player.getTalent( "press_the_advantage" ).ok )
+            return ( not Player.getTalent( "press_the_advantage" ).ok )
         end,
         
         action_multiplier = function( self, state )
             local am = 1
             
-            if IsBlackoutCombo( state ) then
+            if Player.getBuff( "blackout_combo", state ).up() then
                 am = am * Player.getTalent( "blackout_combo" ).effectN( 1 ).mod
             end
             
@@ -4843,6 +4810,10 @@ local brm_spells = {
         brew_cdr = function()
             return 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds ) 
         end,
+        
+        onExecute = function( self, state )
+            Player.getBuff( "blackout_combo", state ).expire()
+        end,           
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,
@@ -5044,8 +5015,8 @@ local brm_spells = {
             end]]
             
             -- TP Modifiers
-            if IsBlackoutCombo( state ) then
-                am = am * ( 1 + ( Player.buffs.blackout_combo.effectN( 5 ).pct * press_the_advantage_boc_mod ) )
+            if Player.getBuff( "blackout_combo", state ).up() then
+                am = am * ( 1 + ( Player.getBuff( "blackout_combo", state ).effectN( 5 ).pct * press_the_advantage_boc_mod ) )
             end     
             
             am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct * press_the_advantage_fp_mod ) )
@@ -5106,7 +5077,8 @@ local brm_spells = {
 
     ["keg_smash"] = Player.createAction( 121253, {
         callbacks = {
-            "breath_of_fire", -- Scalding Brew / Sal'Salabim's        
+            "breath_of_fire", -- Scalding Brew / Sal'Salabim's
+            "blackout_kick", -- Blackout Combo
         },
     
         hasted_cooldown = true,
@@ -5151,7 +5123,7 @@ local brm_spells = {
         brew_cdr = function()
             local cdr = 3
             
-            if IsBlackoutCombo( state ) then -- TODO: State passed to brew_cdr
+            if Player.getBuff( "blackout_combo", state ) then -- TODO: State passed to brew_cdr
                 cdr = cdr + Player.getTalent( "blackout_combo" ).effectN( 3 ).base_value
             end
             
@@ -5162,22 +5134,9 @@ local brm_spells = {
             return cdr
         end,
         
-        ready = function()
-            -- With Press the Advantage we don't want to "waste" a buffed RSK if it's worth delaying
-            local last_update = aura_env.jeremy_update
-            if Player.buffs.press_the_advantage.stacks() >= 10 and last_update then
-                local pta_rsk = last_update.raw["pta_rising_sun_kick"] or 0
-                local pta_ks  = last_update.raw["pta_keg_smash"] or 0
-                
-                local rsk_remaining = aura_env.getCooldown( 107428 )
-                local ks_cd = aura_env.actionBaseCooldown( aura_env.spells["keg_smash"] )
-                local ks_cur, ks_max = GetSpellCharges( 121253 )
-                local ks_mod = 1 + ( ( ks_cur < ks_max and 0 ) or rsk_remaining / ks_cd )
-                
-                return pta_rsk < pta_ks * ks_mod
-            end
-            return true
-        end,
+        onExecute = function( self, state )
+            Player.getBuff( "blackout_combo", state ).expire()
+        end,        
         
         reduces_cd = {
             ["breath_of_fire"] = function ()
@@ -5199,7 +5158,6 @@ local brm_spells = {
                 if Player.buffs.press_the_advantage.stacks() >= 10 then
                     return true
                 end
-                
                 return false
             end,
             ["weapons_of_order_debuff"] = true,
@@ -5333,9 +5291,8 @@ local brm_spells = {
         action_multiplier = function( self, state )
             local am = 1
             
-            -- BUG: BoC buffs the initial hit as well as the periodic
-            if IsBlackoutCombo( state ) then
-                am = am * Player.buffs.blackout_combo.effectN( 5 ).mod
+            if Player.getBuff( "blackout_combo", state ) then
+                am = am * Player.getBuff( "blackout_combo", state ).effectN( 5 ).mod
             end            
             
             if Player.stagger > 0 and Player.getTalent( "dragonfire_brew" ).ok then
@@ -5365,6 +5322,10 @@ local brm_spells = {
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, 5, 1 )
         end, 
+        
+        onExecute = function( self, state )
+            Player.getBuff( "blackout_combo", state ).expire()
+        end,           
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,    
@@ -5414,8 +5375,8 @@ local brm_spells = {
         action_multiplier = function( self, state )
             local am = 1
             
-            if IsBlackoutCombo( state ) then
-                am = am * Player.buffs.blackout_combo.effectN( 5 ).mod
+            if Player.getBuff( "blackout_combo", state )then
+                am = am * Player.getBuff( "blackout_combo", state ).effectN( 5 ).mod
             end         
             
             return am
@@ -5441,8 +5402,8 @@ local brm_spells = {
                 dr = dr + Player.getTalent( "celestial_flames" ).effectN( 2 ).pct
             end
             
-            if IsBlackoutCombo( state ) then
-                dr = dr + Player.buffs.blackout_combo.effectN( 2 ).pct
+            if Player.getBuff( "blackout_combo", state ) then
+                dr = dr + Player.getBuff( "blackout_combo", state ).effectN( 2 ).pct
             end
             
             return dr * bof_duration * ratio * Player.recent_dtps
@@ -5611,6 +5572,10 @@ local brm_spells = {
             
             return Player.stagger > 0 
         end,
+        
+        onExecute = function( self, state )
+            Player.getBuff( "blackout_combo", state ).expire()
+        end,           
     } ),
 
     ["celestial_brew"] = Player.createAction( 322507, {
@@ -5659,7 +5624,7 @@ local brm_spells = {
                     end
                 end
                 
-                if IsBlackoutCombo( state ) then
+                if Player.getBuff( "blackout_combo", state ) then
                     -- TODO: Use DBC Value
                     purified_chi_count = purified_chi_count + 3
                 end
@@ -5691,6 +5656,10 @@ local brm_spells = {
             -- return
             return m
         end,
+        
+        onExecute = function( self, state )
+            Player.getBuff( "blackout_combo", state ).expire()
+        end,           
         
         trigger = {
             ["special_delivery"] = true,
