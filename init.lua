@@ -2440,32 +2440,6 @@ local CurrentCraneStacks = function( state )
     end
 end
 
-local IsBlackoutReinforcement = function( state )
-    
-    if Player.set_pieces[ 31 ] < 2 then
-        return false
-    end
-    
-    if not state then
-        return Player.buffs.blackout_reinforcement.up()
-    else
-        local blackout_reinforcement = Player.buffs.blackout_reinforcement.up()
-        
-        for cb_idx, cb in ipairs( state.callback_stack ) do
-            if cb_idx == #state.callback_stack then
-                break
-            end
-
-            if cb.name == "spinning_crane_kick" and cb.spell and cb.spell.base_cost == 0 then
-                blackout_reinforcement = true
-            elseif cb.name == "blackout_kick" then
-                blackout_reinforcement = false
-            end
-        end
-        return blackout_reinforcement
-    end    
-end
-
 local IsFlowingMomentumKicks = function( state )
     
     if Player.set_pieces[ 29 ] < 2 and Player.set_pieces[ 32 ] < 2 then
@@ -3189,6 +3163,12 @@ local ww_spells = {
             return aura_env.targetScale( target_count, spell.spinning_crane_kick.effectN( 1 ).base_value )
         end,
         
+        onExecute = function( self, state )
+            if Player.set_pieces[ 31 ] >= 2 and self.base_cost == 0 then
+                Player.getBuff( "blackout_reinforcement", state ).increment()
+            end
+        end,
+        
         trigger = {
             ["chi_explosion"] = true,
         },
@@ -3316,8 +3296,8 @@ local ww_spells = {
             
             am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
             
-            if IsBlackoutReinforcement( state ) then
-                am = am * Player.buffs.blackout_reinforcement.effectN( 1 ).mod
+            if Player.getBuff( "blackout_reinforcement", state ).up() then
+                am = am * Player.getBuff( "blackout_reinforcement", state ).effectN( 1 ).mod
             end
             
             am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
@@ -3344,6 +3324,10 @@ local ww_spells = {
             return target_count
         end,
         
+        onExecute = function( self, state )
+            Player.getBuff( "blackout_reinforcement", state ).decrement()
+        end,
+        
         reduces_cd = {
             ["rising_sun_kick"] = function( state ) 
                 local cdr = spell.blackout_kick.effectN( 3 ).seconds 
@@ -3358,7 +3342,7 @@ local ww_spells = {
                     end
                 end
                 
-                if IsBlackoutReinforcement( state ) then
+                if Player.getBuff( "blackout_reinforcement", state ) then
                     cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end
                 
@@ -3368,7 +3352,7 @@ local ww_spells = {
             ["fists_of_fury"] = function( state )
                 local cdr = spell.blackout_kick.effectN( 3 ).seconds
                 
-                if IsBlackoutReinforcement( state ) then
+                if Player.getBuff( "blackout_reinforcement", state ) then
                     cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end                
                 
@@ -3378,7 +3362,7 @@ local ww_spells = {
             ["strike_of_the_windlord"] = function( state )
                 local cdr = 0
                 
-                if IsBlackoutReinforcement( state ) then
+                if Player.getBuff( "blackout_reinforcement", state ) then
                     cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end                
                 
@@ -3388,7 +3372,7 @@ local ww_spells = {
             ["whirling_dragon_punch"] = function( state )
                 local cdr = 0
                 
-                if IsBlackoutReinforcement( state ) then
+                if Player.getBuff( "blackout_reinforcement", state ) then
                     cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end             
                 
