@@ -2440,32 +2440,6 @@ local CurrentCraneStacks = function( state )
     end
 end
 
-local IsFlowingMomentumKicks = function( state )
-    
-    if Player.set_pieces[ 29 ] < 2 and Player.set_pieces[ 32 ] < 2 then
-        return false
-    end
-    
-    if not state then
-        return Player.buffs.kicks_of_flowing_momentum.up()
-    else
-        local flowing_momentum = Player.buffs.kicks_of_flowing_momentum.up()
-        
-        for cb_idx, cb in ipairs( state.callback_stack ) do
-            if cb_idx == #state.callback_stack then
-                break
-            end
-            
-            if cb.name == "fists_of_fury" or cb.name == "fists_of_fury_cancel" then
-                flowing_momentum = true
-            elseif cb.name == "rising_sun_kick" then
-                flowing_momentum = false
-            end
-        end
-        return flowing_momentum
-    end
-end
-
 local IsDanceProc = function( state )
     if not Player.getTalent( "dance_of_chiji" ).ok then
         return false
@@ -2880,8 +2854,8 @@ local ww_spells = {
             
             am = am * Player.getTalent( "open_palm_strikes" ).effectN( 4 ).mod
             
-            if Player.buffs.fists_of_flowing_momentum.up() then
-                am = am * ( 1 + Player.buffs.fists_of_flowing_momentum.stacks() * Player.buffs.fists_of_flowing_momentum.effectN( 1 ).pct )
+            if Player.getBuff( "fists_of_flowing_momentum", state ).up() then
+                am = am * ( 1 + Player.getBuff( "fists_of_flowing_momentum", state ).stacks() * Player.getBuff( "fists_of_flowing_momentum", state ).effectN( 1 ).pct )
             end
             
             if Player.set_pieces[ 31 ] >= 4 then
@@ -2927,6 +2901,13 @@ local ww_spells = {
             local primary_multiplier = 1
             
             return aura_env.targetScale( target_count, spell.fists_of_fury.effectN( 1 ).base_value, 1, spell.fists_of_fury.effectN( 6 ).pct, primary_multiplier )
+        end,
+        
+        onExecute = function( self, state )
+            if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
+                local stacks = ( ( Player.set_pieces[ 29 ] >= 4 or Player.set_pieces[ 32 ] >= 4 ) and 3 ) or 2
+                Player.getBuff( "kicks_of_flowing_momentum", state ).increment( stacks )
+            end
         end,
         
         trigger = {
@@ -3062,8 +3043,8 @@ local ww_spells = {
             
             am = am * Player.getTalent( "rising_star" ).effectN( 1 ).mod
             
-            if IsFlowingMomentumKicks( state ) then
-                am = am * Player.buffs.kicks_of_flowing_momentum.effectN( 1 ).mod
+            if Player.getBuff( "kicks_of_flowing_momentum", state ) then
+                am = am * Player.getBuff( "kicks_of_flowing_momentum", state ).effectN( 1 ).mod
             end
             
             if Player.set_pieces[ 31 ] >= 4 then
@@ -3072,6 +3053,15 @@ local ww_spells = {
             
             return am
         end,
+        
+        onExecute = function( self, state )
+            if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
+                if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
+                    Player.getBuff( "kicks_of_flowing_momentum", state ).decrement()
+                    Player.getBuff( "fists_of_flowing_momentum", state ).increment()
+                end
+            end
+        end,        
         
         trigger = {
             ["glory_of_the_dawn"] = true,
@@ -3142,8 +3132,8 @@ local ww_spells = {
             
             am = am * Player.getTalent( "crane_vortex" ).effectN( 1 ).mod
             
-            if IsFlowingMomentumKicks( state ) then
-                am = am * Player.buffs.kicks_of_flowing_momentum.effectN( 1 ).mod
+            if Player.getBuff( "kicks_of_flowing_momentum", state )) then
+                am = am * Player.getBuff( "kicks_of_flowing_momentum", state ).effectN( 1 ).mod
             end
             
             am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
@@ -3167,8 +3157,15 @@ local ww_spells = {
             if Player.set_pieces[ 31 ] >= 2 and self.base_cost == 0 then
                 Player.getBuff( "blackout_reinforcement", state ).increment()
             end
+            
+            if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
+                if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
+                    Player.getBuff( "kicks_of_flowing_momentum", state ).decrement()
+                    Player.getBuff( "fists_of_flowing_momentum", state ).increment()
+                end
+            end            
         end,
-        
+         
         trigger = {
             ["chi_explosion"] = true,
         },
