@@ -3043,7 +3043,7 @@ local ww_spells = {
             
             am = am * Player.getTalent( "rising_star" ).effectN( 1 ).mod
             
-            if Player.getBuff( "kicks_of_flowing_momentum", state ) then
+            if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
                 am = am * Player.getBuff( "kicks_of_flowing_momentum", state ).effectN( 1 ).mod
             end
             
@@ -3132,7 +3132,7 @@ local ww_spells = {
             
             am = am * Player.getTalent( "crane_vortex" ).effectN( 1 ).mod
             
-            if Player.getBuff( "kicks_of_flowing_momentum", state )) then
+            if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
                 am = am * Player.getBuff( "kicks_of_flowing_momentum", state ).effectN( 1 ).mod
             end
             
