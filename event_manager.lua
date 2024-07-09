@@ -1437,8 +1437,10 @@ function(event, ...)
                                             trigger_healing     = trigger_healing + ( tick_healing * tick_partition )
                                             trigger_group_heal  = trigger_group_heal + ( tick_group_heal * tick_partition )
                                             
-                                            if spell.onTick then
-                                                spell.onTick( spell, state )
+                                            if spell.onImpact then
+                                                for t_idx = 1, ( spell_result.target_count or 1 ) do
+                                                    spell.onImpact( spell, state )
+                                                end
                                             end
                                             
                                             ticks_remaining = ticks_remaining - tick_partition
