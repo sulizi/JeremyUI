@@ -2762,7 +2762,7 @@ local ww_spells = {
         end,
         
         trigger = {
-            ["thunderfist_single"] = function( self, state )
+            ["thunderfist"] = function( self, state )
                 return Player.getBuff( "thunderfist", state ).up()
             end,
             ["dual_threat"] = true,
@@ -2800,7 +2800,7 @@ local ww_spells = {
         end,
         
         trigger = {
-            ["thunderfist_single"] = function( self, state )
+            ["thunderfist"] = function( self, state )
                 return Player.getBuff( "thunderfist", state ).up()
             end,
             ["dual_threat"] = true,
@@ -3575,9 +3575,21 @@ local ww_spells = {
         target_multiplier = function( target_count )
             return ( 1 + 1 / target_count * ( target_count - 1 ) )
         end,
+
+        onImpact = function( self, state )
+            if Player.getTalent( "thunderfist" ).ok then
+                Player.getBuff( "thunderfist", state ).increment()
+            end
+        end,
+        
+        onExecute = function( self, state )
+            if Player.is_beta() and Player.getTalent( "thunderfist" ).ok then
+                local stacks = Player.getTalent( "thunderfist" ).effectN( 1 ).base_value
+                Player.getBuff( "thunderfist", state ).increment( stacks )
+            end
+        end,          
         
         trigger = {
-            ["thunderfist"] = true,
             ["strike_of_the_windlord_mh"] = true,
             ["rushing_jade_wind"] = function( self, state )
                 return Player.is_beta() and Player.getTalent( "rushing_jade_wind" )
@@ -3982,28 +3994,11 @@ local ww_spells = {
         end,
     } ),
 
-    ["thunderfist_single"] = Player.createAction( 393566, {
-        background = true,
-        
-        trigger_etl = true,
-        ww_mastery = false,
-    } ),
-
     ["thunderfist"] = Player.createAction( 393566, {
         background = true,
         
         trigger_etl = true,
         ww_mastery = false,
-        
-        target_count = function()
-            return aura_env.learnedFrontalTargets( 395521 ) -- SotWL
-        end,        
-        target_multiplier = function( target_count )
-            local current_stacks = Player.buffs.thunderfist.stacks()
-            local stacks_acquired = target_count + ( Player.is_beta() and Player.getTalent( "thunderfist" ).effectN( 1 ).base_value or 0 )
-            local stacks = min( 10, stacks_acquired + current_stacks )
-            return min( stacks, aura_env.fight_remains / ( UnitAttackSpeed( "player" ) or 4 ) )          
-        end,
     } ),
 
     ["crackling_jade_lightning"] = Player.createAction( 117952, {
@@ -4444,6 +4439,7 @@ local brm_spells = {
             
             return cm
         end,
+        
         trigger = {
             ["healing_sphere"] = false, -- These are added to the base amount instead
         },
