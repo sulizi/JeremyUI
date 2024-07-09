@@ -1381,9 +1381,11 @@ function(event, ...)
                                     -- Check ready state
                                     state.invalid = state.invalid or not spell.ready( self, state )
 
+
                                     -- set init trigger CD
+                                    local trigger_cd_remains = aura_env.getCooldown( spell.spellID ) - state.time
+                                    
                                     if not state.invalid then
-                                        local trigger_cd_remains = aura_env.getCooldown( spell.spellID ) - state.time
                                         
                                         if not spell.background then
                                             -- Trigger is a non-background action with a cooldown

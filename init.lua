@@ -119,8 +119,8 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 2.4
-local DBC_Critical = 2.2
+local DBC_Version = 2.5
+local DBC_Critical = 2.5
 local LibDBCache = LibStub( "LibDBCache-1.0", true )
 
 if not LibDBCache then
@@ -943,7 +943,7 @@ aura_env.CPlayer = {
                 return stacks
             end
             
-            buff._max_stacks = _spell.max_stacks
+            buff._max_stacks = _spell.max_stacks or 1
             buff.max_stacks = _init.max_stacks or function()
                 return buff._max_stacks
             end
