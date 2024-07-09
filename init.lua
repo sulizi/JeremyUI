@@ -2474,43 +2474,6 @@ local IsComboStrike = function( action, state )
     return ( last_cs ~= action.spellID ), hit_combo
 end
 
-local TigersFerocityStacks = function( state )
-
-    if Player.set_pieces[ 33 ] < 4 then
-        return 0
-    end
-    
-    if not state then
-        return Player.buffs.tigers_ferocity.stacks()
-    else
-        local whitelist = {
-            ["rising_sun_kick"] = true,
-            ["blackout_kick"] = true,
-            ["fists_of_fury"] = true,
-            ["fists_of_fury_cancel"] = true,
-            ["strike_of_the_windlord"] = true,
-            ["whirling_dragon_punch"] = true,
-        }
-    
-        local cur_stacks = Player.buffs.tigers_ferocity.stacks()
-        local max_stacks = Player.buffs.tigers_ferocity.max_stacks()
-        
-        for cb_idx, cb in ipairs( state.callback_stack ) do
-            if cb_idx == #state.callback_stack then
-                break
-            end
-            
-            if cb.name == "tiger_palm" then
-                cur_stacks = 0
-            elseif whitelist[ cb.name ] then
-                cur_stacks = cur_stacks + 1
-            end    
-        end
-        
-        return cur_stacks
-    end  
-end
-
 ------------------------------------------------
 
 ------------------------------------------------
@@ -2778,6 +2741,10 @@ local ww_spells = {
                 local stacks = ( ( Player.set_pieces[ 29 ] >= 4 or Player.set_pieces[ 32 ] >= 4 ) and 3 ) or 2
                 Player.getBuff( "kicks_of_flowing_momentum", state ).increment( stacks )
             end
+            
+            if Player.set_pieces[ 33 ] >= 4 
+                Player.getBuff( "tigers_ferocity", state ).increment()
+            end            
         end,
         
         trigger = {
@@ -2931,6 +2898,10 @@ local ww_spells = {
                     Player.getBuff( "fists_of_flowing_momentum", state ).increment()
                 end
             end
+            
+            if Player.set_pieces[ 33 ] >= 4 
+                Player.getBuff( "tigers_ferocity", state ).increment()
+            end            
         end,        
         
         trigger = {
@@ -3209,6 +3180,10 @@ local ww_spells = {
             Player.getBuff( "blackout_reinforcement", state ).decrement()
             Player.getBuff( "bok_proc", state ).decrement()
             Player.getBuff( "teachings_of_the_monastery", state ).expire()
+            
+            if Player.set_pieces[ 33 ] >= 4 
+                Player.getBuff( "tigers_ferocity", state ).increment()
+            end
         end,
         
         reduces_cd = {
@@ -3381,6 +3356,10 @@ local ww_spells = {
                     Player.getBuff( "teachings_of_the_monastery", state ).increment( Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )
                 end
             end
+            
+            if Player.set_pieces[ 33 ] >= 4 
+                Player.getBuff( "tigers_ferocity", state ).increment()
+            end            
         end,
         
         trigger = {
@@ -3485,6 +3464,10 @@ local ww_spells = {
                 local stacks = Player.getTalent( "thunderfist" ).effectN( 1 ).base_value
                 Player.getBuff( "thunderfist", state ).increment( stacks )
             end
+            
+            if Player.set_pieces[ 33 ] >= 4 
+                Player.getBuff( "tigers_ferocity", state ).increment()
+            end            
         end,          
         
         trigger = {
@@ -3737,7 +3720,7 @@ local ww_spells = {
             am = am * ( 1 + Player.getBuff( "martial_mixture", state ).stacks() * Player.buffs.martial_mixture.effectN( 1 ).pct )
             
             if Player.set_pieces[ 33 ] >= 4 then
-                am = am * ( 1 + ( TigersFerocityStacks( state ) * Player.buffs.tigers_ferocity.effectN( 1 ).pct ) )
+                am = am * ( 1 + ( Player.getBuff( "tigers_ferocity", state ).stacks() * Player.buffs.tigers_ferocity.effectN( 1 ).pct ) )
             end
             
             return am
@@ -3766,7 +3749,9 @@ local ww_spells = {
             
             if Player.getTalent( "martial_mixture" ).ok then
                 Player.getBuff( "martial_mixture", state ).expire()
-            end                
+            end
+            
+            Player.getBuff( "tigers_ferocity", state ).expire()
         end,
         
         trigger = {
