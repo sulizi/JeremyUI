@@ -2704,23 +2704,9 @@ local ww_spells = {
                 -- Momentum Boost's first effect, increase damage by n% of haste
                 am = am * ( 1 + ( Player.haste * Player.getTalent( "momentum_boost" ).effectN( 1 ).pct ) )
                 
-                -- Momentum Boost's damage buff is solved using an algebraic series formula
-                -- Possibly look at implementing an inherent tick_multiplier method at some point?
-                local ticks = floor( self.ticks() )
+                -- Second effect, increase damage by n% per stack
+                am = am * ( 1 + Player.getBuff( "momentum_boost", state ).stacks() * Player.getBuff( "momentum_boost", state ).effectN( 1 ).pct  )
                 
-                if ticks > 1 then
-                    local targets = self.target_count()
-                    local max_stacks = Player.buffs.momentum_boost.max_stacks()
-                    
-                    -- The first tick will be unbuffed 
-                    local uncapped = ( ticks - 1 ) * targets <= max_stacks and ( ticks - 1 ) or floor( max_stacks / targets )
-                    local capped = ticks - 1 - uncapped
-                    
-                    local m = Player.buffs.momentum_boost.effectN( 1 ).pct / ticks -- Effect value divided by *TOTAL* ticks for this action
-                    local momentum = ( uncapped / 2 ) * ( 2 * ( targets * m ) + ( uncapped - 1 ) * ( targets * m ) ) + ( max_stacks * m ) * capped
-                    
-                    am = am * ( 1 + momentum )
-                end
             end
             
             return am
@@ -2736,6 +2722,12 @@ local ww_spells = {
             return aura_env.targetScale( target_count, spell.fists_of_fury.effectN( 1 ).base_value, 1, spell.fists_of_fury.effectN( 6 ).pct, primary_multiplier )
         end,
         
+        onImpact = function( self, state )
+            if Player.getTalent( "momentum_boost", state ).ok then
+                Player.getBuff( "momentum_boost", state ).increment()
+            end
+        end
+        
         onExecute = function( self, state )
             if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
                 local stacks = ( ( Player.set_pieces[ 29 ] >= 4 or Player.set_pieces[ 32 ] >= 4 ) and 3 ) or 2
@@ -2747,6 +2739,7 @@ local ww_spells = {
             end
         
             Player.getBuff( "transfer_the_power", state ).expire()
+            Player.getBuff( "momentum_boost", state ).expire()
         end,
         
         trigger = {
