@@ -2663,7 +2663,9 @@ local ww_spells = {
             "expel_harm",
             "chi_burst",
             
-            "blackout_kick", -- CDR        
+            "blackout_kick", -- CDR / Transfer the Power
+            "rising_sun_kick", -- Transfer the Power
+            "spinning_crane_kick", -- Transfer the Power
         },
         
         triggerSpell = 117418,
@@ -2681,9 +2683,7 @@ local ww_spells = {
             
             am = am * Player.getTalent( "flashing_fists" ).effectN( 1 ).mod
             
-            if Player.buffs.transfer_the_power.up() then
-                am = am * ( 1 + Player.buffs.transfer_the_power.stacks() * Player.getTalent( "transfer_the_power" ).effectN( 1 ).pct )
-            end
+            am = am * ( 1 + Player.getBuff( "transfer_the_power", state ).stacks() * Player.getTalent( "transfer_the_power" ).effectN( 1 ).pct )
             
             am = am * Player.getTalent( "open_palm_strikes" ).effectN( 4 ).mod
             
@@ -2742,9 +2742,11 @@ local ww_spells = {
                 Player.getBuff( "kicks_of_flowing_momentum", state ).increment( stacks )
             end
             
-            if Player.set_pieces[ 33 ] >= 4 
+            if Player.set_pieces[ 33 ] >= 4 then
                 Player.getBuff( "tigers_ferocity", state ).increment()
-            end            
+            end
+        
+            Player.getBuff( "transfer_the_power", state ).expire()
         end,
         
         trigger = {
@@ -2899,9 +2901,13 @@ local ww_spells = {
                 end
             end
             
-            if Player.set_pieces[ 33 ] >= 4 
+            if Player.set_pieces[ 33 ] >= 4 then
                 Player.getBuff( "tigers_ferocity", state ).increment()
-            end            
+            end
+        
+            if Player.getTalent( "transfer_the_power" ).ok then
+                Player.getBuff( "transfer_the_power", state ).increment()
+            end
         end,        
         
         trigger = {
@@ -3013,6 +3019,10 @@ local ww_spells = {
                 
                 Player.getBuff( "dance_of_chiji", state ).decrement()
             end
+            
+            if Player.getTalent( "transfer_the_power" ).ok then
+                Player.getBuff( "transfer_the_power", state ).increment()
+            end            
         end,
          
         trigger = {
@@ -3181,9 +3191,13 @@ local ww_spells = {
             Player.getBuff( "bok_proc", state ).decrement()
             Player.getBuff( "teachings_of_the_monastery", state ).expire()
             
-            if Player.set_pieces[ 33 ] >= 4 
+            if Player.set_pieces[ 33 ] >= 4 then
                 Player.getBuff( "tigers_ferocity", state ).increment()
             end
+            
+            if Player.getTalent( "transfer_the_power" ).ok then
+                Player.getBuff( "transfer_the_power", state ).increment()
+            end            
         end,
         
         reduces_cd = {
@@ -3357,7 +3371,7 @@ local ww_spells = {
                 end
             end
             
-            if Player.set_pieces[ 33 ] >= 4 
+            if Player.set_pieces[ 33 ] >= 4 then
                 Player.getBuff( "tigers_ferocity", state ).increment()
             end            
         end,
@@ -3465,7 +3479,7 @@ local ww_spells = {
                 Player.getBuff( "thunderfist", state ).increment( stacks )
             end
             
-            if Player.set_pieces[ 33 ] >= 4 
+            if Player.set_pieces[ 33 ] >= 4 then
                 Player.getBuff( "tigers_ferocity", state ).increment()
             end            
         end,          
