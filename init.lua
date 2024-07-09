@@ -2394,7 +2394,6 @@ end
 
 ------------------------------------------------
 -- Class specific state helper functions
--- TODO: This is getting cumbersome, it should be automated
 ------------------------------------------------
 
 local CurrentCraneStacks = function( state )
@@ -2438,73 +2437,6 @@ local CurrentCraneStacks = function( state )
         end
         
         return motc_stacks
-    end
-end
-
-local IsDanceProc = function( state )
-    if not Player.getTalent( "dance_of_chiji" ).ok then
-        return false
-    end
-    
-    if not state then
-        return Player.buffs.dance_of_chiji.up()
-    else
-        local docj_stacks = Player.buffs.dance_of_chiji.stacks()
-        local max_stacks = Player.buffs.dance_of_chiji.max_stacks()
-        
-        for cb_idx, cb in ipairs( state.callback_stack ) do
-            if cb_idx == #state.callback_stack then
-                break
-            end
-            
-            if cb.name == "whirling_dragon_punch" then
-                if Player.getTalent( "revolving_whirl" ).ok then
-                    docj_stacks = min( max_stacks, docj_stacks + 1 )
-                end
-            elseif cb.name == "spinning_crane_kick" and docj_stacks > 0 then
-                docj_stacks = max( 0, docj_stacks - 1 )
-            end    
-
-        end
-        return docj_stacks > 0
-    end  
-end
-
-local IsBlackoutProc = function( state )
-    
-    if not state then
-        return Player.buffs.bok_proc.up()
-    else
-        local bok_stacks = Player.buffs.bok_proc.stacks()
-        local docj_stacks = Player.buffs.dance_of_chiji.stacks()
-        
-        local _next = nil
-        local _, stack = ipairs( state.callback_stack )
-       
-        for cb_idx = 1, #stack do
-            if cb_idx == #stack then
-                break
-            end
-            
-            local cb = stack[ cb_idx ] 
-            _next = stack [ cb_idx + 1 ]
-  
-            if cb.name == "spinning_crane_kick" and docj_stacks > 0 then
-                if Player.getTalent( "sequenced_strikes" ).ok then
-                    bok_stacks = min( Player.buffs.bok_proc.max_stacks(), bok_stacks + 1 )
-                end
-                
-                docj_stacks = max( 0, docj_stacks - 1 )
-            elseif cb.name == "whirling_dragon_punch" then
-                if Player.getTalent( "revolving_whirl" ).ok then
-                    docj_stacks = min( Player.buffs.dance_of_chiji.max_stacks(), docj_stacks + 1 )
-                end
-            elseif cb.name == "blackout_kick" and _next.name ~= "energy_burst" then
-                bok_stacks = max( 0, bok_stacks - 1 )
-            end
-        end
-        
-        return bok_stacks > 0
     end
 end
 
@@ -3127,7 +3059,7 @@ local ww_spells = {
                 am = am * ( 1 + ( motc_stacks * spell.cyclone_strikes.effectN( 1 ).pct ) )
             end
             
-            if IsDanceProc( state ) then
+            if Player.getBuff( "dance_of_chiji", state ) then
                 am = am * Player.getTalent( "dance_of_chiji" ).effectN( 1 ).mod
             end
             
@@ -3164,7 +3096,15 @@ local ww_spells = {
                     Player.getBuff( "kicks_of_flowing_momentum", state ).decrement()
                     Player.getBuff( "fists_of_flowing_momentum", state ).increment()
                 end
-            end            
+            end      
+            
+            if Player.getBuff( "dance_of_chiji", state ).up() then
+                if Player.getTalent( "sequenced_strikes" ).ok then 
+                    Player.getBuff( "bok_proc", state ).increment()
+                end
+                
+                Player.getBuff( "dance_of_chiji", state ).decrement()
+            end
         end,
          
         trigger = {
@@ -3225,11 +3165,7 @@ local ww_spells = {
         background = true,
         
         chi_gain = function( state )
-            if IsBlackoutProc( state ) then
-                return Player.getTalent( "energy_burst" ).effectN( 2 ).base_value
-            end
-            
-            return 0
+            return Player.getTalent( "energy_burst" ).effectN( 2 ).base_value
         end,
         
         trigger_rate = function( callback )
@@ -3237,7 +3173,7 @@ local ww_spells = {
         end,
         
         ready = function( self, state )
-            return Player.getTalent( "energy_burst" ).ok
+            return Player.getBuff( "bok_proc", state ).up()
         end,
     } ),
 
@@ -3300,7 +3236,7 @@ local ww_spells = {
             
             am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
             
-            if IsBlackoutProc( state ) then
+            if Player.getBuff( "bok_proc", state ).up() then
                 am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
             end
             
@@ -3324,6 +3260,7 @@ local ww_spells = {
         
         onExecute = function( self, state )
             Player.getBuff( "blackout_reinforcement", state ).decrement()
+            Player.getBuff( "bok_proc", state ).decrement()
         end,
         
         reduces_cd = {
@@ -3418,7 +3355,8 @@ local ww_spells = {
 
     ["whirling_dragon_punch"] = Player.createAction( 152175, {
         callbacks = {
-            "rising_sun_kick", -- Spell activation        
+            "rising_sun_kick", -- Spell activation
+            "spinning_crane_kick", -- Revolving Whirl
         },
         
         triggerSpell = 158221,
@@ -3483,6 +3421,12 @@ local ww_spells = {
             end
             
             return target_count
+        end,
+        
+        onExecute = function( self, state )
+            if Player.getTalent( "revolving_whirl" ).ok then
+                Player.getBuff( "dance_of_chiji", state ).increment()
+            end
         end,
         
         trigger = {
