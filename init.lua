@@ -2440,35 +2440,6 @@ local CurrentCraneStacks = function( state )
     end
 end
 
-local GetTotMStacks = function( state )
-    
-    if not Player.getTalent( "teachings_of_the_monastery" ).ok then
-        return 0
-    end
-    
-    if not state then
-        return Player.buffs.teachings_of_the_monastery.stacks()
-    else
-        local totm_stacks = Player.buffs.teachings_of_the_monastery.stacks()
-        local max_stacks = Player.buffs.teachings_of_the_monastery.max_stacks()
-        
-        for cb_idx, cb in ipairs( state.callback_stack ) do
-            if cb_idx == #state.callback_stack then
-                break
-            end
-            
-            if cb.name == "tiger_palm" then
-                totm_stacks = min( max_stacks, totm_stacks + 1 )
-            elseif cb.name == "whirling_dragon_punch" then
-                totm_stacks = min( max_stacks, totm_stacks + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )
-            elseif cb.name == "blackout_kick" then
-                totm_stacks = 0
-            end
-        end
-        return totm_stacks
-    end    
-end
-
 local MartialMixtureStacks = function( state )
 
     if not Player.getTalent( "martial_mixture" ).ok then
@@ -3127,7 +3098,7 @@ local ww_spells = {
         ww_mastery = false,
         
         trigger_rate = function( state )
-            return GetTotMStacks( state )
+            return Player.getBuff( "teachings_of_the_monastery", state ).stacks()
         end,
         
         critical_rate = function()
@@ -3261,6 +3232,7 @@ local ww_spells = {
         onExecute = function( self, state )
             Player.getBuff( "blackout_reinforcement", state ).decrement()
             Player.getBuff( "bok_proc", state ).decrement()
+            Player.getBuff( "teachings_of_the_monastery", state ).expire()
         end,
         
         reduces_cd = {
@@ -3271,7 +3243,7 @@ local ww_spells = {
                     local remaining = aura_env.getCooldown( 107428 ) -- RSK
                     if remaining > 0 then
                         local targets = min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
-                        local totm_stacks = GetTotMStacks( state )
+                        local totm_stacks = Player.getBuff( "teachings_of_the_monastery", state ).stacks()
                         
                         cdr = cdr + ( min( 1, Player.getTalent( "teachings_of_the_monastery" ).effectN( 1 ).roll * targets * ( 1 + totm_stacks ) ) * remaining )
                     end
@@ -3322,7 +3294,7 @@ local ww_spells = {
         tick_trigger = {
             ["ancient_lava"] = true,  
             ["blackout_kick_totm"] = function( self, state )
-                return Player.getTalent( "teachings_of_the_monastery" ).ok
+                return Player.getBuff( "teachings_of_the_monastery", state ).up()
             end,
             ["resonant_fists"] = true,
         },    
@@ -3426,6 +3398,12 @@ local ww_spells = {
         onExecute = function( self, state )
             if Player.getTalent( "revolving_whirl" ).ok then
                 Player.getBuff( "dance_of_chiji", state ).increment()
+            end
+            
+            if Player.getTalent( "teachings_of_the_monastery" ).ok then
+                if Player.getTalent( "knowledge_of_the_broken_temple" ) then
+                    Player.getBuff( "teachings_of_the_monastery", state ).increment( Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )
+                end
             end
         end,
         
@@ -3801,6 +3779,12 @@ local ww_spells = {
             end
             
             return 1
+        end,
+        
+        onExecute = function( self, state )
+            if Player.getTalent( "teachings_of_the_monastery" ).ok then
+                Player.getBuff( "teachings_of_the_monastery", state ).increment()
+            end
         end,
         
         trigger = {
