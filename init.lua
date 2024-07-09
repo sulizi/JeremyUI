@@ -2440,40 +2440,6 @@ local CurrentCraneStacks = function( state )
     end
 end
 
-local MartialMixtureStacks = function( state )
-
-    if not Player.getTalent( "martial_mixture" ).ok then
-        return 0
-    end
-    
-    if not state then
-        return Player.buffs.martial_mixture.stacks()
-    else
-        local stacks = Player.buffs.martial_mixture.stacks()
-        local max_stacks = Player.buffs.martial_mixture.max_stacks()
-        local totm_stacks = Player.buffs.teachings_of_the_monastery.stacks()
-        local max_totm_stacks = Player.buffs.teachings_of_the_monastery.max_stacks()
-        
-        for cb_idx, cb in ipairs( state.callback_stack ) do
-            if cb_idx == #state.callback_stack then
-                break
-            end
-            
-            if cb.name == "tiger_palm" then
-                stacks = 0
-                totm_stacks = min( max_totm_stacks, totm_stacks + 1 )
-            elseif cb.name == "whirling_dragon_punch" then
-                totm_stacks = min( max_totm_stacks, totm_stacks + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )                
-            elseif cb.name == "blackout_kick" then
-                stacks = min( max_stacks, stacks + ( cb.result.target_count * ( 1 + totm_stacks ) ) )
-                totm_stacks = 0
-            end
-        end
-        return stacks
-    end  
-
-end
-
 local IsComboStrike = function( action, state )
     -- Returns:
     -- 1: Boolean, true if combo strike
@@ -3127,6 +3093,12 @@ local ww_spells = {
             return am
         end,
         
+        onImpact = function( self, state )
+            if Player.getTalent( "martial_mixture" ).ok then
+                Player.getBuff( "martial_mixture", state ).increment()
+            end    
+        end,        
+        
         tick_trigger = {
             ["ancient_lava"] = true,            
         },        
@@ -3211,8 +3183,6 @@ local ww_spells = {
                 am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
             end
             
-            am = am * ( 1 + MartialMixtureStacks( state ) * Player.buffs.martial_mixture.effectN( 1 ).pct )
-            
             return am
         end,
         
@@ -3227,6 +3197,12 @@ local ww_spells = {
             end
             
             return target_count
+        end,
+        
+        onImpact = function( self, state )
+            if Player.getTalent( "martial_mixture" ).ok then
+                Player.getBuff( "martial_mixture", state ).increment()
+            end    
         end,
         
         onExecute = function( self, state )
@@ -3758,6 +3734,8 @@ local ww_spells = {
             
             am = am * Player.getTalent( "xuens_guidance" ).effectN( 1 ).mod
             
+            am = am * ( 1 + Player.getBuff( "martial_mixture", state ).stacks() * Player.buffs.martial_mixture.effectN( 1 ).pct )
+            
             if Player.set_pieces[ 33 ] >= 4 then
                 am = am * ( 1 + ( TigersFerocityStacks( state ) * Player.buffs.tigers_ferocity.effectN( 1 ).pct ) )
             end
@@ -3785,6 +3763,10 @@ local ww_spells = {
             if Player.getTalent( "teachings_of_the_monastery" ).ok then
                 Player.getBuff( "teachings_of_the_monastery", state ).increment()
             end
+            
+            if Player.getTalent( "martial_mixture" ).ok then
+                Player.getBuff( "martial_mixture", state ).expire()
+            end                
         end,
         
         trigger = {
