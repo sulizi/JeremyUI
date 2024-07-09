@@ -2726,7 +2726,11 @@ local ww_spells = {
             if Player.getTalent( "momentum_boost", state ).ok then
                 Player.getBuff( "momentum_boost", state ).increment()
             end
-        end
+            
+            if Player.getTalent( "jade_ignition", state ).ok then
+                Player.getBuff( "chi_energy", state ).increment()
+            end
+        end,
         
         onExecute = function( self, state )
             if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
@@ -3015,7 +3019,9 @@ local ww_spells = {
             
             if Player.getTalent( "transfer_the_power" ).ok then
                 Player.getBuff( "transfer_the_power", state ).increment()
-            end            
+            end
+            
+            Player.getBuff( "chi_energy", state ).expire()
         end,
          
         trigger = {
@@ -3724,10 +3730,10 @@ local ww_spells = {
             
             am = am * Player.getTalent( "xuens_guidance" ).effectN( 1 ).mod
             
-            am = am * ( 1 + Player.getBuff( "martial_mixture", state ).stacks() * Player.buffs.martial_mixture.effectN( 1 ).pct )
+            am = am * ( 1 + Player.getBuff( "martial_mixture", state ).stacks() * Player.getBuff( "martial_mixture", state ).effectN( 1 ).pct )
             
             if Player.set_pieces[ 33 ] >= 4 then
-                am = am * ( 1 + ( Player.getBuff( "tigers_ferocity", state ).stacks() * Player.buffs.tigers_ferocity.effectN( 1 ).pct ) )
+                am = am * ( 1 + ( Player.getBuff( "tigers_ferocity", state ).stacks() * Player.getBuff( "tigers_ferocity", state ).effectN( 1 ).pct ) )
             end
             
             return am
@@ -3881,10 +3887,11 @@ local ww_spells = {
         ww_mastery = false,
         
         action_multiplier = function( self, state )
-            if Player.buffs.chi_energy.up() then
-                return ( 1 + Player.buffs.chi_energy.stacks() * spell.chi_energy.effectN( 1 ).pct )
-            end
-            return 0
+            local am = 1
+            
+            am = am * ( 1 + Player.getBuff( "chi_energy", state ).stacks() * Player.getBuff( "chi_energy", state ).effectN( 1 ).pct )
+            
+            return am
         end,
         
         target_count = function()
@@ -3894,6 +3901,10 @@ local ww_spells = {
         target_multiplier = function( target_count )
             return target_count
         end,
+        
+        ready = function( self, state )
+            return Player.getBuff( "chi_energy", state ).up()
+        end
     } ),
 
     ["thunderfist"] = Player.createAction( 393566, {
