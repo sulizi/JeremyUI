@@ -760,13 +760,13 @@ aura_env.CPlayer = {
         
         -- Action Ready
         local ready = initialize_value( action.ready, function() return true end )
-        action.ready = function()
+        action.ready = function( self, state )
             if action.combo and aura_env.fight_remains < action.execute_time() then
                 return false
             end
             
             if ( action.background or action.debuff or IsSpellKnown( action.replaces or action.spellID ) ) then
-                return ready()
+                return ready( self, state )
             end
             
             return false
@@ -926,7 +926,8 @@ aura_env.CPlayer = {
                 local data = self.findAura( spellID )
                 return data
             end
-            buff.up = function() 
+            buff.up = function()
+                local data = self.findAura( spellID )
                 return ( data ~= nil )
             end
             buff.remains = function()
@@ -2332,7 +2333,7 @@ local function generateCallbacks( spells )
                             _init.depth = ( _init.depth or 0 ) + 1
                             _init.trigger = _init.trigger or {}
                             _init.trigger[ action ] = true
-                            _init.ready = function() 
+                            _init.ready = function( self, state ) 
                                 if not base_spell.background and IsSpellKnown( base_spell.replaces or base_spell.spellID ) then
                                     if base_spell.callback_ready then
                                         return base_spell.callback_ready( callback )
@@ -2703,7 +2704,7 @@ local ww_spells = {
             -- Doesn't say in tooltip but damage scales with targets
             return ( 1 + ( min( 5, target_count ) - 1 ) * 0.15 ) 
         end,
-        ready = function()
+        ready = function( self, state )
             return Player.findAura( 408835 )
         end,      
     } ),
@@ -2725,7 +2726,7 @@ local ww_spells = {
             return -1 * Player.main_hand.swing_damage
         end,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "dual_threat" ).ok
         end,
     }),
@@ -2761,8 +2762,8 @@ local ww_spells = {
         end,
         
         trigger = {
-            ["thunderfist_single"] = function()
-                return Player.buffs.thunderfist.up()
+            ["thunderfist_single"] = function( self, state )
+                return Player.getBuff( "thunderfist", state ).up()
             end,
             ["dual_threat"] = true,
         },
@@ -2799,8 +2800,8 @@ local ww_spells = {
         end,
         
         trigger = {
-            ["thunderfist_single"] = function()
-                return Player.buffs.thunderfist.up()
+            ["thunderfist_single"] = function( self, state )
+                return Player.getBuff( "thunderfist", state ).up()
             end,
             ["dual_threat"] = true,
         },        
@@ -2809,15 +2810,15 @@ local ww_spells = {
     ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
         skip_calcs = true, -- This is just the script that triggers the individual hits
         
-        ready = function()
+        ready = function( self, state )
             return aura_env.unitRange( "target" ) < 8 
         end,
         
         trigger = {
-            ["mainhand_attack"] = function()
+            ["mainhand_attack"] = function( self, state )
                 return Player.main_hand.equipped 
             end,
-            ["offhand_attack"] = function()
+            ["offhand_attack"] = function( self, state )
                 return Player.off_hand.equipped
             end,            
         },
@@ -2975,7 +2976,7 @@ local ww_spells = {
             return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).roll 
         end,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "glory_of_the_dawn" ).ok
         end,
 
@@ -3065,8 +3066,8 @@ local ww_spells = {
         
         trigger = {
             ["glory_of_the_dawn"] = true,
-            ["chi_wave"] = function()
-                return Player.buffs.chi_wave.up()
+            ["chi_wave"] = function( self, state )
+                return Player.getBuff( "chi_wave", state ).up()
             end,
         },
     
@@ -3235,7 +3236,7 @@ local ww_spells = {
             return Player.getTalent( "energy_burst" ).effectN( 1 ).roll
         end,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "energy_burst" ).ok
         end,
     } ),
@@ -3383,7 +3384,7 @@ local ww_spells = {
     
         tick_trigger = {
             ["ancient_lava"] = true,  
-            ["blackout_kick_totm"] = function()
+            ["blackout_kick_totm"] = function( self, state )
                 return Player.getTalent( "teachings_of_the_monastery" ).ok
             end,
             ["resonant_fists"] = true,
@@ -3429,7 +3430,7 @@ local ww_spells = {
         copied_by_sef = true,
         trigger_etl = true,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "whirling_dragon_punch" ).ok
         end,
         
@@ -3578,7 +3579,7 @@ local ww_spells = {
         trigger = {
             ["thunderfist"] = true,
             ["strike_of_the_windlord_mh"] = true,
-            ["rushing_jade_wind"] = function()
+            ["rushing_jade_wind"] = function( self, state )
                 return Player.is_beta() and Player.getTalent( "rushing_jade_wind" )
             end,
         },
@@ -3588,7 +3589,7 @@ local ww_spells = {
             ["resonant_fists"] = true,
         },
     
-        ready = function()
+        ready = function( self, state )
             local cd_xuen = aura_env.getCooldown( 123904 )
             return cd_xuen > 12 or cd_xuen < 1 
         end,
@@ -3650,7 +3651,7 @@ local ww_spells = {
             end
             return max( 0, duration )
         end,
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "jadefire_harmony" ).ok
         end,
     },
@@ -3693,7 +3694,7 @@ local ww_spells = {
         trigger_etl = true,
         ww_mastery = true,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "jadefire_fists" ).ok
         end,
         
@@ -3741,7 +3742,7 @@ local ww_spells = {
         trigger_etl = true,
         ww_mastery = true,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "jadefire_stomp" ).ok and aura_env.fight_remains > 5 and Player.moving == false
         end,
         
@@ -4063,7 +4064,7 @@ local ww_spells = {
             return aura_env.targetScale( target_count, 5 )
         end,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "resonant_fists" ).ok
         end,
     } ),
@@ -4079,7 +4080,7 @@ local ww_spells = {
             return Player.getTalent( "open_palm_strikes" ).effectN( 2 ).roll
         end,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "open_palm_strikes" ).ok
         end,
     } ),
@@ -4097,7 +4098,7 @@ local ww_spells = {
             return min( UnitHealthMax( "player" ) * health_mod, Player.recent_dtps * tick_time ) * Player.getTalent( "touch_of_karma" ).effectN( 4 ).pct
         end,
         
-        ready = function()
+        ready = function( self, state )
             local tick_time = min( aura_env.target_ttd, 10 )
             local health_mod = Player.getTalent( "touch_of_karma" ).effectN( 3 ).pct
             
@@ -4115,7 +4116,7 @@ local ww_spells = {
     ["diffuse_magic"] = Player.createAction( 122783, {
         skip_calcs = true,     
         
-        ready = function()
+        ready = function( self, state )
             
             local option = aura_env.config.diffuse_option
             
@@ -4190,7 +4191,7 @@ local ww_spells = {
             
         end,
         
-        ready = function()
+        ready = function( self, state )
             return IsUsableSpell( 322109 )
         end,
     } ),
@@ -4204,7 +4205,7 @@ local ww_spells = {
         usable_during_sck = true,
         ww_mastery = false,
         
-        ready = function()
+        ready = function( self, state )
             return InCombatLockdown() and aura_env.fight_remains > 3 
         end,
         
@@ -4224,7 +4225,7 @@ local ww_spells = {
     ["storm_earth_and_fire_fixate"] = Player.createAction( 221771, {
         skip_calcs = true,
         
-        ready = function()
+        ready = function( self, state )
             local arrogance = Player.findAura( 411661 )
             return InCombatLockdown() and Player.buffs.storm_earth_and_fire.remains() >= 1
             and 
@@ -4289,7 +4290,7 @@ local brm_spells = {
             -- Doesn't say in tooltip but damage scales with targets
             return ( 1 + ( min( 5, target_count ) - 1 ) * 0.15 ) 
         end,
-        ready = function()
+        ready = function( self, state )
             return Player.findAura( 408835 )
         end,      
     } ),
@@ -4367,15 +4368,15 @@ local brm_spells = {
     ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
         skip_calcs = true, -- This is just the script that triggers the individual hits
         
-        ready = function()
+        ready = function( self, state )
             return aura_env.unitRange( "target" ) < 8 
         end,
         
         trigger = {
-            ["mainhand_attack"] = function()
+            ["mainhand_attack"] = function( self, state )
                 return Player.main_hand.equipped 
             end,
-            ["offhand_attack"] = function()
+            ["offhand_attack"] = function( self, state )
                 return Player.off_hand.equipped
             end,            
         },
@@ -4540,16 +4541,16 @@ local brm_spells = {
         },
     
         trigger = {
-            ["pta_rising_sun_kick"] = function()
-                if Player.buffs.press_the_advantage.stacks() >= 10 then
+            ["pta_rising_sun_kick"] = function( self, state )
+                if Player.getBuff( "press_the_advantage", state ).stacks() >= 10 then
                     return true
                 end
                 
                 return false
             end,
             ["weapons_of_order_debuff"] = true,
-            ["chi_wave"] = function()
-                return Player.buffs.chi_wave.up()
+            ["chi_wave"] = function( self, state )
+                return Player.getBuff( "chi_wave", state ).up()
             end,
         },
     
@@ -4573,13 +4574,13 @@ local brm_spells = {
             return am
         end,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "charred_passions" ).ok
         end,
         
         tick_trigger = {
             ["charred_dreams_heal"] = true,        
-            ["breath_of_fire_periodic"] = function()
+            ["breath_of_fire_periodic"] = function( self, state )
                 return Player.bof_targets > 0
             end,
         },
@@ -4661,13 +4662,8 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
-            ["charred_passions"] = function( driver )
-                if Player.getTalent( "charred_passions" ).ok then
-                    if driver == "breath_of_fire" or Player.buffs.charred_passions.up() then
-                        return true
-                    end
-                end
-                return false
+            ["charred_passions"] = function( self, state )
+                return Player.getBuff( "charred_passions", state ).up() 
             end,     
             ["resonant_fists"] = true,
         },
@@ -4713,14 +4709,9 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
-            ["charred_passions"] = function( driver )
-                if Player.getTalent( "charred_passions" ).ok then
-                    if driver == "breath_of_fire" or Player.buffs.charred_passions.up() then
-                        return true
-                    end
-                end
-                return false
-            end,
+            ["charred_passions"] = function( self, state )
+                return Player.getBuff( "charred_passions", state ).up() 
+            end, 
             ["resonant_fists"] = true,
         },        
     
@@ -4766,7 +4757,7 @@ local brm_spells = {
         
         usable_during_sck = true,  
         
-        ready = function()
+        ready = function( self, state )
             return ( not Player.getTalent( "press_the_advantage" ).ok )
         end,
         
@@ -4867,7 +4858,7 @@ local brm_spells = {
             end
         end,
         
-        ready = function()
+        ready = function( self, state )
             if not IsUsableSpell( 322109 ) then
                 return false
             end
@@ -4895,7 +4886,7 @@ local brm_spells = {
         
         usable_during_sck = true,
         
-        ready = function()
+        ready = function( self, state )
             return InCombatLockdown() and aura_env.fight_remains > 3 
         end,
         
@@ -4916,7 +4907,7 @@ local brm_spells = {
     ["diffuse_magic"] = Player.createAction( 122783, {
         skip_calcs = true,     
         
-        ready = function()
+        ready = function( self, state )
             
             local option = aura_env.config.diffuse_option
             
@@ -4948,7 +4939,7 @@ local brm_spells = {
             return aura_env.targetScale( target_count, 5 )
         end,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "resonant_fists" ).ok
         end,
     } ),
@@ -4965,7 +4956,7 @@ local brm_spells = {
             return aura_env.target_count
         end,    
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "chi_surge" ).ok
         end,
         
@@ -5135,8 +5126,8 @@ local brm_spells = {
         },    
     
         trigger = {
-            ["pta_keg_smash"] = function()
-                if Player.buffs.press_the_advantage.stacks() >= 10 then
+            ["pta_keg_smash"] = function( self, state )
+                if Player.getBuff( "press_the_advantage", state ).stacks() >= 10 then
                     return true
                 end
                 return false
@@ -5181,7 +5172,7 @@ local brm_spells = {
             return false
         end,
         
-        ready = function()
+        ready = function( self, state )
             if Player.getTalent( "bountiful_brew" ).ok and Player.bdb_targets == 0 then
                 return false
             end
@@ -5316,8 +5307,8 @@ local brm_spells = {
         }, 
     
         trigger = {
-            ["breath_of_fire_periodic"] = function( driver ) 
-                return driver == "keg_smash" or Player.ks_targets > 0 
+            ["breath_of_fire_periodic"] = function( self, state ) 
+                return state.callback_name == "keg_smash" or Player.ks_targets > 0 
             end,  
             ["dragonfire"] = true,  
         },
@@ -5339,7 +5330,7 @@ local brm_spells = {
             return aura_env.targetScale( target_count, 5, 1 )
         end,  
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "dragonfire_brew" ).ok
         end,
         
@@ -5408,7 +5399,7 @@ local brm_spells = {
         background = true,
         skip_calcs = true,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "shuffle" ).ok
         end,
         
@@ -5502,7 +5493,7 @@ local brm_spells = {
 
         trigger = {
             ["special_delivery"] = true,
-            ["gai_plins_imperial_brew"] = function()
+            ["gai_plins_imperial_brew"] = function( self, state )
                 return Player.getTalent( "gai_plins_imperial_brew" ).ok
             end,
         },
@@ -5539,7 +5530,7 @@ local brm_spells = {
             return m
         end,
         
-        ready = function()
+        ready = function( self, state )
             local pb_cur, pb_max = GetSpellCharges( 119582 )
             
             if pb_cur < pb_max then
@@ -5567,7 +5558,7 @@ local brm_spells = {
     
         usable_during_sck = true,
         
-        ready = function()
+        ready = function( self, state )
             -- Hold for next tank buster if applicable
             if aura_env.danger_next and ( aura_env.danger_next < 40 and aura_env.danger_next > 8 ) then
                 return false
@@ -5651,7 +5642,7 @@ local brm_spells = {
         
         usable_during_sck = true,
         
-        ready = function()
+        ready = function( self, state )
             -- Require Celestial Brew on CD
             return aura_env.getCooldown( 322507 ) > 0
         end,
@@ -5689,7 +5680,7 @@ local brm_spells = {
             return target_count
         end,    
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "special_delivery" ).ok
         end,
     } ),
@@ -5698,7 +5689,7 @@ local brm_spells = {
         -- Melee swing damage event that replaces TP
         background = true,
         
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "press_the_advantage" ).ok
         end,
         
@@ -5734,7 +5725,7 @@ local brm_spells = {
             
             return max( 0, duration )
         end,
-        ready = function()
+        ready = function( self, state )
             return Player.getTalent( "weapons_of_order" ).ok and Player.findAura( 387184 )
         end,
     },
@@ -5758,7 +5749,7 @@ local brm_spells = {
             return am
         end,
         
-        ready = function()
+        ready = function( self, state )
             return ( Player.set_pieces[ 31 ] >= 2 or Player.set_pieces[ 32 ] >= 2 )
         end,
     } ),
@@ -5781,7 +5772,7 @@ local brm_spells = {
             return am
         end,
         
-        ready = function()
+        ready = function( self, state )
             return ( Player.set_pieces[ 31 ] >= 2 or Player.set_pieces[ 32 ] >= 2  )
         end,
     } ),
