@@ -4652,7 +4652,9 @@ local brm_spells = {
         end,
         
         onExecute = function( self, state )
-            Player.getBuff( "blackout_combo", state ).increment()
+            if Player.getTalent( "blackout_combo" ).ok then
+                Player.getBuff( "blackout_combo", state ).increment()
+            end
         end,
         
         trigger = {
