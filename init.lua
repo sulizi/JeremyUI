@@ -4418,8 +4418,8 @@ local brm_spells = {
             
             am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct * press_the_advantage_fp_mod ) )
             
-            if Player.buffs.counterstrike.up() then
-                am = am * ( 1 + ( Player.buffs.counterstrike.effectN( 1 ).pct * press_the_advantage_cs_mod ) )
+            if Player.getBuff( "counterstrike", state ).up() then
+                am = am * ( 1 + ( Player.getBuff( "counterstrike", state ).effectN( 1 ).pct * press_the_advantage_cs_mod ) )
             end        
             
             return am
@@ -4432,6 +4432,7 @@ local brm_spells = {
         onExecute = function( self, state )
             Player.getBuff( "blackout_combo", state ).expire()
             Player.getBuff( "press_the_advantage", state ).expire()
+            Player.getBuff( "counterstrike", state ).expire()
         end,           
         
         tick_trigger = {
@@ -4631,8 +4632,8 @@ local brm_spells = {
             
             am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
             
-            if Player.buffs.counterstrike.up() then
-                am = am * Player.buffs.counterstrike.effectN( 1 ).mod
+            if Player.getBuff( "counterstrike", state ).up() then
+                am = am * Player.getBuff( "counterstrike", state ).effectN( 1 ).mod
             end
             
             am = am * Player.getTalent( "efficient_training" ).effectN( 5 ).mod
@@ -4646,6 +4647,10 @@ local brm_spells = {
         
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, spell.spinning_crane_kick.effectN( 1 ).base_value )
+        end,
+        
+        onExecute = function( self, state )
+            Player.getBuff( "counterstrike", state ).expire()    
         end,
         
         tick_trigger = {
@@ -4712,8 +4717,8 @@ local brm_spells = {
             
             am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct  ) )
             
-            if Player.buffs.counterstrike.up() then
-                am = am * Player.buffs.counterstrike.effectN( 1 ).mod
+            if Player.getBuff( "counterstrike", state ).up() then
+                am = am * Player.getBuff( "counterstrike", state ).effectN( 1 ).mod
             end
             
             am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
@@ -4727,6 +4732,7 @@ local brm_spells = {
         
         onExecute = function( self, state )
             Player.getBuff( "blackout_combo", state ).expire()
+            Player.getBuff( "counterstrike", state ).expire()
         end,           
         
         tick_trigger = {
@@ -4935,8 +4941,8 @@ local brm_spells = {
             
             am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct * press_the_advantage_fp_mod ) )
             
-            if Player.buffs.counterstrike.up() then
-                am = am * ( 1 + ( Player.buffs.counterstrike.effectN( 1 ).pct * press_the_advantage_cs_mod ) )
+            if Player.getBuff( "counterstrike", state ).up() then
+                am = am * ( 1 + ( Player.getBuff( "counterstrike", state ).effectN( 1 ).pct * press_the_advantage_cs_mod ) )
             end   
             
             am = am * Player.getTalent( "one_versus_many" ).effectN( 3 ).mod
@@ -4970,6 +4976,7 @@ local brm_spells = {
         
         onExecute = function( self, state )
             Player.getBuff( "press_the_advantage", state ).expire()    
+            Player.getBuff( "counterstrike", state ).expire()
         end,
         
         reduces_cd = {
