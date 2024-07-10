@@ -4596,6 +4596,10 @@ local brm_spells = {
             if Player.getTalent( "blackout_combo" ).ok then
                 Player.getBuff( "blackout_combo", state ).increment()
             end
+            
+            if Player.getTalent( "hit_scheme" ).ok then
+                Player.getBuff( "hit_scheme", state ).increment()
+            end
         end,
         
         trigger = {
@@ -5003,7 +5007,7 @@ local brm_spells = {
     ["keg_smash"] = Player.createAction( 121253, {
         callbacks = {
             "breath_of_fire", -- Scalding Brew / Sal'Salabim's
-            "blackout_kick", -- Blackout Combo
+            "blackout_kick", -- Blackout Combo / Hit Scheme
         },
     
         hasted_cooldown = true,
@@ -5015,10 +5019,8 @@ local brm_spells = {
             
             am = am * Player.getTalent( "stormstouts_last_keg" ).effectN( 1 ).mod
             
-            if Player.buffs.hit_scheme.up() then
-                am = am * ( 1 + Player.buffs.hit_scheme.stacks() * Player.buffs.hit_scheme.effectN( 1 ).pct )
-            end     
-            
+            am = am * ( 1 + Player.getBuff( "hit_scheme", state ).stacks() * Player.buffs.hit_scheme.effectN( 1 ).pct )
+
             if Player.bof_targets > 0 and Player.getTalent( "scalding_brew" ).ok then
                 local ratio = Player.bof_targets / min( 20, aura_env.target_count ) 
                 am = am * ( 1 + ( ratio * Player.getTalent( "scalding_brew" ).effectN( 1 ).pct ) )
@@ -5061,6 +5063,7 @@ local brm_spells = {
         
         onExecute = function( self, state )
             Player.getBuff( "blackout_combo", state ).expire()
+            Player.getBuff( "hit_scheme", state ).expire()
         end,        
         
         reduces_cd = {
