@@ -2744,6 +2744,10 @@ local ww_spells = {
         
             Player.getBuff( "transfer_the_power", state ).expire()
             Player.getBuff( "momentum_boost", state ).expire()
+            
+            if Player.getTalent( "last_emperors_capacitor" ).ok then
+                Player.getBuff( "the_emperors_capacitor", state ).increment()
+            end            
         end,
         
         trigger = {
@@ -2905,6 +2909,10 @@ local ww_spells = {
             if Player.getTalent( "transfer_the_power" ).ok then
                 Player.getBuff( "transfer_the_power", state ).increment()
             end
+            
+            if Player.getTalent( "last_emperors_capacitor" ).ok then
+                Player.getBuff( "the_emperors_capacitor", state ).increment()
+            end            
         end,        
         
         trigger = {
@@ -3022,6 +3030,10 @@ local ww_spells = {
             end
             
             Player.getBuff( "chi_energy", state ).expire()
+            
+            if Player.getTalent( "last_emperors_capacitor" ).ok then
+                Player.getBuff( "the_emperors_capacitor", state ).increment()
+            end            
         end,
          
         trigger = {
@@ -3196,6 +3208,10 @@ local ww_spells = {
             
             if Player.getTalent( "transfer_the_power" ).ok then
                 Player.getBuff( "transfer_the_power", state ).increment()
+            end
+            
+            if Player.getTalent( "last_emperors_capacitor" ).ok then
+                Player.getBuff( "the_emperors_capacitor", state ).increment()
             end            
         end,
         
@@ -3480,7 +3496,11 @@ local ww_spells = {
             
             if Player.set_pieces[ 33 ] >= 4 then
                 Player.getBuff( "tigers_ferocity", state ).increment()
-            end            
+            end
+            
+            if Player.getTalent( "last_emperors_capacitor" ).ok then
+                Player.getBuff( "the_emperors_capacitor", state ).increment()
+            end
         end,          
         
         trigger = {
@@ -3915,6 +3935,14 @@ local ww_spells = {
     } ),
 
     ["crackling_jade_lightning"] = Player.createAction( 117952, {
+        callbacks = {
+            -- Last Emperor's Capacitor Generators
+            "strike_of_the_windlord",
+            "blackout_kick",
+            "spinning_crane_kick",
+            "rising_sun_kick",
+            "fists_of_fury",
+        }
 
         ticks = 4,
   
@@ -3924,9 +3952,7 @@ local ww_spells = {
         action_multiplier = function( self, state )
             local am = 1
             
-            if Player.buffs.the_emperors_capacitor.up() then
-                am = am * ( 1 + Player.buffs.the_emperors_capacitor.stacks() * spell.emperors_capacitor.effectN( 1 ).pct )
-            end
+            am = am * ( 1 + Player.getBuff( "the_emperors_capacitor", state ).stacks() * Player.getBuff( "the_emperors_capacitor", state ).effectN( 1 ).pct )
             
             am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
             
@@ -3947,6 +3973,10 @@ local ww_spells = {
         
         target_multiplier = function( target_count )
             return target_count
+        end,
+        
+        onExecute = function( self, state )
+            Player.getBuff( "the_emperors_capacitor", state ).expire()
         end,
         
         tick_trigger = {

@@ -919,7 +919,7 @@ function(event, ...)
                             start_cooldown[ #start_cooldown + 1 ] = combo_base
                         end
                         
-                        local ready = action.ready( self )
+                        local ready = action.ready( action )
                         local execute_time = action.execute_time()
                         
                         local cost = nil
