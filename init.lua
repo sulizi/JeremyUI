@@ -5475,11 +5475,11 @@ local brm_spells = {
             return Player.stagger * 0.5
         end,
         
-        mitigate = function()
+        mitigate = function( state )
             local m = 0
             
             if Player.getTalent( "pretense_of_instability" ).ok then
-                local pretenseGain = pretense_duration - Player.buffs.pretense_of_instability.remains()
+                local pretenseGain = pretense_duration - Player.getBuff( "pretense_of_instability", state ).remains()
                 m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
             end
             
@@ -5502,7 +5502,19 @@ local brm_spells = {
         end,
         
         onExecute = function( self, state )
+            
+            -- Purified Chi
+            local purified_chi_count = 1
+            if Player.buffs.moderate_stagger.up() then
+                purified_chi_count = 3
+            elseif Player.buffs.heavy_stagger.up() then
+                purified_chi_count = 5
+            end                
+            
+            Player.getBuff( "purified_chi", state ).increment( purified_chi_count )
+            
             Player.getBuff( "blackout_combo", state ).expire()
+            
         end,           
     } ),
 
@@ -5535,32 +5547,7 @@ local brm_spells = {
             
             if m > 0 then
             
-                -- Purified Chi
-                -- --------------------------
-                local purified_chi_count = 0
-                local driver = state and state.callback_name
-                
-                -- check state
-                
-                if driver and driver == "purifying_brew" then
-                    -- TODO: Use DBC Value
-                    purified_chi_count = 1
-                    if Player.buffs.moderate_stagger.up() then
-                        purified_chi_count = 3
-                    elseif Player.buffs.heavy_stagger.up() then
-                        purified_chi_count = 5
-                    end
-                end
-                
-                if Player.getBuff( "blackout_combo", state ) then
-                    -- TODO: Use DBC Value
-                    purified_chi_count = purified_chi_count + 3
-                end
-                
-                -- current buff
-                purified_chi_count = purified_chi_count + Player.buffs.purified_chi.stacks()
-                
-                m = m * ( 1 + ( min( 10, purified_chi_count ) * Player.buffs.purified_chi.effectN( 1 ).pct ) )
+                m = m * ( 1 + Player.getBuff( "purified_chi", state ).stacks() * Player.buffs.purified_chi.effectN( 1 ).pct )
 
                 -- --------------------------
             
@@ -5577,7 +5564,7 @@ local brm_spells = {
             
             -- Pretense of Instability
             if Player.getTalent( "pretense_of_instability" ).ok then
-                local pretenseGain = pretense_duration - Player.buffs.pretense_of_instability.remains()
+                local pretenseGain = pretense_duration - Player.getBuff( "pretense_of_instability", state ).remains()
                 m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
             end
             
@@ -5587,6 +5574,7 @@ local brm_spells = {
         
         onExecute = function( self, state )
             Player.getBuff( "blackout_combo", state ).expire()
+            Player.getBuff( "purified_chi", state ).expire()
         end,           
         
         trigger = {
