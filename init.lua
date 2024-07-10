@@ -4431,6 +4431,7 @@ local brm_spells = {
 
         onExecute = function( self, state )
             Player.getBuff( "blackout_combo", state ).expire()
+            Player.getBuff( "press_the_advantage", state ).expire()
         end,           
         
         tick_trigger = {
@@ -4965,6 +4966,10 @@ local brm_spells = {
             cdr = cdr + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds )
             
             return cdr
+        end,
+        
+        onExecute = function( self, state )
+            Player.getBuff( "press_the_advantage", state ).expire()    
         end,
         
         reduces_cd = {
@@ -5636,6 +5641,10 @@ local brm_spells = {
         
         brew_cdr = function()
             return Player.getTalent( "press_the_advantage" ).effectN( 1 ).seconds
+        end,
+        
+        onExecute = function( self, state )
+            Player.getBuff( "press_the_advantage", state ).increment()    
         end,
         
         tick_trigger = {
