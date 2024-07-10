@@ -1,0 +1,71 @@
+[Generic]:
+
+Absorb Shield SpellIDs
+Debuff States
+PPM Effects
+Review all Callbacks
+Prepatch: Remove all deprecated spells / code cleanup
+
+[DBC / Spell Datamining]:
+
+Hasted Cooldown
+Action Usable Off GCD?
+
+[Class Tree]:
+
+Pressure Points
+
+[Windwalker]:
+
+Dual Threat Attack Speed Buff
+Acclamation
+Gale Force
+Ordered Elements
+
+[Brewmaster]:
+
+August Blessing
+Improved Niuzao
+
+[Shado-Pan]:
+
+Against All Odds
+Flurry Charge
+Flurry Strikes
+High Impact
+Lead From the Front
+Pride of Pandaria
+Veteran's Eye
+Vigilant Watch Buff
+Wisdom of the Wall
+
+[Conduit of the Celestials]:
+
+August Dynasty
+Celestial Conduit
+Courage of the White Tiger
+Flight of the Red Crane
+Heart of the Jade Serpent
+Inner Compass
+Jade Sanctuary
+Niuzao's Protection
+Restore Balance
+Strength of the Black Ox
+Unity Within
+Yulon's Knowledge
+
+[Master of Harmony]:
+
+Vitality
+Aspect of Harmony
+Balanced Stratagem
+Clarity of Purpose
+Endless Draught
+Harmonic Gambit
+Mantra of Purity
+Mantra of Tenacity
+Overwhelming Force
+Path of Resurgence
+Purified Spirit
+Resonance
+Way of a Thousand Strikes

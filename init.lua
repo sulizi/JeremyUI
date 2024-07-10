@@ -2487,7 +2487,7 @@ Player.action_multiplier = function( action, state )
         am = action.action_multiplier( action, state )
     end
     
-    if Player.spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"]  then
+    if Player.spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ]  then
         -- WW Mastery and Hit Combo effects
         local cs, hit_combo = IsComboStrike( action, state )
         if cs then
