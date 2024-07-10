@@ -867,9 +867,9 @@ aura_env.CPlayer = {
             buff.increment = function( count )
                 count = count or 1
                 if buff.refresh_behavior ~= "DISABLED" then
-                    if refresh_behavior == "PANDEMIC" then
+                    if buff.refresh_behavior == "PANDEMIC" then
                         buff._remains = buff.duration + min( 0.3 * buff.duration, buff.remains() )
-                    elseif refresh_behavior == "MAX" then
+                    elseif buff.refresh_behavior == "MAX" then
                         buff._remains = max( buff.duration, buff.remains() )
                     else 
                         buff._remains = buff.duration
@@ -3942,7 +3942,7 @@ local ww_spells = {
             "spinning_crane_kick",
             "rising_sun_kick",
             "fists_of_fury",
-        }
+        },
 
         ticks = 4,
   

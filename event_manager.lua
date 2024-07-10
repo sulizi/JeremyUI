@@ -1361,7 +1361,7 @@ function(event, ...)
                                     end
                                     
                                     -- Check ready state
-                                    state.invalid = state.invalid or not trigger.ready( self, state )
+                                    state.invalid = state.invalid or not trigger.ready( spell, state )
 
                                     -- Trigger has cost
                                     state.invalid = state.invalid or state.primary < ( spell.base_cost or 0 )
@@ -1379,7 +1379,7 @@ function(event, ...)
                                     end
                                     
                                     -- Check ready state
-                                    state.invalid = state.invalid or not spell.ready( self, state )
+                                    state.invalid = state.invalid or not spell.ready( spell, state )
 
 
                                     -- set init trigger CD
