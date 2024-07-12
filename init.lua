@@ -2551,7 +2551,21 @@ local ww_spells = {
         
         triggerSpell = 451839,
         trigger_rate = function( state )
-            return Player.getTalent( "dual_threat" ).effectN( 1 ).pct
+            
+            local rate = Player.getTalent( "dual_threat" ).effectN( 1 ).pct
+            
+            -- Dual Threat does not trigger from misses
+            local enemy_level = UnitLevel( "target" )
+            local miss = enemy_level > 0 and min( 1, max( 0, 0.03 + ( ( enemy_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
+            
+            if Player.off_hand.equipped then
+                miss = miss + 0.19
+            end
+
+            rate = rate * ( 1 - miss )
+            -- ------------------------------
+            
+            return rate
         end,
         
         bonus_da = function()
