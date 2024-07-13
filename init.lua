@@ -2985,14 +2985,13 @@ local ww_spells = {
         
         action_multiplier = function( self, state )
             local am = 1
-            
             local motc_stacks = CurrentCraneStacks( state )
             
             if motc_stacks > 0 then
                 am = am * ( 1 + ( motc_stacks * spell.cyclone_strikes.effectN( 1 ).pct ) )
             end
             
-            if Player.getBuff( "dance_of_chiji", state ) then
+            if Player.getBuff( "dance_of_chiji", state ).up() then
                 am = am * Player.getTalent( "dance_of_chiji" ).effectN( 1 ).mod
             end
             
@@ -3003,7 +3002,7 @@ local ww_spells = {
             end
             
             am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
-            
+
             am = am * Player.getTalent( "efficient_training" ).effectN( 5 ).mod
             
             am = am * Player.getTalent( "temple_training" ).effectN( 2 ).mod
@@ -3243,7 +3242,7 @@ local ww_spells = {
                     end
                 end
                 
-                if Player.getBuff( "blackout_reinforcement", state ) then
+                if Player.getBuff( "blackout_reinforcement", state ).up() then
                     cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end
                 
@@ -3253,7 +3252,7 @@ local ww_spells = {
             ["fists_of_fury"] = function( state )
                 local cdr = spell.blackout_kick.effectN( 3 ).seconds
                 
-                if Player.getBuff( "blackout_reinforcement", state ) then
+                if Player.getBuff( "blackout_reinforcement", state ).up() then
                     cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end                
                 
@@ -3263,7 +3262,7 @@ local ww_spells = {
             ["strike_of_the_windlord"] = function( state )
                 local cdr = 0
                 
-                if Player.getBuff( "blackout_reinforcement", state ) then
+                if Player.getBuff( "blackout_reinforcement", state ).up() then
                     cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end                
                 
@@ -3273,7 +3272,7 @@ local ww_spells = {
             ["whirling_dragon_punch"] = function( state )
                 local cdr = 0
                 
-                if Player.getBuff( "blackout_reinforcement", state ) then
+                if Player.getBuff( "blackout_reinforcement", state ).up() then
                     cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                 end             
                 
@@ -5064,7 +5063,7 @@ local brm_spells = {
         brew_cdr = function()
             local cdr = 3
             
-            if Player.getBuff( "blackout_combo", state ) then -- TODO: State passed to brew_cdr
+            if Player.getBuff( "blackout_combo", state ).up() then -- TODO: State passed to brew_cdr
                 cdr = cdr + Player.getTalent( "blackout_combo" ).effectN( 3 ).base_value
             end
             
@@ -5233,7 +5232,7 @@ local brm_spells = {
         action_multiplier = function( self, state )
             local am = 1
             
-            if Player.getBuff( "blackout_combo", state ) then
+            if Player.getBuff( "blackout_combo", state ).up() then
                 am = am * Player.getBuff( "blackout_combo", state ).effectN( 5 ).mod
             end            
             
@@ -5344,7 +5343,7 @@ local brm_spells = {
                 dr = dr + Player.getTalent( "celestial_flames" ).effectN( 2 ).pct
             end
             
-            if Player.getBuff( "blackout_combo", state ) then
+            if Player.getBuff( "blackout_combo", state ).up() then
                 dr = dr + Player.getBuff( "blackout_combo", state ).effectN( 2 ).pct
             end
             
