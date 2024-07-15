@@ -2354,8 +2354,7 @@ function(event, ...)
             Enemy.priority_modifier = aura_env.npc_priority[ Enemy.npcid ] or 1.0
             
             local am_level = aura_env.config.automarker_enable 
-            local am_enable = 
-            am_level > 1 
+            local am_enable = am_level == 2 
             or ( am_level == 3 and UnitGroupRolesAssigned( "player" ) == "TANK" ) 
             or ( am_level == 4 and UnitIsGroupLeader( "player" ) )
             
