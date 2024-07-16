@@ -441,6 +441,7 @@ aura_env.CPlayer = {
         ticks = 1,
         ticks_remaining = nil,
     },
+    coneListeners = {},
     crit_bonus = 1,
     default_action = "spinning_crane_kick",
     dps = 0,
@@ -1334,23 +1335,6 @@ end
 aura_env.pull_hash = "" 
 aura_env.pull_data = nil
 
--- Variables related to Machine Learning
-aura_env.cone_listeners =
-{
-    -- Fists of Fury
-    [117418] = true,
-    -- Strike of the Windlord
-    [395521] = true,  
-    -- Faeline Stomp WW
-    [327264] = true,
-    -- Jadefire Stomp WW
-    [388201] = true,
-    -- Breath of Fire
-    [115181] = true,
-    -- Dragonfire Brew
-    [387621] = true,
-}
-
 -- base structure for trained data
 -- anything written to this structure is stored locally for the end-user
 -- and    renewed   on     initialization    of    the   WA
@@ -1511,16 +1495,16 @@ aura_env.nextPullListener = function( )
 end
 
 aura_env.coneTickListener = function ( spellID, GUID )
+
+    if not Player.coneListeners[ spellID ] then
+        return
+    end
     
     if not IsInInstance() or aura_env.pvp_mode then
         return
     end
     
     if not aura_env.pull_hash or aura_env.pull_hash == "" then
-        return
-    end
-    
-    if not aura_env.cone_listeners[ spellID ] then
         return
     end
     
@@ -2283,6 +2267,18 @@ local function deepcopy(orig, copies)
     end
     
     return copy
+end
+
+local function generateCones( actions )
+ 
+    for action, init in pairs( actions ) do
+        local id = init.spellID
+        if id not Player.coneListeners[ id ] then
+            if init.frontal then
+                Player.coneListeners[ id ] = true 
+            end
+        end
+    end
 end
 
 local function generateChannels( actions )
@@ -5274,7 +5270,7 @@ local brm_spells = {
             ["charred_dreams_damage"] = true,       
             ["resonant_fists"] = true,
         }, 
-    
+
         trigger = {
             ["breath_of_fire_periodic"] = function( self, state ) 
                 return state.callback_name == "keg_smash" or Player.ks_targets > 0 
@@ -5749,6 +5745,11 @@ generateChannels( brm_spells )
 generateCallbacks( ww_spells )
 generateCallbacks( mw_spells )
 generateCallbacks( brm_spells )
+
+-- Generate cone targeting listeners
+generateCones( ww_spells )
+generateCones( mw_spells )
+generateCones( brm_spells )
 
 ---------------------
 -- initSpecialization

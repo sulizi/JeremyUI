@@ -5,7 +5,6 @@ Debuff States
 PPM Effects
 Review all Callbacks
 Prepatch: Remove all deprecated spells / code cleanup
-Automatically set cone listeners 
 Generate target multiplier function on action initialization using SimC style variables
 
 [DBC / Spell Datamining]:
