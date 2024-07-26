@@ -37,7 +37,7 @@ function(event, ...)
     local GetNamePlateForUnit = C_NamePlate.GetNamePlateForUnit
     local GetNamePlates = C_NamePlate.GetNamePlates
     local C_Scenario = C_Scenario
-    local GetCriteriaInfo = C_Scenario.GetCriteriaInfo
+    local GetCriteriaInfo = C_Scenario.GetCriteriaInfo or C_ScenarioInfo.GetCriteriaInfo
     local GetInfo = C_Scenario.GetInfo
     local GetStepInfo = C_Scenario.GetStepInfo
     local C_UnitAuras = C_UnitAuras
@@ -238,19 +238,20 @@ function(event, ...)
         local action_set = function( tbl )
             if not tbl.name then return end
             
-            tbl.cb            = tbl.cb or spells[ tbl.name ]
-            tbl.raw           = tbl.raw or 0
-            tbl.ticks         = tbl.ticks or 1
-            tbl.damage        = tbl.damage or 0
-            tbl.healing       = tbl.healing or 0
-            tbl.group_healing = tbl.group_healing or 0 
-            tbl.cooldown      = tbl.cooldown or 0
-            tbl.cd_remains    = tbl.cooldown_remains or 0
-            tbl.start_cd      = tbl.starts_cooldown or {}
-            tbl.execute_time  = max( 0, tbl.execute_time or 0 )
-            tbl.cost          = tbl.cost or 0
-            tbl.t_amp         = tbl.t_amp or 1.0
-            tbl.delay         = max( 0, tbl.delay or 0 )
+            tbl.cb             = tbl.cb or spells[ tbl.name ]
+            tbl.raw            = tbl.raw or 0
+            tbl.ticks          = tbl.ticks or 1
+            tbl.damage         = tbl.damage or 0
+            tbl.healing        = tbl.healing or 0
+            tbl.group_healing  = tbl.group_healing or 0 
+            tbl.cooldown       = tbl.cooldown or 0
+            tbl.cd_remains     = tbl.cooldown_remains or 0
+            tbl.start_cd       = tbl.starts_cooldown or {}
+            tbl.execute_time   = max( 0, tbl.execute_time or 0 )
+            tbl.cost           = tbl.cost or 0
+            tbl.secondary_cost = tbl.secondary_cost or 0
+            tbl.t_amp          = tbl.t_amp or 1.0
+            tbl.delay          = max( 0, tbl.delay or 0 )
             
             -- Snapshot Channel Information
             if tbl.cb and tbl.raw > 0 and Player.channel.spellID and Player.channel.spellID == tbl.cb.spellID then
@@ -262,10 +263,13 @@ function(event, ...)
             local raw_comp = tbl.raw / compression_value
             jeremy.raw[ tbl.name ] = raw_comp > 1 and floor( raw_comp ) or raw_comp 
             if not tbl.background then
-                local deficit = ( Player.primary_resource and Player.primary_resource.deficit ) or 0
+                local deficit           = ( Player.primary_resource and Player.primary_resource.deficit ) or 0
+                local secondary_deficit = ( Player.secondary_resource and Player.secondary_resource.deficit ) or 0
+                
                 local dpet = tbl.raw / max( 1, 1 + ( tbl.execute_time + tbl.delay )  * rate_time() ) 
+                
                 tbl.d_time = dpet - tbl.cost
-                tbl.d_cost = dpet / max( 1, 1 + deficit + tbl.cost )
+                tbl.d_cost = dpet / max( 1, 1 + deficit + tbl.cost ) / max( 1, 1 + secondary_deficit + tbl.secondary_cost )
                 
                 local index = actionhash[ tbl.name ] or #actionlist+1
                 actionlist[ index ] = tbl
@@ -1096,11 +1100,6 @@ function(event, ...)
                                 crit_rate = action.critical_rate and action.critical_rate() or Player.crit_bonus
                                 crit_mod = action.critical_modifier and action.critical_modifier() or 1
                                 
-                                if crit_rate < 1.0 then
-                                    -- Keefer's Skyreach
-                                    crit_rate = min( 1, crit_rate + aura_env.skyreach_modifier( action ) )
-                                end
-                                
                                 if Player.is_pvp then
                                     local pvp_crit_modifier = Player.spell.pvp_enabled.effectN( 3 ).mod
                                     crit_mod = crit_mod * pvp_crit_modifier
@@ -1490,7 +1489,7 @@ function(event, ...)
                                     
                                     state.secondary = state.secondary - ( spell.base_secondary_cost or 0 )
                                     --state.secondary = state.secondary + TODO Secondary Gain function
-                                    state.secondary = min( state.primary, Player.secondary_resource.max )                                    
+                                    state.secondary = min( state.secondary, Player.secondary_resource.max )                                    
 
                                     -- Update Trigger results
                                     trigger_cost            = trigger_cost + ( basePrimary - state.primary )
@@ -1810,53 +1809,29 @@ function(event, ...)
                             end
                             
                             -- Resource Gain
-                            if secondary_cost > 0 and gain > 0 then
-                                local rate = gain / secondary_cost
-                                
-                                if action_cooldown > 0 then
-                                    rate = rate / action_cooldown
-                                end
-                                if not Player.secondary_conversion_rate or Player.secondary_conversion_rate < rate then
-                                    Player.secondary_conversion_rate = rate
-                                end
-                            end
-                            
                             if Player.primary_resource then
+                                
+                                if Player.primary_resource.regen > 0 then
+                                    gain = gain + ( Player.primary_resource.regen * ( execute_time + action_delay ) )
+                                end
                                 
                                 gain = min( Player.primary_resource.deficit, gain )
                                 
-                                --[[
                                 if aura_env.fight_remains > 5 then
+                                    
                                     if Player.secondary_resource then
                                         
                                         if Player.secondary_resource.regen > 0 then
                                             secondary_gain = secondary_gain + ( Player.secondary_resource.regen * ( execute_time + action_delay ) )
                                         end
                                         
-                                        if secondary_gain > 0 then
-                                            local capped_resource = secondary_gain - secondary_cost - Player.secondary_resource.deficit
-                                            
-                                            if capped_resource > 0 then 
-                                                secondary_cost = secondary_cost + capped_resource
-                                            end
-                                        end
-                                        
-                                        secondary_cost = secondary_cost - secondary_gain
-                                        secondary_cost = max( Player.secondary_resource.deficit * -1, secondary_cost )
-                                        
-                                        if Player.secondary_conversion_rate then
-                                            cost = cost + secondary_cost * Player.secondary_conversion_rate
-                                        end
+                                        secondary_cost = secondary_cost - min( Player.primary_resource.deficit, secondary_gain )
                                     end
-                                    
-                                    if Player.primary_resource.regen > 0 then
-                                        gain = gain + ( Player.primary_resource.regen * ( execute_time + action_delay ) )
-                                    end
-                                end]]
-                                
+                                end
                             end 
                             
-                            cost = cost - gain
+                            cost            = cost - gain
+                            secondary_cost  = secondary_cost - secondary_gain 
                             action.cost_total = cost
                             action.time_total = execute_time
                             
@@ -1866,6 +1841,7 @@ function(event, ...)
                                     raw = adjusted,
                                     ticks = ticks,
                                     cost = cost,
+                                    secondary_cost = secondary_cost,
                                     damage = damage,
                                     healing = healing,
                                     group_healing = group_healing,
@@ -2047,6 +2023,7 @@ function(event, ...)
                                 dpet = v.d_time,
                                 raw = v.raw,
                                 cost = v.cost,
+                                s_cost = v.secondary_cost,
                                 execute_time = v.execute_time,
                                 delay = v.delay,
                             }
@@ -2632,7 +2609,7 @@ function(event, ...)
             
             if amount == nil
             or type( amount ) ~= "number"
-            or amount == 0 then
+            or amount == 0 then 
                 return false
             end
             

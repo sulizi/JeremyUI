@@ -119,8 +119,8 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 2.5
-local DBC_Critical = 2.5
+local DBC_Version = 2.6
+local DBC_Critical = 2.6
 local LibDBCache = LibStub( "LibDBCache-1.0", true )
 
 if not LibDBCache then
@@ -192,7 +192,6 @@ local spell = {
     keefers_skyreach        = LibDBCache:find_spell( 344021 ),
     pretense                = LibDBCache:find_spell( 393515 ),
     pta_melee               = LibDBCache:find_spell( 418360 ),
-    resonant_fists          = LibDBCache:find_spell( 391400 ),
     special_delivery        = LibDBCache:find_spell( 196733 ),
     thunderfist             = LibDBCache:find_spell( 393566 ),
     
@@ -499,7 +498,7 @@ aura_env.CPlayer = {
     --
     
     is_beta = function()
-        local beta = 11.0 -- The War Within
+        local beta = 12.0 -- Midnight
         local build_version = select( 4, GetBuildInfo() ) / 10000
         return build_version >= beta
     end,
@@ -1060,7 +1059,6 @@ aura_env.CPlayer = {
         
         -- Player Aura Information
         if Player.needsFullUpdate then
-            Player.secondary_conversion_rate = nil
             ScanEvents( "UNIT_AURA_FULL_UPDATE", "player" )
         end            
     end,
@@ -1244,7 +1242,7 @@ aura_env.combo_strike = {
     [100780] = true,  -- Tiger Palm
     [100784] = true,  -- Blackout Kick
     [107428] = true,  -- Rising Sun Kick
-    [101545] = not Player.is_beta(),  -- Flying Serpent Kick
+    [101545] = false, -- Flying Serpent Kick
     [113656] = true,  -- Fists of Fury
     [101546] = true,  -- Spinning Crane Kick
     [116847] = true,  -- Rushing Jade Wind
@@ -1259,7 +1257,7 @@ aura_env.combo_strike = {
     [388193] = true,  -- Jadefire Stomp
     [325216] = true,  -- Bonedust Brew
     [388686] = true,  -- White Tiger Statue
-    [137639] = Player.is_beta(), -- Storm, Earth, and Fire
+    [137639] = true,  -- Storm, Earth, and Fire
 }
 
 aura_env.error_margin = 0.05
@@ -1323,7 +1321,7 @@ aura_env.buff_refresh_behavior =
 -- -----------------------------------------------------------------------------
 
 -- -----------------
-local ML_VERSION = 1.33
+local ML_VERSION = 1.4
 local ML_MAX_NODES = 10 -- Maximum nodes used in optimization algorithms
 
 if aura_env.saved and ( not aura_env.saved.version or aura_env.saved.version < ML_VERSION ) then
@@ -2140,57 +2138,6 @@ aura_env.unitRange = function( unitID )
     return 40
 end
 
--- TODO: Remove this in TWW
-aura_env.skyreach_modifier = function( callback )
-    
-    local callback_type = callback.type or "damage"
-    
-    if not callback.may_crit 
-    or not LibDBCache:spell_affected_by_effect( callback.spellID, spell.keefers_skyreach.effectN( 1 ) )
-    or callback_type ~= "damage" then
-        return 0
-    end
-    
-    local keefers_skyreach = 393047 --spellid
-    
-    local target_count = max( 1, min( 20, ( callback.target_count and callback.target_count() or 1 ) ) )
-    local execute_time = callback.execute_time and callback.execute_time() or 1 
-    
-    if target_count == 1 and aura_env.validTarget( "target" ) then
-        local Target = aura_env.GetEnemy( UnitGUID( "target" ) )
-        local remaining = 0
-        Target.auraExists( keefers_skyreach, function( auraData )
-                if auraData.sourceUnit == "player" then
-                    remaining = auraData.expirationTime - GetTime()
-                    return true
-                end    
-        end )  
-        if remaining > 0 then
-            return spell.keefers_skyreach.effectN( 1 ).mod * ( execute_time > 1 and min( 1, remaining  / execute_time ) or 1 )
-        end
-    else
-        local combined_rate = 0
-        for _, auras in pairs( aura_env.targetAuras ) do
-            local target_rate = 0
-            
-            local debuff = auras[ keefers_skyreach ]
-            if debuff then 
-                local remaining = debuff.expire - GetTime()
-                if remaining > 0 then
-                    target_rate = spell.keefers_skyreach.effectN( 1 ).mod * ( execute_time > 1 and min( 1, remaining  / execute_time ) or 1 )
-                end
-            end
-            combined_rate = combined_rate + target_rate
-        end
-        
-        if combined_rate > 0 then
-            return combined_rate / aura_env.target_count
-        end
-    end
-    
-    return 0
-end
-
 aura_env.actionPostProcessor = function( result )
     
     if not result then
@@ -2273,7 +2220,7 @@ local function generateCones( actions )
  
     for action, init in pairs( actions ) do
         local id = init.spellID
-        if id not Player.coneListeners[ id ] then
+        if id and not Player.coneListeners[ id ] then
             if init.frontal then
                 Player.coneListeners[ id ] = true 
             end
@@ -2393,10 +2340,6 @@ end
 ------------------------------------------------
 
 local CurrentCraneStacks = function( state )
-    
-    if not Player.is_beta() and not Player.getTalent( "mark_of_the_crane" ).ok then
-        return 0
-    end
     
     local motc_stacks = GetSpellCount( 101546 )
     
@@ -2538,7 +2481,7 @@ local ww_spells = {
     } ),
 
     -- TODO: Buff effect
-    ["dual_threat"] = Player.createAction( Player.is_beta() and 451823 or nil, {
+    ["dual_threat"] = Player.createAction( 451823, {
         background = true,
         
         --ww_mastery = TODO
@@ -2571,7 +2514,7 @@ local ww_spells = {
         ready = function( self, state )
             return Player.getTalent( "dual_threat" ).ok
         end,
-    }),
+    } ),
 
     ["mainhand_attack"] = Player.createAction( AUTO_ATTACK, {
         background = true,
@@ -2715,8 +2658,27 @@ local ww_spells = {
                 am = am * ( 1 + ( Player.haste * Player.getTalent( "momentum_boost" ).effectN( 1 ).pct ) )
                 
                 -- Second effect, increase damage by n% per stack
-                am = am * ( 1 + Player.getBuff( "momentum_boost", state ).stacks() * Player.getBuff( "momentum_boost", state ).effectN( 1 ).pct  )
-                
+                if state then
+                    -- if state is available we can use the buff state
+                    am = am * ( 1 + Player.getBuff( "momentum_boost", state ).stacks() * Player.getBuff( "momentum_boost", state ).effectN( 1 ).pct  )
+                else
+                    -- otherwise this can be solved using an algebraic series formula
+                    local ticks = floor( self.ticks() )
+
+                    if ticks > 1 then
+                        local targets = self.target_count()
+                        local max_stacks = Player.buffs.momentum_boost.max_stacks()
+    
+                        -- The first tick will be unbuffed 
+                        local uncapped = ( ticks - 1 ) * targets <= max_stacks and ( ticks - 1 ) or floor( max_stacks / targets )
+                        local capped = ticks - 1 - uncapped
+    
+                        local m = Player.buffs.momentum_boost.effectN( 1 ).pct / ticks -- Effect value divided by *TOTAL* ticks for this action
+                        local momentum = ( uncapped / 2 ) * ( 2 * ( targets * m ) + ( uncapped - 1 ) * ( targets * m ) ) + ( max_stacks * m ) * capped
+    
+                        am = am * ( 1 + momentum )
+                    end
+                end
             end
             
             return am
@@ -2765,9 +2727,7 @@ local ww_spells = {
         },
         
         tick_trigger = {
-            ["open_palm_strikes"] = true,
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
         },
     } ),
 
@@ -2810,19 +2770,11 @@ local ww_spells = {
         end,
         
         chi_gain = function()
-            if Player.is_beta() then
-                return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).base_value     
-            end
-            
-            return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).base_value 
+            return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).base_value     
         end,
         
         trigger_rate = function() 
-            if Player.is_beta() then
-                return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).roll * Player.haste
-            end
-            
-            return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).roll 
+            return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).roll * Player.haste
         end,
         
         ready = function( self, state )
@@ -2934,7 +2886,6 @@ local ww_spells = {
     
         tick_trigger = {
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
         },
     
         reduces_cd = {
@@ -2964,7 +2915,6 @@ local ww_spells = {
         ap_type = "BOTH",
         triggerSpell = 107270,
         ticks = 4,
-        delay_aa = not Player.is_beta(),
         
         copied_by_sef = true,
         affected_by_serenity = true,
@@ -3051,7 +3001,6 @@ local ww_spells = {
     
         tick_trigger = {
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,            
         },
     
     } ),
@@ -3105,7 +3054,7 @@ local ww_spells = {
         },        
     } ),
 
-    ["energy_burst"] = Player.createAction( Player.is_beta() and 451498 or nil, {
+    ["energy_burst"] = Player.createAction( 451498, {
         background = true,
         
         chi_gain = function( state )
@@ -3144,11 +3093,7 @@ local ww_spells = {
         ww_mastery = true,
         
         generate_marks = function()
-            if Player.is_beta() then
-                return 1
-            end
-            
-            return 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value
+            return 1
         end,
         
         critical_rate = function()
@@ -3192,12 +3137,8 @@ local ww_spells = {
         end,
         
         target_multiplier = function( target_count )
-            if Player.is_beta() then
-                local chain_targets = min( 0, target_count - 1 )
-                return 1 + ( chain_targets * Player.getTalent( "shadowboxing_treads" ).effectN( 3 ).pct )
-            end
-            
-            return target_count
+            local chain_targets = min( 0, target_count - 1 )
+            return 1 + ( chain_targets * Player.getTalent( "shadowboxing_treads" ).effectN( 3 ).pct )
         end,
         
         onImpact = function( self, state )
@@ -3285,11 +3226,10 @@ local ww_spells = {
             ["blackout_kick_totm"] = function( self, state )
                 return Player.getBuff( "teachings_of_the_monastery", state ).up()
             end,
-            ["resonant_fists"] = true,
         },    
     } ),
 
-    ["wdp_st_tick"] = Player.createAction( Player.is_beta() and 451767 or nil, {
+    ["wdp_st_tick"] = Player.createAction( 451767, {
         background = true,
         
         ww_mastery = true,
@@ -3310,7 +3250,6 @@ local ww_spells = {
         
         tick_trigger = {
             ["ancient_lava"] = true,  
-            ["resonant_fists"] = true,
         },       
     }),
 
@@ -3339,20 +3278,16 @@ local ww_spells = {
             if not Player.getTalent( "whirling_dragon_punch" ).ok then
                 return false
             end
-            -- WDP not ready
-            if aura_env.getCooldown( 152175 ) ~= 0 then
-                return false
-            end
             
-            local fof_remains = aura_env.getCooldown( 113656 )
+            local brain_lag = 1.25
+            local gcd = aura_env.spells[ callback ].gcd()
+            local fof_cd = ( callback == "fists_of_fury" and 0 ) or aura_env.getCooldown( 113656 )
+            local rsk_cd = ( callback == "rising_sun_kick" and 0 ) or aura_env.getCooldown( 107428 )
+            local wdp_cd = aura_env.getCooldown( 152175 )
             
-            -- Fists of Fury not on CD
-            if fof_remains == 0 then
-                return false
-            end
-            
-            -- Not enough reaction time to perform the combo
-            if fof_remains < 2.25 then
+            if fof_cd < ( gcd + brain_lag )
+            or rsk_cd < ( gcd + brain_lag )
+            or wdp_cd > gcd then
                 return false
             end
             
@@ -3376,12 +3311,7 @@ local ww_spells = {
         end,
         
         target_multiplier = function( target_count )
-            
-            if Player.is_beta() then
-                return aura_env.targetScale( target_count, Player.getTalent( "whirling_dragon_punch" ).effectN( 1 ).base_value )
-            end
-            
-            return target_count
+            return aura_env.targetScale( target_count, Player.getTalent( "whirling_dragon_punch" ).effectN( 1 ).base_value )
         end,
         
         onExecute = function( self, state )
@@ -3390,7 +3320,7 @@ local ww_spells = {
             end
             
             if Player.getTalent( "teachings_of_the_monastery" ).ok then
-                if Player.getTalent( "knowledge_of_the_broken_temple" ) then
+                if Player.getTalent( "knowledge_of_the_broken_temple" ).ok then
                     Player.getBuff( "teachings_of_the_monastery", state ).increment( Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )
                 end
             end
@@ -3401,12 +3331,11 @@ local ww_spells = {
         end,
         
         trigger = {
-            ["wdp_st_tick"] = Player.is_beta(),
+            ["wdp_st_tick"] = true,
         },
         
         tick_trigger = {
             ["ancient_lava"] = true,  
-            ["resonant_fists"] = true,
         },        
     } ),
 
@@ -3439,7 +3368,6 @@ local ww_spells = {
         
         tick_trigger = {
             ["ancient_lava"] = true, 
-            ["resonant_fists"] = true,
         },    
     } ),
 
@@ -3465,7 +3393,7 @@ local ww_spells = {
         affected_by_serenity = true,
         
         motc_gain = function()
-            if Player.is_beta() and Player.getTalent( "rushing_jade_wind" ) then
+            if Player.getTalent( "rushing_jade_wind" ).ok then
                 return 5
             end
             
@@ -3498,7 +3426,7 @@ local ww_spells = {
         end,
         
         onExecute = function( self, state )
-            if Player.is_beta() and Player.getTalent( "thunderfist" ).ok then
+            if Player.getTalent( "thunderfist" ).ok then
                 local stacks = Player.getTalent( "thunderfist" ).effectN( 1 ).base_value
                 Player.getBuff( "thunderfist", state ).increment( stacks )
             end
@@ -3515,13 +3443,12 @@ local ww_spells = {
         trigger = {
             ["strike_of_the_windlord_mh"] = true,
             ["rushing_jade_wind"] = function( self, state )
-                return Player.is_beta() and Player.getTalent( "rushing_jade_wind" )
+                return Player.getTalent( "rushing_jade_wind" )
             end,
         },
     
         tick_trigger = {
             ["ancient_lava"] = true, 
-            ["resonant_fists"] = true,
         },
     
         ready = function( self, state )
@@ -3531,14 +3458,8 @@ local ww_spells = {
     } ),
 
     ["rushing_jade_wind"] = Player.createAction( 116847, {
-        callbacks = not Player.is_beta() and {
-            -- Chi generators
-            "tiger_palm", -- also MotC and Mastery eval.
-            "expel_harm", -- also Mastery eval.
-            "chi_burst",
-        } or nil,
-        
-        background = Player.is_beta(),
+
+        background = true,
         
         triggerSpell = 148187,
         base_tick_rate = 0.75, -- TODO: Better buff handling
@@ -3560,7 +3481,6 @@ local ww_spells = {
         
         tick_trigger = {
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
         },        
     } ),
 
@@ -3618,11 +3538,10 @@ local ww_spells = {
         
         tick_trigger = {
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
         },        
     } ),    
 
-    ["jadefire_fists"] = Player.createAction( Player.is_beta() and 457974 or nil, {
+    ["jadefire_fists"] = Player.createAction( 457974, {
         background = true,
         
         triggerSpell = 388207,
@@ -3665,7 +3584,6 @@ local ww_spells = {
     
         tick_trigger = {
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
         },        
     }),
 
@@ -3713,7 +3631,6 @@ local ww_spells = {
     
         tick_trigger = {
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
         },        
     } ),
 
@@ -3729,11 +3646,7 @@ local ww_spells = {
         },
 
         chi_gain = function() 
-            if Player.is_beta() then
-                return 2
-            end
-            
-            return ( Player.buffs.power_strikes.up() and 3 or 2 ) 
+            return 2
         end,
         
         generate_marks = 1,
@@ -3745,10 +3658,8 @@ local ww_spells = {
         action_multiplier = function( self, state )
             local am = 1
             
-            local combat_wisdom = Player.is_beta() and Player.getTalent( "combat_wisdom" ) or Player.getTalent( "power_strikes" )
-            
-            if Player.buffs.power_strikes.up() and combat_wisdom.ok then
-                am = am * combat_wisdom.effectN( 2 ).mod
+            if Player.buffs.power_strikes.up() and Player.getTalent( "combat_wisdom" ).ok then
+                am = am * Player.getTalent( "combat_wisdom" ).effectN( 2 ).mod
             end
             
             am = am * Player.getTalent( "touch_of_the_tiger" ).effectN( 1 ).mod
@@ -3797,12 +3708,11 @@ local ww_spells = {
         end,
         
         trigger = {
-            ["expel_harm"] = Player.is_beta(),
+            ["expel_harm"] = true,
         },
         
         tick_trigger = {
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
         },    
     } ),
 
@@ -3814,14 +3724,6 @@ local ww_spells = {
         copied_by_sef = true,   
         ww_mastery = true,
         
-        chi_gain = function()
-            if Player.is_beta() then
-                return 0
-            end
-            
-            return min( 2, aura_env.target_count ) 
-        end,
-
         target_count = function()
             return aura_env.target_count
         end,
@@ -3831,12 +3733,11 @@ local ww_spells = {
         end,
         
         tick_trigger = {
-            ["resonant_fists"] = true,
         },
     } ),
 
-    ["chi_wave"] = Player.createAction( Player.is_beta() and 450391 or 115098, {
-        background = Player.is_beta(),
+    ["chi_wave"] = Player.createAction( 450391, {
+        background = true,
         triggerSpell = 132467,
         ticks = 4, -- 4 Damage Bounces
         
@@ -3846,18 +3747,17 @@ local ww_spells = {
         copied_by_sef = true,
  
         tick_trigger = {
-            ["resonant_fists"] = true,
         },        
     } ),
 
-    ["expel_harm"] = Player.createAction( Player.is_beta() and 451968 or 322101, {
+    ["expel_harm"] = Player.createAction( 451968, {
         trigger_etl = true,
         ww_mastery = true,
         usable_during_sck = true,
         
         chi_gain = function()
             
-            local chi = Player.is_beta() and 0 or 1
+            local chi = 0
             
             if IsPlayerSpell( spell.reverse_harm.id ) then -- Reverse Harm
                 chi = chi + spell.reverse_harm.effectN( 2 ).base_value
@@ -3989,47 +3889,7 @@ local ww_spells = {
         end,
         
         tick_trigger = {
-            ["resonant_fists"] = true,
         },
-    } ),
-
-    -- TODO: Remove this in TWW
-    ["resonant_fists"] = Player.createAction( not Player.is_beta() and 389578 or nil, {
-        background = true,
-        
-        trigger_etl = true,
-
-        action_multiplier = function( self, state )
-            return Player.getTalent( "resonant_fists" ).rank 
-        end,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, 5 )
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "resonant_fists" ).ok
-        end,
-    } ),
-
-    ["open_palm_strikes"] = Player.createAction( not Player.is_beta() and 392970 or nil, {
-        background = true,
-        
-        chi_gain = function() 
-            return Player.getTalent( "open_palm_strikes" ).effectN( 3 ).base_value 
-        end,
-        
-        trigger_rate = function( callback )
-            return Player.getTalent( "open_palm_strikes" ).effectN( 2 ).roll
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "open_palm_strikes" ).ok
-        end,
     } ),
 
     -- TODO: Refactor this to debuff at some point?
@@ -4165,7 +4025,6 @@ local ww_spells = {
         end,
         
         tick_trigger = {
-            ["resonant_fists"] = true,
         },
     } ),
 
@@ -4447,7 +4306,6 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
         },
     
         trigger = {
@@ -4487,7 +4345,6 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
         },
     
         trigger = {
@@ -4621,7 +4478,6 @@ local brm_spells = {
             ["charred_passions"] = function( self, state )
                 return Player.getBuff( "charred_passions", state ).up() 
             end,     
-            ["resonant_fists"] = true,
         },
     } ),
 
@@ -4672,7 +4528,6 @@ local brm_spells = {
             ["charred_passions"] = function( self, state )
                 return Player.getBuff( "charred_passions", state ).up() 
             end, 
-            ["resonant_fists"] = true,
         },        
     
         trigger = {
@@ -4706,7 +4561,6 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,      
-            ["resonant_fists"] = true,
         },      
     } ),
 
@@ -4751,7 +4605,6 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,   
-            ["resonant_fists"] = true,
         },
     } ),
 
@@ -4777,13 +4630,12 @@ local brm_spells = {
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,   
-            ["resonant_fists"] = true,
         },
     } ),
 
-    ["chi_wave"] = Player.createAction( Player.is_beta() and 450391 or 115098, {
+    ["chi_wave"] = Player.createAction( 450391, {
         
-        background = Player.is_beta(),
+        background = true,
         triggerSpell = 132467,
         ticks = 4, -- 4 Damage Bounces
         usable_during_sck = true,   
@@ -4798,7 +4650,6 @@ local brm_spells = {
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,  
-            ["resonant_fists"] = true,
         },
     } ),
 
@@ -4861,7 +4712,6 @@ local brm_spells = {
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["resonant_fists"] = true,
         },
     } ),
 
@@ -4884,27 +4734,6 @@ local brm_spells = {
         end,
     } ),
 
-    -- TODO: Remove this in TWW
-    ["resonant_fists"] = Player.createAction( not Player.is_beta() and 389578 or nil, {
-        background = true,
-        
-        action_multiplier = function( self, state )
-            return Player.getTalent( "resonant_fists" ).rank 
-        end,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, 5 )
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "resonant_fists" ).ok
-        end,
-    } ),
-
     ["chi_surge"] = Player.createAction( 393786, {
         background = true,
         base_tick_rate = 2,
@@ -4922,7 +4751,6 @@ local brm_spells = {
         end,
         
         tick_trigger = {
-            ["resonant_fists"] = true,
         },
     } ),
 
@@ -5004,7 +4832,6 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,  
-            ["resonant_fists"] = true,
         },   
     
         trigger = {
@@ -5087,7 +4914,6 @@ local brm_spells = {
         tick_trigger = {
             ["exploding_keg_proc"] = true,
             ["ancient_lava"] = true,
-            ["resonant_fists"] = true,
         },    
     
         trigger = {
@@ -5147,7 +4973,6 @@ local brm_spells = {
         
         tick_trigger = {
             ["charred_dreams_heal"] = true,   
-            ["resonant_fists"] = true,
             ["exploding_keg_proc"] = true, -- to pass the buff to the state function
         },
     } ),
@@ -5213,7 +5038,6 @@ local brm_spells = {
         
         tick_trigger = {
             ["charred_dreams_heal"] = true, 
-            ["resonant_fists"] = true,
         },
     } ),
 
@@ -5268,7 +5092,6 @@ local brm_spells = {
             ["exploding_keg_proc"] = true,    
             ["charred_dreams_heal"] = true,
             ["charred_dreams_damage"] = true,       
-            ["resonant_fists"] = true,
         }, 
 
         trigger = {
@@ -5655,7 +5478,7 @@ local brm_spells = {
         end,
         
         tick_trigger = {
-            ["resonant_fists"] = true,
+
         },
     } ),
 
@@ -5922,7 +5745,9 @@ SetCVar( "showNPETutorials", 0 )
 SetCVar( "UberTooltips", 1 )
 SetCVar( "threatWarning", 3 )
 SetCVar( "ActionButtonUseKeyDown", 1 )
-SetCVar( "cameraDistanceMaxZoomFactor", 2.6 ) 
+SetCVar( "cameraDistanceMaxZoomFactor", 2.6 )
+SetCVar( "cameraIndirectVisibility", 1 ) 
+SetCVar( "cameraIndirectOffset", 10 ) 
 
 BNToastFrame:SetPoint ( "Left", 0, 0 ) 
 
