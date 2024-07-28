@@ -177,23 +177,23 @@ local spell = {
     wdp_tick            = LibDBCache:find_spell( 158221 ),
     
     -- Other Spells
-    breath_of_fire_dot      = LibDBCache:find_spell( 123725 ),
-    catue_claw              = LibDBCache:find_spell( 389541 ),
-    celestial_fortune       = LibDBCache:find_spell( 216519 ),
-    chi_energy              = LibDBCache:find_spell( 393057 ),
-    chi_explosion           = LibDBCache:find_spell( 393056 ),
-    chi_surge_dot           = LibDBCache:find_spell( 393786 ),
-    cyclone_strikes         = LibDBCache:find_spell( 220358 ),
-    dragonfire              = LibDBCache:find_spell( 387621 ),
-    emperors_capacitor      = LibDBCache:find_spell( 393039 ),
-    jadefire_brand_dmg      = LibDBCache:find_spell( 395414 ),
-    gift_of_the_ox          = LibDBCache:find_spell( 124507 ),
-    gotd_proc               = LibDBCache:find_spell( 392959 ),
-    keefers_skyreach        = LibDBCache:find_spell( 344021 ),
-    pretense                = LibDBCache:find_spell( 393515 ),
-    pta_melee               = LibDBCache:find_spell( 418360 ),
-    special_delivery        = LibDBCache:find_spell( 196733 ),
-    thunderfist             = LibDBCache:find_spell( 393566 ),
+    breath_of_fire_dot          = LibDBCache:find_spell( 123725 ),
+    catue_claw                  = LibDBCache:find_spell( 389541 ),
+    celestial_fortune           = LibDBCache:find_spell( 216519 ),
+    chi_energy                  = LibDBCache:find_spell( 393057 ),
+    chi_explosion               = LibDBCache:find_spell( 393056 ),
+    chi_surge_dot               = LibDBCache:find_spell( 393786 ),
+    cyclone_strikes             = LibDBCache:find_spell( 220358 ),
+    dragonfire                  = LibDBCache:find_spell( 387621 ),
+    emperors_capacitor          = LibDBCache:find_spell( 393039 ),
+    empowered_tiger_lightning   = LibDBCache:find_spell( 323999 ),
+    jadefire_brand_dmg          = LibDBCache:find_spell( 395414 ),
+    gift_of_the_ox              = LibDBCache:find_spell( 124507 ),
+    gotd_proc                   = LibDBCache:find_spell( 392959 ),
+    pretense                    = LibDBCache:find_spell( 393515 ),
+    pta_melee                   = LibDBCache:find_spell( 418360 ),
+    special_delivery            = LibDBCache:find_spell( 196733 ),
+    thunderfist                 = LibDBCache:find_spell( 393566 ),
     
     mystic_touch            = LibDBCache:find_spell( 113746 ),
     
@@ -208,7 +208,6 @@ local spell = {
 -- ------------------------------------------------------------------------------
 
 -- todo
-local bdb_chance = 0.5
 local bof_duration = 12
 local cb_apmod = 8.4
 local double_barrel_amp = 0.5
@@ -482,7 +481,6 @@ aura_env.CPlayer = {
     talent = {},
     
     -- Monk 
-    bdb_targets = 0,
     bof_targets = 0,
     diffuse_reflects = {},
     diffuse_auras = {},
@@ -1183,7 +1181,6 @@ Player.makeBuff( 426553, "annihilating_flame" )
 
 -- general
 
-Player.makeBuff( 389684, "close_to_heart" )
 Player.makeBuff( 390105, "save_them_all" )
 
 -- ww 
@@ -1197,7 +1194,7 @@ Player.makeBuff( 196741, "hit_combo" )
 Player.makeBuff( 394944, "kicks_of_flowing_momentum" )
 Player.makeBuff( 451457, "martial_mixture" )
 Player.makeBuff( 451297, "momentum_boost" )
-Player.makeBuff( 129914, "power_strikes" )
+Player.makeBuff( 129914, "combat_wisdom" )
 Player.makeBuff( 337482, "pressure_point" )
 Player.makeBuff( 152173, "serenity" )
 Player.makeBuff( 137639, "storm_earth_and_fire" )
@@ -1247,7 +1244,6 @@ aura_env.combo_strike = {
     [101546] = true,  -- Spinning Crane Kick
     [116847] = true,  -- Rushing Jade Wind
     [152175] = true,  -- Whirling Dragon Punch
-    [115098] = true,  -- Chi Wave
     [123986] = true,  -- Chi Burst
     [117952] = true,  -- Crackling Jade Lightning
     [392983] = true,  -- Strike of the Windlord
@@ -1255,7 +1251,6 @@ aura_env.combo_strike = {
     [322101] = true,  -- Expel Harm
     [310454] = true,  -- Weapons of Order
     [388193] = true,  -- Jadefire Stomp
-    [325216] = true,  -- Bonedust Brew
     [388686] = true,  -- White Tiger Statue
     [137639] = true,  -- Storm, Earth, and Fire
 }
@@ -1840,12 +1835,6 @@ aura_env.updateTalents = function()
 end
 
 aura_env.targetAuras = { }
-aura_env.bdb_amp = function()
-    
-    local attenuation_bonus = Player.getTalent( "attenuation" ).effectN( 1 ).mod
-    
-    return 1 + ( Player.getTalent( "bonedust_brew" ).effectN( 1 ).mod * attenuation_bonus * bdb_chance )
-end
 aura_env.targetAuraEffect = function( callback, future )
     
     future = future or 0
@@ -1999,9 +1988,6 @@ aura_env.global_modifier = function( callback, future, real )
             gm = gm * spell.mystic_touch.effectN( 1 ).mod
         end
         
-        -- Passive Talents
-        gm = gm * Player.getTalent( "ferocity_of_xuen" ).effectN( 1 ).mod
-        
         -- Chi Proficiency
         if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 1 ) ) then
             gm = gm * Player.getTalent( "chi_proficiency" ).effectN( 1 ).mod
@@ -2041,9 +2027,9 @@ aura_env.global_modifier = function( callback, future, real )
             gm = gm * ( 1 + Player.buffs.hit_combo.stacks() * Player.buffs.hit_combo.effectN( 1 ).pct  )
         end
         
-        if Player.getTalent( "empowered_tiger_lightning" ).ok and callback.trigger_etl then
+        if callback.trigger_etl then
             if Player.buffs.xuen_the_white_tiger.remains() > future then
-                gm = gm * ( Player.getTalent( "empowered_tiger_lightning" ).effectN( 2 ).mod * ( execute_time > 1 and min( 1, ( Player.buffs.xuen_the_white_tiger.remains() - future ) / execute_time ) or 1 ) )
+                gm = gm * ( Player.spell.empowered_tiger_lightning.effectN( 2 ).mod * ( execute_time > 1 and min( 1, ( Player.buffs.xuen_the_white_tiger.remains() - future ) / execute_time ) or 1 ) )
             end
         end
         
@@ -2634,11 +2620,7 @@ local ww_spells = {
         action_multiplier = function( self, state )
             local am = 1
             
-            am = am * Player.getTalent( "flashing_fists" ).effectN( 1 ).mod
-            
             am = am * ( 1 + Player.getBuff( "transfer_the_power", state ).stacks() * Player.getTalent( "transfer_the_power" ).effectN( 1 ).pct )
-            
-            am = am * Player.getTalent( "open_palm_strikes" ).effectN( 4 ).mod
             
             if Player.getBuff( "fists_of_flowing_momentum", state ).up() then
                 am = am * ( 1 + Player.getBuff( "fists_of_flowing_momentum", state ).stacks() * Player.getBuff( "fists_of_flowing_momentum", state ).effectN( 1 ).pct )
@@ -2920,14 +2902,6 @@ local ww_spells = {
         affected_by_serenity = true,
         trigger_etl = true,
         ww_mastery = true,
-        
-        chi_gain = function()
-            if Player.bdb_targets > 0 then
-                return 1
-            end
-            
-            return 0
-        end,
         
         action_multiplier = function( self, state )
             local am = 1
@@ -3443,7 +3417,7 @@ local ww_spells = {
         trigger = {
             ["strike_of_the_windlord_mh"] = true,
             ["rushing_jade_wind"] = function( self, state )
-                return Player.getTalent( "rushing_jade_wind" )
+                return Player.getTalent( "rushing_jade_wind" ).ok
             end,
         },
     
@@ -3658,8 +3632,8 @@ local ww_spells = {
         action_multiplier = function( self, state )
             local am = 1
             
-            if Player.buffs.power_strikes.up() and Player.getTalent( "combat_wisdom" ).ok then
-                am = am * Player.getTalent( "combat_wisdom" ).effectN( 2 ).mod
+            if Player.getBuff( "combat_wisdom" ).up() then
+                am = am * Player.getBuff( "combat_wisdom" ).effectN( 2 ).mod
             end
             
             am = am * Player.getTalent( "touch_of_the_tiger" ).effectN( 1 ).mod
@@ -3940,49 +3914,17 @@ local ww_spells = {
     } ),
 
     ["touch_of_death"] = Player.createAction( 322109, {
-        callbacks = {
-            -- Mastery eval
-            "tiger_palm",
-            "expel_harm",
-            "blackout_kick",
-            "spinning_crane_kick",
-        },
-        
+
         may_miss = false, -- Datamine parses this as physical effect that can miss but cannot miss in game
         
         usable_during_sck = true,
         trigger_etl = true,
         ww_mastery = true,
         
-        callback_ready = function( callback )
-            
-            if not IsUsableSpell( 322109 ) then
-                return false
-            end
-            
-            if Player.getTalent( "forbidden_technique" ).okay then
-                local fatal_touch = Player.findAura( 213114 )
-                
-                if fatal_touch then
-                    local callback_execute_time = aura_env.spells[ callback ].base_execute_time or 0
-                    if ( fatal_touch.remaining - callback_execute_time ) < 0.250 
-                    or ( aura_env.target_ttd - callback_execute_time ) < 0.250 then
-                        return false
-                    end
-                end
-            end
-            
-            return true
-        end,
-        
         bonus_da = function()
             local da_mod = 1
-            local targets = 1    
+
             local damage_pct = spell.touch_of_death.effectN( 3 ).pct
-            
-            if Player.getTalent( "fatal_flying_guillotine" ).ok then
-                targets = min( 5, aura_env.target_count )
-            end
             
             da_mod = da_mod * Player.getTalent( "meridian_strikes" ).effectN( 1 ).mod
             
@@ -3991,9 +3933,9 @@ local ww_spells = {
             local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" ) 
             
             if is_execute then
-                return UnitHealth("player") + ( da_mod * UnitHealthMax("player") * damage_pct * targets - 1 )
+                return UnitHealth("player") 
             else
-                return da_mod * UnitHealthMax("player") * damage_pct * targets
+                return da_mod * UnitHealthMax("player") * damage_pct
             end
             
         end,
@@ -4001,31 +3943,6 @@ local ww_spells = {
         ready = function( self, state )
             return IsUsableSpell( 322109 )
         end,
-    } ),
-
-    ["white_tiger_statue"] = Player.createAction( 388686, {
-
-        triggerSpell = 389541, -- (Claw of the White Tiger)
-        base_tick_rate = 2,
-        
-        trigger_etl = false,
-        usable_during_sck = true,
-        ww_mastery = false,
-        
-        ready = function( self, state )
-            return InCombatLockdown() and aura_env.fight_remains > 3 
-        end,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return target_count
-        end,
-        
-        tick_trigger = {
-        },
     } ),
 
     ["storm_earth_and_fire_fixate"] = Player.createAction( 221771, {
@@ -4262,12 +4179,6 @@ local brm_spells = {
             
             return 0
         end,            
-    } ),
-
-    ["healing_elixir"] = Player.createAction( 122281, {
-        bonus_heal = function()
-            return ( Player.getTalent( "healing_elixir" ).effectN( 1 ).pct ) * UnitHealthMax( "player" )
-        end,
     } ),
 
     ["pta_rising_sun_kick"] = Player.createAction( 185099, {
@@ -4691,30 +4602,6 @@ local brm_spells = {
         end,
     } ),
 
-    ["white_tiger_statue"] = Player.createAction( 388686, {
-
-        triggerSpell = 389541, -- (Claw of the White Tiger)
-        base_tick_rate = 2,
-        
-        usable_during_sck = true,
-        
-        ready = function( self, state )
-            return InCombatLockdown() and aura_env.fight_remains > 3 
-        end,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return target_count
-        end,
-        
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,
-        },
-    } ),
-
     ["diffuse_magic"] = Player.createAction( 122783, {
         skip_calcs = true,     
         
@@ -4806,10 +4693,6 @@ local brm_spells = {
         brew_cdr = function()
             local cdr = 3
             
-            if Player.bdb_targets > 0 then
-                cdr = cdr + 1
-            end
-            
             cdr = cdr + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds )
             
             return cdr
@@ -4890,10 +4773,6 @@ local brm_spells = {
                 cdr = cdr + Player.getTalent( "blackout_combo" ).effectN( 3 ).base_value
             end
             
-            if Player.bdb_targets > 0 then
-                cdr = cdr + 1
-            end
-            
             return cdr
         end,
         
@@ -4949,10 +4828,6 @@ local brm_spells = {
         
         callback_ready = function( callback )
             
-            if Player.getTalent( "bountiful_brew" ).ok and Player.bdb_targets == 0 then
-                return false
-            end
-            
             if callback == "rushing_jade_wind" then
                 local rjw = Player.findAura( 116847 )
                 if not rjw or ( rjw.remaining and rjw.remaining < 3 ) then
@@ -4961,14 +4836,6 @@ local brm_spells = {
             end
             
             return false
-        end,
-        
-        ready = function( self, state )
-            if Player.getTalent( "bountiful_brew" ).ok and Player.bdb_targets == 0 then
-                return false
-            end
-            
-            return true
         end,
         
         tick_trigger = {

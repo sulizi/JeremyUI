@@ -417,24 +417,6 @@ function(event, ...)
                 
                 -- Generic
                 
-                -- Bonedust Brew
-                Enemy.auraExists( { 325216, 386276 }, function( auraData )
-                        if auraData.sourceUnit == "player" then
-                            local expires = auraData.expirationTime
-                            if expires == 0 then
-                                expires = frameTime + 3600
-                            end
-                            
-                            aura_env.bdb_dur_total = max( 0, aura_env.bdb_dur_total + ( expires - frameTime ) )
-                            Player.bdb_targets = Player.bdb_targets + 1
-                            aura_env.targetAuras[ unitID ][ auraData.spellId ] = { 
-                                amp = aura_env.bdb_amp(), 
-                                expire = expires 
-                            }
-                            return true
-                        end    
-                end )
-                
                 -- Others defined in Init
                 for id, aura_amp in pairs( aura_env.aura_amps ) do
                     local copies = 0
@@ -476,12 +458,10 @@ function(event, ...)
                 
                 aura_env.boss_lockdown = false
                 aura_env.woo_best = 0
-                aura_env.bdb_dur_total = 0
                 
                 Player.motc_targets = 0
                 Player.jfh_targets = 0
                 Player.jfh_dur_total = 0
-                Player.bdb_targets = 0
                 Player.ks_targets = 0
                 Player.bof_targets = 0
                 Player.sfv_targets = 0
@@ -1698,7 +1678,7 @@ function(event, ...)
                             -- Generic Brew CDR
                             if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"] and action.brew_cdr then
                                 local brew_cdr = action.brew_cdr or 0 
-                                local brew_list = { "purifying_brew", "celestial_brew", "fortifying_brew", "black_ox_brew", "bonedust_brew" }
+                                local brew_list = { "purifying_brew", "celestial_brew", "fortifying_brew", "black_ox_brew" }
                                 
                                 if type( brew_cdr ) == "function" then
                                     brew_cdr = brew_cdr()
@@ -2067,21 +2047,6 @@ function(event, ...)
                 jeremy.woo_prio = true
             else
                 jeremy.woo_prio = false
-            end
-            
-            -- Bountiful Brew holding
-            if aura_env.bdb_dur_total == 0 or aura_env.config.hide_bdb < 2 then
-                jeremy.hold_bdb = false
-            else
-                local avgDuration = aura_env.bdb_dur_total / Player.bdb_targets
-                local recast = ( aura_env.target_count - Player.bdb_targets ) * 10
-                recast = recast + ( Player.bdb_targets * ( min( 20, avgDuration + 10 ) ) )
-                local opportunity = aura_env.bdb_dur_total + recast - ( avgDuration / 54 * recast ) 
-                if Player.bdb_targets > 0 and ( recast / opportunity ) < 0.9 then
-                    jeremy.hold_bdb = true
-                else
-                    jeremy.hold_bdb = false
-                end
             end
             
             -- end of ability options
