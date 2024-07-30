@@ -100,9 +100,11 @@ local UnitAttackPower = UnitAttackPower
 local UnitAttackSpeed = UnitAttackSpeed
 local UnitCanAttack = UnitCanAttack
 local UnitExists = UnitExists
+local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitGUID = UnitGUID
 local UnitHealth = UnitHealth
 local UnitHealthMax = UnitHealthMax
+local UnitIsGroupLeader = UnitIsGroupLeader
 local UnitIsPlayer = UnitIsPlayer
 local UnitIsPVP = UnitIsPVP
 local UnitLevel = UnitLevel
@@ -446,6 +448,7 @@ aura_env.CPlayer = {
     haste = 1,
     health_deficit = 0,
     lastFullUpdate = nil,
+    leader = false,
     main_hand = {
         wdps = 0.5,
         swing_damage = 1,
@@ -464,6 +467,7 @@ aura_env.CPlayer = {
     },    
     primary_stat = 0,
     recent_dtps = 0,
+    role = "DAMAGER",
     set_pieces = {},
     spec = 0,
     spell = spell,
@@ -954,6 +958,14 @@ aura_env.CPlayer = {
     
     Update = function()
         local Player = aura_env.CPlayer
+        
+        -- Group Status
+        Player.role = UnitGroupRolesAssigned( "player" )
+        Player.leader = UnitIsGroupLeader( "player" )
+        
+        if not Player.role or Player.role == "NONE" then
+            Player.role = "DAMAGER"
+        end
         
         -- PvP Flag
         Player.is_pvp = UnitIsPlayer( "target" ) and aura_env.validTarget(  "target" )

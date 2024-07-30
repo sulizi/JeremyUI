@@ -92,12 +92,10 @@ function(event, ...)
     local UnitExists = UnitExists
     local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
     local UnitGetTotalHealAbsorbs = UnitGetTotalHealAbsorbs
-    local UnitGroupRolesAssigned = UnitGroupRolesAssigned
     local UnitGUID = UnitGUID
     local UnitHealth = UnitHealth
     local UnitHealthMax = UnitHealthMax
     local UnitIsDead = UnitIsDead
-    local UnitIsGroupLeader = UnitIsGroupLeader
     local UnitIsPlayer = UnitIsPlayer
     local UnitLevel = UnitLevel
     local UnitName = UnitName
@@ -312,7 +310,7 @@ function(event, ...)
                 aura_env.targetAuras[ unitID ] = {}
                 aura_env.targetAuras[ unitID ][ "priority_check" ] = { amp = Enemy.priority_modifier, expire = frameTime + 3600 }
                 
-                if spec == aura_env.SPEC_INDEX[ "MONK_BREWMASTER" ] then
+                if Player.role == "TANK" then
                     local threat_status = UnitThreatSituation( "player", unitID ) or 0
                     aura_env.targetAuras[ unitID ][ "threat_check" ] = { 
                         amp = ( threat_status < 3 and 2.0 or 1.0 ), 
@@ -1550,10 +1548,7 @@ function(event, ...)
                                     healing = base_healing * temporary_amplifiers
                                     group_healing = base_ghealing * target_multiplier * temporary_amplifiers
                                     
-                                    --if name == "spinning_crane_kick" or name == "rising_sun_kick" then
-                                        --print( name..": ".. base_damage )
-                                    --end
-                                    
+                                  
                                     -- Expel Harm
                                     -- TODO: Move to post processor
                                     if name == "expel_harm" then
@@ -1616,23 +1611,17 @@ function(event, ...)
                                 
                                 -- -----------------------------------------------------
                                 
-                                -- Adjust damage / heal value based on option sliders
+                                -- Adjust damage / heal value based on spec roles
                                 local D = results.damage
                                 
-                                if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]  then
-                                    D = ( D * brewmaster_dmg_ratio ) 
-                                    + ( ( results.self_healing + results.mitigation ) * brewmaster_heal_ratio )
+                                if Player.role ~= "DAMAGER" then
+                                    D = ( D * 0.5 ) + results.self_healing
                                     
-                                    -- Exploding Keg         
-                                    if Player.findAura( 325153 ) then 
-                                        D = damage
+                                    if Player.role == "TANK" then
+                                        D = D + results.mitigation
+                                    else
+                                        D = D + results.group_healing
                                     end
-                                elseif spec == aura_env.SPEC_INDEX["MONK_MISTWEAVER"]  then
-                                    -- TODO: Make this variable
-                                    local mistweaver_heal_ratio = 0.5
-                                    local mistweaver_dmg_ratio = 0.5
-                                    
-                                    D = ( D * mistweaver_dmg_ratio ) + ( ( results.self_healing + results.group_healing ) * mistweaver_heal_ratio )
                                 end
                                 
                                 results.adjusted = D
@@ -2118,8 +2107,8 @@ function(event, ...)
                 elseif config_type == "TANKBUSTER" then
                     
                     local affects = config.affects or 1
-                    if affects == 1 and spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"]
-                    or affects == 2 and spec ~= aura_env.SPEC_INDEX["MONK_BREWMASTER"]
+                    if affects == 1 and Player.role == "TANK"
+                    or affects == 2 and Player.role ~= "TANK"
                     or affects == 3 then
                         -- Send message to Raid Ability Timeline
                         if event == "RELOE_SPELLCD_STATE_UPDATE" then
@@ -2290,8 +2279,8 @@ function(event, ...)
             
             local am_level = aura_env.config.automarker_enable 
             local am_enable = am_level == 2 
-            or ( am_level == 3 and UnitGroupRolesAssigned( "player" ) == "TANK" ) 
-            or ( am_level == 4 and UnitIsGroupLeader( "player" ) )
+            or ( am_level == 3 and Player.role == "TANK" ) 
+            or ( am_level == 4 and Player.leader )
             
             if aura_env.AUTOMARKER and am_enable then
                 local value = aura_env.AUTOMARKER[ UnitName( unitID ) ] or aura_env.AUTOMARKER[ Enemy.npcid ]
