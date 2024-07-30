@@ -119,7 +119,7 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 2.6
+local DBC_Version = 2.7
 local DBC_Critical = 2.6
 local LibDBCache = LibStub( "LibDBCache-1.0", true )
 
@@ -222,8 +222,6 @@ local press_the_advantage_fp_mod = 0.25
 local press_the_advantage_boc_mod = 0.5
 
 local armor = 0.7
-local SEF_bonus = 1.26
-local SER_bonus = 1.15
 
 -- ------------------------------------------------------------------------------
 
@@ -1196,7 +1194,6 @@ Player.makeBuff( 451457, "martial_mixture" )
 Player.makeBuff( 451297, "momentum_boost" )
 Player.makeBuff( 129914, "combat_wisdom" )
 Player.makeBuff( 337482, "pressure_point" )
-Player.makeBuff( 152173, "serenity" )
 Player.makeBuff( 137639, "storm_earth_and_fire" )
 Player.makeBuff( 202090, "teachings_of_the_monastery", {
     max_stacks = function()
@@ -1720,9 +1717,7 @@ aura_env.actionModRate = function( action )
         return rate
     end
     
-    if Player.buffs.serenity.up() and action.affected_by_serenity then
-        rate = 0.5
-    end
+    -- Any buff effects that are not picked up by the above API functions here:
     
     return rate
 end
@@ -1759,17 +1754,8 @@ aura_env.actionBaseCooldown = function( action )
         end
     end
     
+    cooldown = cooldown * aura_env.actionModRate( action )
 
-    if Player.buffs.serenity.up() and action.affected_by_serenity then
-        if cooldown < Player.buffs.serenity.remains() then
-            cooldown = cooldown / 2
-        else
-            cooldown = cooldown - Player.buffs.serenity.remains()
-        end
-    else
-        cooldown = cooldown * aura_env.actionModRate( action )
-    end
-    
     return cooldown
 end
 
@@ -2033,13 +2019,15 @@ aura_env.global_modifier = function( callback, future, real )
             end
         end
         
-        if callback.copied_by_sef and Player.buffs.storm_earth_and_fire.remains() > future then
-            gm = gm * ( 1 + ( SEF_bonus - 1 ) * ( execute_time > 1 and min( 1, ( Player.buffs.storm_earth_and_fire.remains() - future ) / execute_time ) or 1 ) )
-        end
-        
-        if Player.buffs.serenity.remains() > future then
-            local serenity_bonus = ( aura_env.pvp_mode and 0.67 or 1 ) * SER_bonus
-            gm = gm * ( 1 + ( serenity_bonus - 1 ) * ( execute_time > 1 and min( 1, ( Player.buffs.serenity.remains() - future ) / execute_time ) or 1 ) )
+        if Player.getTalent( "storm_earth_and_fire" ).ok and Player.getBuff( "storm_earth_and_fire" ).remains() > future then
+            local SEF_Bonus = ( 1 + Player.getTalent( "storm_earth_and_fire" ).effectN( 1 ).pct ) * 3 -- Saved as (-0.6)
+            local isCopiedBySEF = LibDBCache:spell_affected_by_effect( callback.spellID, Player.getBuff( "storm_earth_and_fire" ).effectN( 1 ) )
+                                or LibDBCache:spell_affected_by_effect( callback.spellID, Player.getBuff( "storm_earth_and_fire" ).effectN( 2 ) )
+                                or callback.spellID == AUTO_ATTACK
+                                
+            if isCopiedBySEF then
+                gm = gm * ( 1 + ( SEF_Bonus - 1 ) * ( execute_time > 1 and min( 1, ( Player.getBuff( "storm_earth_and_fire" ).remains() - future ) / execute_time ) or 1 ) )    
+            end
         end
         
         for aura_id, aura_modifier in ipairs ( aura_env.aura_amps_player ) do
@@ -2471,7 +2459,6 @@ local ww_spells = {
         background = true,
         
         --ww_mastery = TODO
-        --copied_by_sef = TODO
         --trigger_etl = TODO
         
         triggerSpell = 451839,
@@ -2613,8 +2600,6 @@ local ww_spells = {
         hasted_cooldown = true,
 
         ww_mastery = true,
-        copied_by_sef = true,
-        affected_by_serenity = true,
         trigger_etl = true,
         
         action_multiplier = function( self, state )
@@ -2717,7 +2702,6 @@ local ww_spells = {
         background = true,
 
         trigger_etl = true,
-        copied_by_sef = true, 
         ww_mastery = true,
 
         critical_rate = function()
@@ -2794,8 +2778,6 @@ local ww_spells = {
         
         generate_marks = 1,
         usable_during_sck = true,
-        copied_by_sef = true,
-        affected_by_serenity = true,
         trigger_etl = true,
         ww_mastery = true,
         
@@ -2890,16 +2872,12 @@ local ww_spells = {
             "blackout_kick", -- MotC and Mastery eval.
             "strike_of_the_windlord", -- Mastery eval.
             "whirling_dragon_punch", -- Mastery eval.
-            "rushing_jade_wind", -- Mastery eval.
-            "flying_serpent_kick", -- Mastery eval.
         },
         
         ap_type = "BOTH",
         triggerSpell = 107270,
         ticks = 4,
         
-        copied_by_sef = true,
-        affected_by_serenity = true,
         trigger_etl = true,
         ww_mastery = true,
         
@@ -2983,7 +2961,6 @@ local ww_spells = {
         
         background = true,
         
-        copied_by_sef = true,
         trigger_etl = true,
         ww_mastery = false,
         
@@ -3061,8 +3038,6 @@ local ww_spells = {
         ap_type = "BOTH",
         
         usable_during_sck = true,       
-        copied_by_sef = true,
-        affected_by_serenity = true,
         trigger_etl = true,
         ww_mastery = true,
         
@@ -3207,7 +3182,6 @@ local ww_spells = {
         background = true,
         
         ww_mastery = true,
-        copied_by_sef = true,
         trigger_etl = true,
         
         action_multiplier = function( self, state )
@@ -3239,7 +3213,6 @@ local ww_spells = {
         
         ww_mastery = true,
         usable_during_sck = true,    
-        copied_by_sef = true,
         trigger_etl = true,
         
         ready = function( self, state )
@@ -3318,8 +3291,6 @@ local ww_spells = {
         
         ww_mastery = true,
         trigger_etl = true,
-        copied_by_sef = true,
-        affected_by_serenity = true,
         
         action_multiplier = function( self, state )
             local am = 1
@@ -3363,8 +3334,6 @@ local ww_spells = {
         ww_mastery = true,
         usable_during_sck = true,   
         trigger_etl = true,
-        copied_by_sef = true,
-        affected_by_serenity = true,
         
         motc_gain = function()
             if Player.getTalent( "rushing_jade_wind" ).ok then
@@ -3437,12 +3406,8 @@ local ww_spells = {
         
         triggerSpell = 148187,
         base_tick_rate = 0.75, -- TODO: Better buff handling
-        hasted_cooldown = true, -- Remove in tww
-        
+     
         ww_mastery = true,
-        usable_during_sck = true, -- remove in tww     
-        copied_by_sef = true,
-        affected_by_serenity = true,
         trigger_etl = true,
 
         target_count = function()
@@ -3626,7 +3591,6 @@ local ww_spells = {
         generate_marks = 1,
         usable_during_sck = true,     
         trigger_etl = true,
-        copied_by_sef = true,    
         ww_mastery = true,
         
         action_multiplier = function( self, state )
@@ -3695,7 +3659,6 @@ local ww_spells = {
         triggerSpell = 148135,
         
         trigger_etl = true,
-        copied_by_sef = true,   
         ww_mastery = true,
         
         target_count = function()
@@ -3716,9 +3679,7 @@ local ww_spells = {
         ticks = 4, -- 4 Damage Bounces
         
         ww_mastery = true,
-        usable_during_sck = true,        
         trigger_etl = true,
-        copied_by_sef = true,
  
         tick_trigger = {
         },        
@@ -3829,7 +3790,6 @@ local ww_spells = {
 
         ticks = 4,
   
-        copied_by_sef = true,    
         ww_mastery = true,
         
         action_multiplier = function( self, state )
@@ -3917,7 +3877,6 @@ local ww_spells = {
 
         may_miss = false, -- Datamine parses this as physical effect that can miss but cannot miss in game
         
-        usable_during_sck = true,
         trigger_etl = true,
         ww_mastery = true,
         
@@ -3927,8 +3886,6 @@ local ww_spells = {
             local damage_pct = spell.touch_of_death.effectN( 3 ).pct
             
             da_mod = da_mod * Player.getTalent( "meridian_strikes" ).effectN( 1 ).mod
-            
-            da_mod = da_mod * Player.getTalent( "forbidden_technique" ).effectN( 2 ).mod
             
             local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" ) 
             
@@ -4448,13 +4405,7 @@ local brm_spells = {
     } ),
 
     ["rushing_jade_wind"] = Player.createAction( 116847, {
-        callbacks = {
-            -- Chi generators
-            "tiger_palm", -- also MotC and Mastery eval.
-            "expel_harm", -- also Mastery eval.
-            "chi_burst",
-        },
-        
+
         triggerSpell = 148187,
         base_tick_rate = 0.75, -- TODO: Better buff handling
         hasted_cooldown = true,
@@ -4582,14 +4533,7 @@ local brm_spells = {
         end,
         
         ready = function( self, state )
-            if not IsUsableSpell( 322109 ) then
-                return false
-            end
-            
-            local cd = 90
-            local damage_pct = spell.touch_of_death.effectN( 3 ).pct
-            local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" )
-            return is_execute or aura_env.target_ttd > ( damage_pct * cd ) 
+             return IsUsableSpell( 322109 )
         end,
         
         reduce_stagger = function()

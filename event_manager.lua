@@ -714,7 +714,6 @@ function(event, ...)
             
             aura_env.actionlist_update = frameTime
             
-            local serenity = ( spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ] and Player.findAura( 152173 ) ) or nil
             local brewmaster_dmg_ratio = max( 0.01, aura_env.config.brewmaster_ratio )
             local brewmaster_heal_ratio = max( 0.01, 1 - aura_env.config.brewmaster_ratio )
             
@@ -1748,12 +1747,6 @@ function(event, ...)
                             
                             if action_cd_remains == 0 and action_cooldown > 0 and actionModRate < 1 then
                                 local duration = action_cooldown
-                                
-                                -- TODO: How can I get modRate duration dynamically for unknown effects? 
-                                if serenity and action.affected_by_serenity and serenity.remaining > action_delay then
-                                    duration = min( duration, serenity.remaining )
-                                end
-                                
                                 local recharge_cdr = min( duration, max( 0, action_cooldown - execute_time ) ) * ( 1 - actionModRate )
                                 if recharge_cdr > 0 then
                                     local recast = 1 + ( recharge_cdr / action_cooldown )
