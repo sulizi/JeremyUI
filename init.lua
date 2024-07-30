@@ -3775,7 +3775,7 @@ local ww_spells = {
         end,
         
         target_multiplier = function( target_count )
-            return target_count
+            return aura_env.targetScale( target_count, Player.getTalent( "jade_ignition" ).effectN( 3 ).base_value )
         end,
         
         ready = function( self, state )
