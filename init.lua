@@ -1772,11 +1772,10 @@ aura_env.actionBaseCooldown = function( action )
 end
 
 aura_env.unmarked_targets = function( )
-    local motcCount = GetSpellCount(101546)
+    local motcCount = GetSpellCount( 101546 )
     local unmarkedTargets = aura_env.target_count - Player.motc_targets
     
-    -- TODO: DBC Value
-    if motcCount < 5 and unmarkedTargets > 0 then
+    if motcCount < spell.cyclone_strikes.max_stacks and unmarkedTargets > 0 then
         return unmarkedTargets
     else
         return 0
@@ -2351,11 +2350,11 @@ local CurrentCraneStacks = function( state )
                     end
                     
                     motc_gain = min( unmarked, motc_gain )
-                    motc_stacks = motc_stacks + motc_gain
+                    motc_stacks = min( spell.cyclone_strikes.max_stacks, motc_stacks + motc_gain )
                     unmarked = unmarked - motc_gain
                 end
                 
-                if unmarked <= 0 then
+                if unmarked <= 0 or motc_stacks >= spell.cyclone_strikes.max_stacks then
                     break
                 end
             end
