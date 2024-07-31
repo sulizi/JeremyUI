@@ -514,6 +514,10 @@ aura_env.CPlayer = {
         
         return am
     end,
+    
+    ready = function( action, state )
+        return action.ready( action, state )
+    end,
 
     --
     
@@ -2420,17 +2424,32 @@ Player.action_multiplier = function( action, state )
         end
         
         -- T33 Windwalker 2PC
-        if Player.buffs.tiger_strikes.up() and LibDBCache:spell_affected_by_effect( action.spellID, Player.buffs.tiger_strikes.effectN( 1 ) ) then
-            am = am * Player.buffs.tiger_strikes.effectN( 1 ).mod
+        if Player.getBuff( "tiger_strikes", state ).up() and LibDBCache:spell_affected_by_effect( action.spellID, Player.getBuff( "tiger_strikes", state ).effectN( 1 ) ) then
+            am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
         end
-        
+    end
+    
+    if Player.spec == aura_env.SPEC_INDEX[ "MONK_BREWMASTER" ]  then
         -- T33 Brewmaster 4PC
-        if Player.buffs.flow_of_battle.up() and LibDBCache:spell_affected_by_effect( action.spellID, Player.flow_of_battle.tiger_strikes.effectN( 1 ) ) then
-            am = am * Player.buffs.flow_of_battle.effectN( 1 ).mod
+        if Player.getBuff( "flow_of_battle", state ).up() and LibDBCache:spell_affected_by_effect( action.spellID, Player.getBuff( "flow_of_battle", state ).effectN( 1 ) ) then
+            am = am * Player.getBuff( "flow_of_battle", state ).effectN( 1 ).mod
         end        
     end
     
     return am
+end
+
+Player.ready = function( action, state )
+    local ready = action.ready( action, state )
+    
+    if Player.spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ] then
+        -- Hardcoded check to not break Mastery
+        if action.ww_mastery and not IsComboStrike( action, state ) then
+            ready = false
+        end
+    end
+    
+    return ready
 end
     
 ------------------------------------------------
