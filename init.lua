@@ -3701,17 +3701,6 @@ local ww_spells = {
         ww_mastery = true,
         usable_during_sck = true,
         
-        chi_gain = function()
-            
-            local chi = 0
-            
-            if IsPlayerSpell( spell.reverse_harm.id ) then -- Reverse Harm
-                chi = chi + spell.reverse_harm.effectN( 2 ).base_value
-            end
-            
-            return chi
-        end,
-        
         action_multiplier = function( self, state )
             local h = 1
             
