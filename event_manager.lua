@@ -712,9 +712,6 @@ function(event, ...)
             
             aura_env.actionlist_update = frameTime
             
-            local brewmaster_dmg_ratio = max( 0.01, aura_env.config.brewmaster_ratio )
-            local brewmaster_heal_ratio = max( 0.01, 1 - aura_env.config.brewmaster_ratio )
-            
             debugprofilestart()
             
             local cpu_target = aura_env.config.cpu_target or 1.5 -- target CPU processing time in miliseconds
@@ -811,7 +808,7 @@ function(event, ...)
                         raw = raw * pct * math.max( 1, buff_duration )
                         raw = math.max ( 0, raw )
                         
-                        if not action.ready( action ) then
+                        if not Player.ready( action ) then
                             raw = 0
                         end
                         
@@ -900,7 +897,7 @@ function(event, ...)
                             start_cooldown[ #start_cooldown + 1 ] = combo_base
                         end
                         
-                        local ready = action.ready( action )
+                        local ready = Player.ready( action )
                         local execute_time = action.execute_time()
                         
                         local cost = nil
@@ -1221,7 +1218,7 @@ function(event, ...)
                                                     end
                                                 end
                                                 
-                                                if _this.ready( spells[ _this.spell ], _this.state ) then
+                                                if Player.ready( spells[ _this.spell ], _this.state ) then
                                                     trigger_spells[ #trigger_spells + 1 ] =  _this
                                                 end
                                             end
@@ -1342,7 +1339,7 @@ function(event, ...)
                                     state.invalid = state.invalid or not trigger.ready( spell, state )
                                     
                                     -- Check ready state
-                                    state.invalid = state.invalid or not spell.ready( spell, state )
+                                    state.invalid = state.invalid or not Player.ready( spell, state )
                                     
                                     -- set init trigger CD
                                     local trigger_cd_remains = aura_env.getCooldown( spell.spellID ) - state.time
