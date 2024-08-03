@@ -3,8 +3,6 @@
 Absorb Shield SpellIDs
 Debuff States
 PPM Effects
-Review all Callbacks
-Prepatch: Remove all deprecated spells / code cleanup
 Generate target multiplier function on action initialization using SimC style variables
 
 [DBC / Spell Datamining]:

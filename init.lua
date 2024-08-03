@@ -2422,11 +2422,6 @@ Player.action_multiplier = function( action, state )
             am = am * Player.mast_bonus
             am = am * ( 1 + hit_combo * Player.buffs.hit_combo.effectN( 1 ).pct )
         end
-        
-        -- T33 Windwalker 2PC
-        if Player.getBuff( "tiger_strikes", state ).up() and LibDBCache:spell_affected_by_effect( action.spellID, Player.getBuff( "tiger_strikes", state ).effectN( 1 ) ) then
-            am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
-        end
     end
     
     if Player.spec == aura_env.SPEC_INDEX[ "MONK_BREWMASTER" ]  then
@@ -2677,6 +2672,11 @@ local ww_spells = {
                     end
                 end
             end
+
+            -- T33 Windwalker 2PC
+            if Player.getBuff( "tiger_strikes", state ).up() then
+                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+            end            
             
             return am
         end,
@@ -2761,6 +2761,11 @@ local ww_spells = {
             am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
             
             am = am * Player.getTalent( "rising_star" ).effectN( 1 ).mod
+
+            -- T33 Windwalker 2PC
+            if Player.getBuff( "tiger_strikes", state ).up() then
+                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+            end   
             
             return am
         end,
@@ -2846,6 +2851,11 @@ local ww_spells = {
             if Player.set_pieces[ 31 ] >= 4 then
                 am = am * spell.t31_ww_4pc.effectN( 2 ).mod
             end
+
+            -- T33 Windwalker 2PC
+            if Player.getBuff( "tiger_strikes", state ).up() then
+                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+            end   
             
             return am
         end,
@@ -2934,6 +2944,11 @@ local ww_spells = {
             am = am * Player.getTalent( "efficient_training" ).effectN( 5 ).mod
             
             am = am * Player.getTalent( "temple_training" ).effectN( 2 ).mod
+
+            -- T33 Windwalker 2PC
+            if Player.getBuff( "tiger_strikes", state ).up() then
+                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+            end   
             
             return am
         end,
@@ -3107,6 +3122,11 @@ local ww_spells = {
             if Player.getBuff( "bok_proc", state ).up() then
                 am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
             end
+
+            -- T33 Windwalker 2PC
+            if Player.getBuff( "tiger_strikes", state ).up() then
+                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+            end   
             
             return am
         end,
@@ -3222,6 +3242,11 @@ local ww_spells = {
             end    
             
             am = am * Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 2 ).mod
+
+            -- T33 Windwalker 2PC
+            if Player.getBuff( "tiger_strikes", state ).up() then
+                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+            end   
             
             return am
         end,        
@@ -3279,6 +3304,11 @@ local ww_spells = {
             end
             
             am = am * Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 2 ).mod
+
+            -- T33 Windwalker 2PC
+            if Player.getBuff( "tiger_strikes", state ).up() then
+                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+            end   
             
             return am
         end,  
@@ -3329,6 +3359,11 @@ local ww_spells = {
             end        
             
             am = am * Player.getTalent( "communion_with_wind" ).effectN( 2 ).mod
+
+            -- T33 Windwalker 2PC
+            if Player.getBuff( "tiger_strikes", state ).up() then
+                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+            end   
             
             return am      
         end,  
@@ -3380,6 +3415,11 @@ local ww_spells = {
             end
             
             am = am * Player.getTalent( "communion_with_wind" ).effectN( 2 ).mod
+
+            -- T33 Windwalker 2PC
+            if Player.getBuff( "tiger_strikes", state ).up() then
+                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+            end   
             
             return am      
         end, 
@@ -3671,6 +3711,11 @@ local ww_spells = {
             if Player.getTalent( "martial_mixture" ).ok then
                 Player.getBuff( "martial_mixture", state ).expire()
             end
+            
+            -- T33 Windwalker 2PC
+            if Player.set_pieces[ 33 ] >= 2 then
+                Player.getBuff( "tiger_strikes", state ).increment()
+            end   
             
             Player.getBuff( "tigers_ferocity", state ).expire()
         end,
