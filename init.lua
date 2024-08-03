@@ -905,6 +905,62 @@ aura_env.CPlayer = {
         end
     end,
     
+    getCooldown = function( name, state )
+        
+        local action = aura_env.spells[ name ]
+        
+        if not action then
+            print( "JeremyUI: Player.getCooldown unknown action name " .. name )
+            return 0
+        end
+        
+        if not action.spellID then
+            return 0, 0
+        end
+        
+        local startTime, duration = select( 3, GetSpellCooldownUnified( action.spellID, nil ) )
+        local remaining = 0 
+        
+        if duration > 0 and duration > 1.5 and duration ~= gcdDuration() then
+            remaining = startTime + duration - GetTime()
+        end
+        
+        if state and state.cooldown then
+            state.cooldown[ name ] = state.cooldown[ name ] or remaining
+            
+            remaining = max( 0, state.cooldown[ name ] - state.time )
+        end
+        
+        return remaining, ( remaining > 0 and duration or 0 )
+    end, 
+
+    getBaseCooldown = function( name )
+    
+        local self = aura_env.CPlayer
+        local action = aura_env.spells[ name ]
+        
+        if not action then
+            print( "JeremyUI: Player.getBaseCooldown unknown action name " .. name )
+            return 0
+        end
+        
+        if not action.spellID or not GetSpellBaseCooldown( action.spellID ) then
+            return action.cooldown or action.icd or 0
+        end
+        
+        local cooldown = GetSpellBaseCooldown( action.spellID ) / 1000
+
+        if cooldown > 0 then
+            if action.hasted_cooldown then
+                cooldown = cooldown / self.haste
+            end
+        end
+        
+        cooldown = cooldown * aura_env.actionModRate( action )
+    
+        return cooldown
+    end,
+    
     makeBuff = function( spellID, name, init )
         local self = aura_env.CPlayer
         
@@ -1738,43 +1794,6 @@ aura_env.actionModRate = function( action )
     return rate
 end
 
-aura_env.getCooldown = function( spellID ) 
-    local _, _, startTime, duration = GetSpellCooldownUnified( spellID, nil );
-    
-    if duration > 0 and duration > 1.5 and duration ~= gcdDuration() then
-        return startTime + duration - GetTime(), duration
-    else
-        return 0, 0
-    end
-end
-
-aura_env.actionBaseCooldown = function( action )
-    
-    local spellID = action.spellID
-    
-    if not spellID or not GetSpellBaseCooldown( spellID ) then
-        return 0
-    end
-    
-    local cooldown = 0
-    
-    if action.override_cooldown then
-        cooldown = ( type( action.override_cooldown ) == "function" and action.override_cooldown() or action.override_cooldown ) or 0
-    else
-        cooldown = GetSpellBaseCooldown( spellID ) / 1000
-    end
-    
-    if cooldown > 0 then
-        if action.hasted_cooldown then
-            cooldown = cooldown / Player.haste
-        end
-    end
-    
-    cooldown = cooldown * aura_env.actionModRate( action )
-
-    return cooldown
-end
-
 aura_env.unmarked_targets = function( )
     local motcCount = GetSpellCount( 101546 )
     local unmarkedTargets = aura_env.target_count - Player.motc_targets
@@ -2245,6 +2264,17 @@ local function generateCallbacks( spells )
             
             base_spell.depth = base_spell.depth or 0
             
+            -- add canceled channels
+            if base_spell.depth == 0 and base_spell.callbacks then
+                for _, callback in pairs( base_spell.callbacks ) do
+                    local cb_spell = spells[ callback ]
+                    if cb_spell.channeled and not cb_spell.canceled then
+                        base_spell.callbacks = base_spell.callbacks or {}
+                        base_spell.callbacks[ #base_spell.callbacks + 1 ] = callback.."_cancel"
+                    end
+                end
+            end
+            
             if base_spell.depth == 0 and base_spell.callbacks then
                 for _, callback in pairs( base_spell.callbacks ) do
                     
@@ -2267,9 +2297,7 @@ local function generateCallbacks( spells )
                             _init.trigger[ action ] = true
                             _init.ready = function( self, state ) 
                                 if not base_spell.background and IsSpellKnown( base_spell.replaces or base_spell.spellID ) then
-                                    if base_spell.callback_ready then
-                                        return base_spell.callback_ready( callback )
-                                    elseif cb_spell.ready then
+                                    if cb_spell.ready then
                                         return cb_spell.ready()
                                     else
                                         return true
@@ -2803,7 +2831,6 @@ local ww_spells = {
             
             "blackout_kick", -- CDR
             "fists_of_fury", -- Pressure Point / T29 + T32 Set
-            "fists_of_fury_cancel", -- Pressure Point / T29 + T32 Set
         },
         
         ap_type = "BOTH",
@@ -2908,7 +2935,6 @@ local ww_spells = {
             "chi_burst",
             
             "fists_of_fury", -- Tier 29 / Tier 32
-            "fists_of_fury_cancel", -- Tier 29 / Tier 32
             "blackout_kick", -- MotC and Mastery eval.
             "strike_of_the_windlord", -- Mastery eval.
             "whirling_dragon_punch", -- Mastery eval.
@@ -3169,7 +3195,7 @@ local ww_spells = {
                 local cdr = spell.blackout_kick.effectN( 3 ).seconds 
                 
                 if Player.getTalent( "teachings_of_the_monastery" ).ok then
-                    local remaining = aura_env.getCooldown( 107428 ) -- RSK
+                    local remaining = Player.getCooldown( "rising_sun_kick", state )
                     if remaining > 0 then
                         local targets = min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
                         local totm_stacks = Player.getBuff( "teachings_of_the_monastery", state ).stacks()
@@ -3259,6 +3285,7 @@ local ww_spells = {
     ["whirling_dragon_punch"] = Player.createAction( 152175, {
         callbacks = {
             "rising_sun_kick", -- Spell activation
+            "fists_of_fury", -- Spell activation
             "spinning_crane_kick", -- Revolving Whirl
         },
         
@@ -3271,29 +3298,29 @@ local ww_spells = {
         trigger_etl = true,
         
         ready = function( self, state )
-            return Player.getTalent( "whirling_dragon_punch" ).ok
-        end,
-        
-        callback_ready = function( callback )
-            
             -- Not talented into WDP
             if not Player.getTalent( "whirling_dragon_punch" ).ok then
                 return false
             end
             
-            local brain_lag = 1.25
-            local gcd = aura_env.spells[ callback ].gcd()
-            local fof_cd = ( callback == "fists_of_fury" and 0 ) or aura_env.getCooldown( 113656 )
-            local rsk_cd = ( callback == "rising_sun_kick" and 0 ) or aura_env.getCooldown( 107428 )
-            local wdp_cd = aura_env.getCooldown( 152175 )
+            if not state then
+                return true
+            end
             
-            if fof_cd < ( gcd + brain_lag )
-            or rsk_cd < ( gcd + brain_lag )
-            or wdp_cd > gcd then
+            local brain_lag = 1.25
+            local grace_period = 0
+            local gcd = state.callback.gcd()
+            local fof_cd = Player.getCooldown( "fists_of_fury", state )
+            local rsk_cd = Player.getCooldown( "rising_sun_kick", state )
+            local wdp_cd = Player.getCooldown( "whirling_dragon_punch", state )
+            
+            if  fof_cd > ( gcd + brain_lag - grace_period ) 
+            and rsk_cd > ( gcd + brain_lag - grace_period )
+            and wdp_cd < ( gcd + grace_period ) then
                 return false
             end
             
-            return true            
+            return true     
         end,
         
         action_multiplier = function( self, state )
@@ -3463,11 +3490,7 @@ local ww_spells = {
         tick_trigger = {
             ["ancient_lava"] = true, 
         },
-    
-        ready = function( self, state )
-            local cd_xuen = aura_env.getCooldown( 123904 )
-            return cd_xuen > 12 or cd_xuen < 1 
-        end,
+
     } ),
 
     ["rushing_jade_wind"] = Player.createAction( 116847, {
@@ -3649,7 +3672,6 @@ local ww_spells = {
             "rising_sun_kick",
             "blackout_kick",
             "fists_of_fury",
-            "fists_of_Fury_cancel",
             "strike_of_the_windlord",
             "whirling_dragon_punch",
         },
@@ -4714,7 +4736,7 @@ local brm_spells = {
         reduces_cd = {
             ["breath_of_fire"] = function ()
                 if Player.getTalent( "salsalabims_strength" ).ok then
-                    return aura_env.getCooldown( 115181 ) -- BoF
+                    return Player.getCooldown( "breath_of_fire" )
                 end
                 return 0 
             end,
@@ -4792,7 +4814,7 @@ local brm_spells = {
         reduces_cd = {
             ["breath_of_fire"] = function ()
                 if Player.getTalent( "salsalabims_strength" ).ok then
-                    return aura_env.getCooldown( 115181 ) -- BoF
+                    return Player.getCooldown( "breath_of_fire" )
                 end
                 return 0 
             end,
@@ -4833,18 +4855,6 @@ local brm_spells = {
             -- same as 100% dodge
             return dodgeMitigation( 1.0, exploding_keg_duration )
         end,   
-        
-        callback_ready = function( callback )
-            
-            if callback == "rushing_jade_wind" then
-                local rjw = Player.findAura( 116847 )
-                if not rjw or ( rjw.remaining and rjw.remaining < 3 ) then
-                    return true
-                end
-            end
-            
-            return false
-        end,
         
         tick_trigger = {
             ["charred_dreams_heal"] = true,   
@@ -5197,7 +5207,7 @@ local brm_spells = {
             local pb_cur, pb_max = GetSpellCharges( 119582 )
             
             if pb_cur < pb_max then
-                local charge_cd = aura_env.getCooldown( 119582 )
+                local charge_cd = Player.getCooldown( "purifying_brew" )
                 if charge_cd > 6 then
                     if not Player.buffs.heavy_stagger.up() then
                         return false
@@ -5295,15 +5305,15 @@ local brm_spells = {
         
         ready = function( self, state )
             -- Require Celestial Brew on CD
-            return aura_env.getCooldown( 322507 ) > 0
+            return Player.getCooldown( "celestial_brew" ) > 0
         end,
         
         reduces_cd = {
             ["celestial_brew"] = function( ) 
-                return aura_env.getCooldown( 322507 ) -- CB
+                return Player.getCooldown( "celestial_brew" )
             end,          
             ["purifying_brew"] = function( ) 
-                local cdr = aura_env.getCooldown( 119582 ) -- PB
+                local cdr = Player.getCooldown( "purifying_brew" )
                 local currentCharges, maxCharges, _, cooldownDuration = GetSpellCharges( 119582 )
                 
                 local fullCharges = maxCharges - currentCharges - 1

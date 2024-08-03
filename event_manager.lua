@@ -502,7 +502,7 @@ function(event, ...)
                 local TargetFilter = function()
                     
                     local validTargets = {}
-                    local checkTod = aura_env.getCooldown( 322109 ) == 0 and aura_env.config.tod_glow > 1
+                    local checkTod = Player.getCooldown( "touch_of_death" ) == 0 and aura_env.config.tod_glow > 1
                     
                     for _, nameplateframe in pairs( GetNamePlates() ) do
                         
@@ -887,11 +887,12 @@ function(event, ...)
                         end
                         
                         local action_targets    = max( 1, min( 20, ( action.target_count and action.target_count() ) or 1 ) )
-                        local action_cooldown   = aura_env.actionBaseCooldown( action )
-                        local action_cd_remains = aura_env.getCooldown( spellID )
                         local action_delay      = 0
                         local start_cooldown    = action.start_cooldown or {}
                         local combo_base        = action.combo_base
+                        local true_name         = gsub( combo_base or name, "_cancel", "" )
+                        local action_cooldown   = Player.getBaseCooldown( true_name )
+                        local action_cd_remains = Player.getCooldown( true_name )
                         
                         if combo_base and not start_cooldown[ combo_base ] then
                             start_cooldown[ #start_cooldown + 1 ] = combo_base
@@ -1116,6 +1117,7 @@ function(event, ...)
                                 local damage_out, healing_out, group_heal_out, mitigate_out = 0, 0, 0, 0
                                 local trigger_gain, trigger_cost, trigger_secondary_cost = 0, 0, 0
                                 local trigger_time, trigger_delay = 0, 0
+                                local trigger_cdr = {}
                                 local driver = action
                                 local driverName = combo_base or name
                                 
@@ -1185,6 +1187,7 @@ function(event, ...)
                                                     primary     = min( Player.primary_resource.max, ( Player.primary_resource.current + gain ) ) - cost,
                                                     secondary   = min( Player.secondary_resource.max, ( Player.secondary_resource.current + secondary_gain ) ) - secondary_cost,
                                                     buffs       = {},
+                                                    cooldown    = { [ true_name ] = max( 0, Player.getBaseCooldown( true_name ) - execute_time ) },
                                                     invalid     = false,
                                                 },
                                                 callback_stack = callback_stack,
@@ -1197,6 +1200,7 @@ function(event, ...)
                                                 primary = 0,
                                                 secondary = 0,
                                                 buffs = {},
+                                                cooldown = {},
                                                 invalid = false,
                                             }
                                             state_table[ h ] = _this.state
@@ -1281,6 +1285,7 @@ function(event, ...)
                                         copyState( "secondary" )
                                         copyState( "time" )
                                         copyState( "buffs" )
+                                        copyState( "cooldown" )
                                     end
                                     
                                     local result = state.result
@@ -1299,6 +1304,7 @@ function(event, ...)
                                     local trigger_damage = 0
                                     local trigger_healing = 0
                                     local trigger_group_heal = 0
+                                    local trigger_cdr = {}
                                     
                                     local basePrimary = state.primary
                                     local baseSecondary = state.secondary
@@ -1342,23 +1348,13 @@ function(event, ...)
                                     state.invalid = state.invalid or not Player.ready( spell, state )
                                     
                                     -- set init trigger CD
-                                    local trigger_cd_remains = aura_env.getCooldown( spell.spellID ) - state.time
-                                    
-                                    if not spell.background then
-                                        -- Trigger is a non-background action with a cooldown
-                                        if trigger_cd_remains > 0 then
-                                            -- Driver reduces cooldown of trigger
-                                            local driver_cdr = driver.reduces_cd and driver.reduces_cd[ trigger.spell ]
-                                            if driver_cdr then
-                                                if type( driver_cdr ) == "function" then
-                                                    driver_cdr = driver_cdr()
-                                                end
-                                            end
-                                            trigger_cd_remains = trigger_cd_remains - max( 0, ( driver_cdr or 0 ) )
-                                        end
-                                    end
+                                    local trigger_cd_remains = Player.getCooldown( trigger.spell, state )
+                                    local trigger_cd         = Player.getBaseCooldown( trigger.spell )
                                     
                                     if not state.invalid then
+                                        
+                                        -- Start Cooldown
+                                        state.cooldown[ trigger.spell ] = trigger_cd
                                         
                                         local ticks = spell_result.ticks or 1
                                         
@@ -1412,33 +1408,44 @@ function(event, ...)
                                             trigger_group_heal = trigger_group_heal * spell_target_multiplier * spell_temporary_amplifiers
                                         end                                    
                                         
-                                        -- Trigger reduces cooldown of non-background driver spell
-                                        if not driver.background and spell.reduces_cd and spell.reduces_cd[ driverName ] then
-                                            local cdr = spell.reduces_cd[ driverName ] 
-                                            local cd = aura_env.actionBaseCooldown( driver )
+                                        -- Trigger reduces cooldown of spell
+                                        if spell.reduces_cd then
                                             
-                                            if type( cdr ) == "function" then
-                                                cdr = cdr( state )
-                                            end
-                                            
-                                            if cd > 0 and cdr > 0 then
-                                                local total_cdr = min( cdr, cd - duration )
-                                                local mod_rate =  aura_env.actionModRate( driver )
-                                                if mod_rate < 1 then
-                                                    total_cdr = total_cdr * ( 1 - mod_rate )
+                                            for cdr_spell, cdr_value in pairs( spell.reduces_cd ) do
+                                                
+                                                cdr_spell = gsub( cdr_spell, "%-.*", "" )
+                                                
+                                                local cdr = cdr_value  
+                                                
+                                                if type( cdr ) == "function" then
+                                                    cdr = cdr()
                                                 end
-                                                if total_cdr > 0 then
-                                                    local spell_raw = spellRaw( driverName )
-                                                    local trigger_raw = spellRaw( trigger.spell )
-                                                    if spell_raw > trigger_raw then
-                                                        trigger_damage      = trigger_damage + ( total_cdr / cd * max( 0, damage - trigger_damage ) )
-                                                        trigger_healing     = trigger_healing + ( total_cdr / cd * max( 0, healing - trigger_healing ) )
-                                                        trigger_group_heal  = trigger_group_heal + ( total_cdr / cd * max( 0, group_healing - trigger_group_heal ) )
-                                                        trigger_mitigate    = trigger_mitigate + ( total_cdr / cd * max( 0, mitigation - trigger_mitigate ) )
-                                                    end                                                
+                                                
+                                                if state.cooldown[ cdr_spell ] then
+                                                    state.cooldown[ cdr_spell ] = max( 0, state.cooldown[ cdr_spell ] - cdr )
+                                                end
+                                                
+                                                local remaining, total = Player.getCooldown( cdr_spell, state )
+                                                
+                                                if cdr > 0 and remaining > 0 and total > 0 then
+                                                    
+                                                    state.cooldown[ trigger.spell ] = max( 0, state.cooldown[ trigger.spell ] - cdr )
+                                                    
+                                                    local spell_action = aura_env.spells[ cdr_spell ]
+                                                    
+                                                    if spell_action and not spell_action.background then
+                                                        local mod_rate = aura_env.actionModRate( spell_action )
+                                                        
+                                                        if mod_rate < 1 then
+                                                            cdr = cdr * ( 1 - mod_rate )
+                                                        end
+                                                        
+                                                        local id = cdr_spell .. "-010" .. state.pos
+                                                        trigger_cdr[ id ] = ( trigger_cdr[ id ] or 0 ) + cdr
+                                                    end
                                                 end
                                             end
-                                        end
+                                        end      
                                         
                                         damage_out     = damage_out + trigger_damage * tick_count
                                         healing_out    = healing_out + trigger_healing * tick_count
@@ -1449,12 +1456,13 @@ function(event, ...)
 
                                     -- Update cooldown information for chained abilities
                                     if action.combo and not spell.background then 
-                                        local trigger_cd  = aura_env.actionBaseCooldown( spell )
                                         action_cooldown   = max( action_cooldown, trigger_cd )
                                         action_cd_remains = max ( action_cd_remains, trigger_cd_remains )
                                         trigger_delay     = max( action_delay, action_cd_remains ) - action_delay
                                         start_cooldown[ #start_cooldown + 1] = trigger.spell
                                     end
+                                    
+                                    
                                     
                                     -- Update Resources
                                     state.primary = state.primary - ( spell.base_cost or 0 )
@@ -1479,7 +1487,8 @@ function(event, ...)
                                     mitigation = mitigate_out,
                                     group_healing = group_heal_out,
                                     execute_time = trigger_time,
-                                    delay = trigger_delay
+                                    delay = trigger_delay,
+                                    cdr = trigger_cdr,
                                 }
                             end
                             
@@ -1507,6 +1516,7 @@ function(event, ...)
                                     trigger_results         = triggerResults,
                                     cost                    = cost,
                                     secondary_cost          = secondary_cost,
+                                    reduce_cd               = {},
                                 }
                             end
                             
@@ -1585,6 +1595,12 @@ function(event, ...)
                                     end
                                 end
                                 
+                                if results.trigger_results.cdr then
+                                    for s, r in pairs( results.trigger_results.cdr ) do
+                                        results.reduce_cd[ s ] = r
+                                    end
+                                end
+                                
                                 -- Healing Caps
                                 results.self_healing = min( results.self_healing, Player.health_deficit )
                                 results.self_healing = max( results.self_healing, 0 )
@@ -1650,8 +1666,12 @@ function(event, ...)
                             execute_time            = result.execute_time
                             action_delay            = result.delay                           
                             temporary_amplifiers    = result.amplifier
-                            
+                    
                             action.result = result.result_base
+                            
+                            for s, v in pairs( result.reduce_cd ) do
+                                action.reduces_cd[ s ] = v
+                            end
                             
                             -- Cache curent player amplifier
                             if name == default_action then
@@ -1691,35 +1711,49 @@ function(event, ...)
                                 local cdr_time = 0
                                 
                                 for spell, value in pairs( action.reduces_cd ) do
+                                    
+                                    local useResult = find( spell, "-010" )
+                                
                                     spell = gsub( spell, "%-.*", "" )
+                                    
                                     local cdr = value  
+                                    local total_cdr = 0
                                     
                                     if type(cdr) == "function" then
                                         cdr = cdr()
                                     end
                                     
-                                    local spell_action = spells[spell]
-                                    if cdr > 0 and spell_action and spell_action.spellID then
-                                        
-                                        local timeLeft, cd = aura_env.getCooldown( spell_action.spellID )
-                                        
-                                        if cd > 0 and timeLeft > 0 then
-                                            local total_cdr = min( cdr, timeLeft - execute_time )
-                                            local mod_rate =  aura_env.actionModRate( spell_action )
-                                            if mod_rate < 1 then
-                                                total_cdr = total_cdr * ( 1 - mod_rate )
+                                    local spell_action = spells[ spell ]
+                                    local base_cd = Player.getBaseCooldown( spell )
+                                    
+                                    if spell_action and cdr > 0 then
+                                        if useResult then
+                                            total_cdr = cdr
+                                        else
+                                            local timeLeft = Player.getCooldown( spell )
+                                            
+                                            if timeLeft > 0 then
+                                            
+                                                total_cdr = min( cdr, timeLeft - execute_time )
+                                                
+                                                local mod_rate = aura_env.actionModRate( spell_action )
+                                                
+                                                if mod_rate < 1 then
+                                                    total_cdr = total_cdr * ( 1 - mod_rate )
+                                                end  
                                             end
-                                            if total_cdr > 0 then
-                                                local spell_raw = spellRaw( spell )
-                                                local spell_time = spell_action.time_total or spell_action.base_execute_time
-                                                if spell_raw > adjusted then
-                                                    spell_raw = spell_raw - adjusted
-                                                    cdr_value = cdr_value + ( total_cdr / cd * spell_raw )
-                                                    cdr_cost  = cdr_cost + ( max( 0, ( spell_action.cost_total or 0 ) ) * total_cdr / cd )
-                                                    cdr_time  = cdr_time + ( spell_time * total_cdr / cd )
-                                                end
-                                            end
-                                        end        
+                                        end
+                                    end
+
+                                    if total_cdr > 0 then
+                                        local spell_raw = spellRaw( spell )
+                                        local spell_time = spell_action.time_total or spell_action.base_execute_time
+                                        if spell_raw > adjusted then
+                                            spell_raw = spell_raw - adjusted
+                                            cdr_value = cdr_value + ( total_cdr / base_cd * spell_raw )
+                                            cdr_cost  = cdr_cost + ( max( 0, ( spell_action.cost_total or 0 ) ) * total_cdr / base_cd )
+                                            cdr_time  = cdr_time + ( spell_time * total_cdr / base_cd )
+                                        end
                                     end
                                 end
                                 
