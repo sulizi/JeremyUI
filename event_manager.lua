@@ -928,10 +928,6 @@ function(event, ...)
                             secondary_cost = secondary_cost or 0
                         end
                         
-                        if name == "tiger_palm" then
-                            print( "tp et: " .. execute_time )
-                        end
-                        
                         local gain = action.chi_gain and action.chi_gain() or 0 -- TODO: Need to rewrite this as generic resource gain somehow
                         local secondary_gain = 0
                         
