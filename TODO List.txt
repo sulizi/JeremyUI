@@ -13,7 +13,6 @@ Action Usable Off GCD?
 [Class Tree]:
 
 Pressure Points
-Fatal Touch
 
 [Windwalker]:
 

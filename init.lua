@@ -672,8 +672,12 @@ aura_env.CPlayer = {
         action.type = initialize_value( action.type, "damage" )
         
         -- GCD Value
+        action.modify_gcd = initialize_value( action.modify_gcd, function( self, state, gcd )
+            -- Overridable function, state and base GCD passed as argument
+            return gcd 
+        end )
         
-        action.gcd = function()
+        action.gcd = function( state )
             local _, gcd = GetSpellBaseCooldown( action.spellID )
             local ret_ms = gcd or 0
         
@@ -696,7 +700,7 @@ aura_env.CPlayer = {
             end
             
             local ret_s = max( 0, ret_ms / 1000 )
-            return ret_s
+            return action.modify_gcd( action, sate, ret_s )
         end        
     
         -- Ticks
@@ -741,12 +745,12 @@ aura_env.CPlayer = {
             return cast_time_ms / 1000
         end )
         
-        action.execute_time = initialize_value( action.execute_time, function()
+        action.execute_time = initialize_value( action.execute_time, function( state )
             if action.background then
                 return 0
             end
             
-            local gcd = action.gcd()
+            local gcd = action.gcd( state )
 
             if action.channeled and action.duration and not action.canceled then
                 return max( action.duration(), gcd )
@@ -1252,6 +1256,7 @@ Player.makeBuff( 426553, "annihilating_flame" )
 -- general
 
 Player.makeBuff( 390105, "save_them_all" )
+Player.makeBuff( 450832, "fatal_touch" )
 
 -- ww 
 Player.makeBuff( 424454, "blackout_reinforcement" )
@@ -1283,6 +1288,7 @@ Player.makeBuff( 393039, "the_emperors_capacitor" )
 Player.makeBuff( 242387, "thunderfist" )
 Player.makeBuff( 195321, "transfer_the_power" )
 Player.makeBuff( 123904, "xuen_the_white_tiger" )
+Player.makeBuff( 459841, "darting_hurricane" )
 
 -- brm
 Player.makeBuff( 228563, "blackout_combo" )
@@ -2443,6 +2449,12 @@ Player.action_multiplier = function( action, state )
         am = action.action_multiplier( action, state )
     end
     
+    -- Fatal Touch
+    if Player.getBuff( "fatal_touch", state ).up() and LibDBCache:spell_affected_by_effect( action.spellID, Player.getBuff( "fatal_touch", state ).effectN( 1 ) ) then
+        am = am * Player.getBuff( "fatal_touch", state ).effectN( 1 ).mod    
+    end
+
+    
     if Player.spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ]  then
         -- WW Mastery and Hit Combo effects
         local cs, hit_combo = IsComboStrike( action, state )
@@ -3467,8 +3479,8 @@ local ww_spells = {
         
         onExecute = function( self, state )
             if Player.getTalent( "thunderfist" ).ok then
-                local stacks = Player.getTalent( "thunderfist" ).effectN( 1 ).base_value
-                Player.getBuff( "thunderfist", state ).increment( stacks )
+                local tf_stacks = Player.getTalent( "thunderfist" ).effectN( 1 ).base_value
+                Player.getBuff( "thunderfist", state ).increment( tf_stacks )
             end
             
             if Player.set_pieces[ 33 ] >= 4 then
@@ -3477,6 +3489,11 @@ local ww_spells = {
             
             if Player.getTalent( "last_emperors_capacitor" ).ok then
                 Player.getBuff( "the_emperors_capacitor", state ).increment()
+            end
+            
+            if Player.getTalent( "darting_hurricane" ).ok then
+                local dh_stacks =  Player.getTalent( "darting_hurricane" ).effectN( 2 ).base_value
+                Player.getBuff( "darting_hurricane", state ).increment( dh_stacks )
             end
         end,          
         
@@ -3685,6 +3702,16 @@ local ww_spells = {
         trigger_etl = true,
         ww_mastery = true,
         
+        modify_gcd = function( self, state, gcd )
+            local t = gcd
+            
+            if Player.getBuff( "darting_hurricane", state ).up() then
+                t = t * Player.getBuff( "darting_hurricane", state ).effectN( 1 ).mod
+            end
+            
+            return t
+        end,
+        
         action_multiplier = function( self, state )
             local am = 1
             
@@ -3740,6 +3767,7 @@ local ww_spells = {
             end   
             
             Player.getBuff( "tigers_ferocity", state ).expire()
+            Player.getBuff( "darting_hurricane", state ).decrement()
         end,
         
         trigger = {

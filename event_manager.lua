@@ -928,6 +928,10 @@ function(event, ...)
                             secondary_cost = secondary_cost or 0
                         end
                         
+                        if name == "tiger_palm" then
+                            print( "tp et: " .. execute_time )
+                        end
+                        
                         local gain = action.chi_gain and action.chi_gain() or 0 -- TODO: Need to rewrite this as generic resource gain somehow
                         local secondary_gain = 0
                         
@@ -1319,8 +1323,8 @@ function(event, ...)
                                             if use_during_channel then
                                                 latency = 0
                                                 
-                                                local gcd     = driver.gcd()
-                                                local base_et = driver.execute_time()
+                                                local gcd     = driver.gcd( driver, state )
+                                                local base_et = driver.execute_time( state )
                                                 state.time = state.time - ( base_et - gcd )
                                             end                            
                                             trigger_delay = max( action_delay, latency ) - action_delay
@@ -1362,7 +1366,7 @@ function(event, ...)
                                         
                                         -- Tick Function
                                         local ticks_remaining   = ticks
-                                        local tick_time         = ( spell.time_total or spell.base_execute_time or 0 ) / ticks
+                                        local tick_time         = spell.execute_time( state ) / ticks
                                         
                                         while ticks_remaining > 0 do
                                             local tick_partition = ticks_remaining < 2 and ticks_remaining or 1
@@ -1747,7 +1751,7 @@ function(event, ...)
 
                                     if total_cdr > 0 then
                                         local spell_raw = spellRaw( spell )
-                                        local spell_time = spell_action.time_total or spell_action.base_execute_time
+                                        local spell_time = spell_action.time_total or spell_action.execute_time()
                                         if spell_raw > adjusted then
                                             spell_raw = spell_raw - adjusted
                                             cdr_value = cdr_value + ( total_cdr / base_cd * spell_raw )
