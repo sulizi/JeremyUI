@@ -2056,10 +2056,6 @@ aura_env.global_modifier = function( callback, future, real )
             gm = gm * ( 1 + Player.buffs.press_the_advantage.stacks() * Player.buffs.press_the_advantage.effectN( 1 ).pct )
         end
         
-        if Player.buffs.hit_combo.up() and LibDBCache:spell_affected_by_effect( callback.spellID, Player.buffs.hit_combo.effectN( 1 ) ) then
-            gm = gm * ( 1 + Player.buffs.hit_combo.stacks() * Player.buffs.hit_combo.effectN( 1 ).pct  )
-        end
-        
         if callback.trigger_etl then
             if Player.buffs.xuen_the_white_tiger.remains() > future then
                 gm = gm * ( Player.spell.empowered_tiger_lightning.effectN( 2 ).mod * ( execute_time > 1 and min( 1, ( Player.buffs.xuen_the_white_tiger.remains() - future ) / execute_time ) or 1 ) )
@@ -2472,10 +2468,15 @@ Player.action_multiplier = function( action, state )
 
     
     if Player.spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ]  then
+        
         -- WW Mastery and Hit Combo effects
         local cs, hit_combo = IsComboStrike( action, state )
+        
         if cs then
             am = am * Player.mast_bonus
+        end
+        
+        if LibDBCache:spell_affected_by_effect( action.spellID, Player.buffs.hit_combo.effectN( 1 ) )
             am = am * ( 1 + hit_combo * Player.buffs.hit_combo.effectN( 1 ).pct )
         end
     end
@@ -2660,7 +2661,6 @@ local ww_spells = {
     } ),
 
     ["flurry_strike"] = Player.createAction( 450617, {
-        
         background = true,
         
         critical_rate = function()
@@ -2687,7 +2687,6 @@ local ww_spells = {
     } ),
 
     ["flurry_strikes"] = Player.createAction( 450615, {
-        
         background = true,
         skip_calcs = true,
         
