@@ -1254,14 +1254,21 @@ end
 Player.makeBuff( 426553, "annihilating_flame" )
 
 -- general
-
-Player.makeBuff( 390105, "save_them_all" )
 Player.makeBuff( 450832, "fatal_touch" )
+Player.makeBuff( 390105, "save_them_all" )
+
+-- shadopan
+Player.makeBuff( 451021, "flurry_charge" )
+Player.makeBuff( 451233, "vigilant_watch" )
+Player.makeBuff( 452684, "wisdom_of_the_wall_crit" )
+Player.makeBuff( 452688, "wisdom_of_the_wall_flurry" )
+Player.makeBuff( 452685, "wisdom_of_the_wall_mastery" )
+
 
 -- ww 
 Player.makeBuff( 424454, "blackout_reinforcement" )
 Player.makeBuff( 116768, "bok_proc" )
-Player.makeBuff( 337571, "chi_energy" )
+Player.makeBuff( 393057, "chi_energy" )
 Player.makeBuff( 450380, "chi_wave" )
 Player.makeBuff( 325202, "dance_of_chiji" )
 Player.makeBuff( 394949, "fists_of_flowing_momentum" )
@@ -2160,6 +2167,15 @@ aura_env.actionPostProcessor = function( result )
     
     local action = result.callback
     
+    -- Wisdom of the Wall: Critical Damage Bonus
+    if Player.getBuff( "wisdom_of_the_wall_crit" ).p() then
+        local wisdom = Player.getBuff( "wisdom_of_the_wall_crit" ).effectN( 1 )
+        
+        if LibDBCache:spell_affected_by_effect( action.spellID, wisdom ) then
+            result.damage = result.damage + ( result.critical_damage * wisdom.pct )
+        end
+    end
+    
     -- Augury of the Primal Flame: Annihilating Flame
     if Player.buffs.annihilating_flame.up() then
         
@@ -2494,37 +2510,9 @@ end
 -- --------- --
 
 local ww_spells = {
-    -- Djaruun the Elder Flame
-    -- TODO: Generic Actions
-    -- TODO: Actual item scaling? This is very lazy
-    ["ancient_lava"] = Player.createAction( 408836, {
-        background = true,
-        icd = 0.5, -- Missing from spell data
-        bonus_da = function()
-            -- actual scaling isn't quite linear but this should be close
-            local itemLevel = GetDetailedItemLevelInfo( GetInventoryItemLink( "player", 16 ) )
-            local damage = itemLevel < 500 and 17838 - 215 * ( 450 - itemLevel ) or 50835 - 215 * ( 528 - itemLevel )
-            local split = damage / aura_env.target_count
-            return split
-        end,
-        target_count = function()
-            return aura_env.target_count
-        end,
-        target_multiplier = function( target_count )
-            -- Doesn't say in tooltip but damage scales with targets
-            return ( 1 + ( min( 5, target_count ) - 1 ) * 0.15 ) 
-        end,
-        ready = function( self, state )
-            return Player.findAura( 408835 )
-        end,      
-    } ),
 
-    -- TODO: Buff effect
     ["dual_threat"] = Player.createAction( 451823, {
         background = true,
-        
-        --ww_mastery = TODO
-        --trigger_etl = TODO
         
         triggerSpell = 451839,
         trigger_rate = function( state )
@@ -2647,6 +2635,112 @@ local ww_spells = {
         },
     } ),
 
+    ["high_impact"] = Player.createAction( 451039 , {
+        background = true,
+
+        target_count = function()
+            return aura_env.target_count
+        end,
+        
+        target_multiplier = function( target_count )
+            return 1
+        end,
+
+        ready = function( self, state )
+            return Player.getTalent( "high_impact" ).ok 
+        end,        
+    } ),
+
+    ["flurry_strike_wisdom"] = Player.createAction( 451250, {
+        background = true,
+
+        target_count = function()
+            return aura_env.target_count
+        end,
+        
+        target_multiplier = function( target_count )
+            return 1
+        end,
+        
+        ready = function( self, state )
+            return Player.getBuff( "wisdom_of_the_wall_flurry", state ).up()
+        end,
+    } ),
+
+    ["flurry_strike"] = Player.createAction( 450617, {
+        
+        background = true,
+        
+        critical_rate = function()
+            local cr = Player.crit_bonus
+            
+            cr = cr + Player.getTalent( "pride_of_pandaria" ).effectN( 1 ).roll
+            
+            return min( 1, cr )
+        end,
+        
+        action_multiplier = function( self, state )
+            local am = 1
+            
+            if Player.getBuff( "vigilant_watch", state ).up() then
+                am = am * Player.getBuff( "vigiliant_watch", state ).effectN( 1 ).mod
+            end
+            
+            return am
+        end,
+        
+        ready = function( self, state )
+            return Player.getTalent( "flurry_strikes" ).ok and Player.getBuff( "flurry_charge", state ).up()
+        end,
+    } ),
+
+    ["flurry_strikes"] = Player.createAction( 450615, {
+        
+        background = true,
+        skip_calcs = true,
+        
+        ticks = function()
+            return Player.getBuff( "flurry_charge" ).stacks()
+        end,
+        
+        trigger_rate = function( state )
+            local result = state.result
+            
+            if not result then
+                return 0
+            end
+            
+            local energy = ( Player.primary_resource.type == 3 and state.result.cost ) or state.result.secondary_cost
+            
+            if energy == 0 then
+                return 0
+            end
+            
+            local partial = energy / Player.getTalent( "flurry_strikes" ).effectN( 2 ).base_value
+            
+            return partial
+        end,
+
+        onExecute = function( self, state )
+            Player.getBuff( "vigilant_watch", state ).expire()        
+        end,
+        
+        ready = function( self, state )
+            return Player.getTalent( "flurry_strikes" ).ok and Player.getBuff( "flurry_charge", state ).up()
+        end,
+        
+        tick_trigger = {
+            ["flurry_strike"] = true,
+            ["flurry_strike_wisdom"] = true,
+        },
+    
+        trigger = {
+            ["high_impact"] = function()
+                return aura_env.target_ttd < 10    
+            end,
+        },
+    } ),
+
     ["fists_of_fury"] = Player.createAction( 113656, {
         callbacks = {
             -- Chi generators
@@ -2762,10 +2856,6 @@ local ww_spells = {
         trigger = {
             ["jadefire_fists"] = true,
         },
-        
-        tick_trigger = {
-            ["ancient_lava"] = true,
-        },
     } ),
 
     ["glory_of_the_dawn"] = Player.createAction( 392959, {
@@ -2826,10 +2916,6 @@ local ww_spells = {
             ["fists_of_fury"] = function() 
                 return Player.getTalent( "xuens_battlegear" ).effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
             end,
-        },
-    
-        tick_trigger = {
-            ["ancient_lava"] = true,            
         },
     
     } ),
@@ -2926,11 +3012,7 @@ local ww_spells = {
                 return Player.getBuff( "chi_wave", state ).up()
             end,
         },
-    
-        tick_trigger = {
-            ["ancient_lava"] = true,
-        },
-    
+
         reduces_cd = {
             ["fists_of_fury"] = function() 
                 return Player.getTalent( "xuens_battlegear" ).effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
@@ -3034,10 +3116,6 @@ local ww_spells = {
             ["chi_explosion"] = true,
         },
     
-        tick_trigger = {
-            ["ancient_lava"] = true,
-        },
-    
     } ),
 
     ["blackout_kick_totm"] = Player.createAction( 228649, {
@@ -3082,10 +3160,6 @@ local ww_spells = {
                 Player.getBuff( "martial_mixture", state ).increment()
             end    
         end,        
-        
-        tick_trigger = {
-            ["ancient_lava"] = true,            
-        },        
     } ),
 
     ["energy_burst"] = Player.createAction( 451498, {
@@ -3199,7 +3273,11 @@ local ww_spells = {
             
             if Player.getTalent( "last_emperors_capacitor" ).ok then
                 Player.getBuff( "the_emperors_capacitor", state ).increment()
-            end            
+            end     
+            
+            if Player.getTalent( "vigilant_watch" ).ok then
+                Player.getBuff( "vigilant_watch", state ).increment()
+            end
         end,
         
         reduces_cd = {
@@ -3259,7 +3337,6 @@ local ww_spells = {
         },
     
         tick_trigger = {
-            ["ancient_lava"] = true,  
             ["blackout_kick_totm"] = function( self, state )
                 return Player.getBuff( "teachings_of_the_monastery", state ).up()
             end,
@@ -3288,10 +3365,6 @@ local ww_spells = {
             
             return am
         end,        
-        
-        tick_trigger = {
-            ["ancient_lava"] = true,  
-        },       
     }),
 
     ["whirling_dragon_punch"] = Player.createAction( 152175, {
@@ -3379,10 +3452,6 @@ local ww_spells = {
         trigger = {
             ["wdp_st_tick"] = true,
         },
-        
-        tick_trigger = {
-            ["ancient_lava"] = true,  
-        },        
     } ),
 
     ["strike_of_the_windlord_mh"] = Player.createAction( 395519, {
@@ -3414,10 +3483,6 @@ local ww_spells = {
         target_multiplier = function( target_count )
             return ( 1 + 1 / target_count * ( target_count - 1 ) )
         end,
-        
-        tick_trigger = {
-            ["ancient_lava"] = true, 
-        },    
     } ),
 
     -- TODO: May need to separate OH hit into a triggered spell at some point, currently not necessary
@@ -3503,11 +3568,6 @@ local ww_spells = {
                 return Player.getTalent( "rushing_jade_wind" ).ok
             end,
         },
-    
-        tick_trigger = {
-            ["ancient_lava"] = true, 
-        },
-
     } ),
 
     ["rushing_jade_wind"] = Player.createAction( 116847, {
@@ -3527,10 +3587,6 @@ local ww_spells = {
         target_multiplier = function( target_count )
             return aura_env.targetScale( target_count, spell.rushing_jade_wind.effectN( 1 ).base_value )
         end,
-        
-        tick_trigger = {
-            ["ancient_lava"] = true,
-        },        
     } ),
 
     -- TODO: Refactor this with proper Debuffs
@@ -3584,10 +3640,6 @@ local ww_spells = {
         target_multiplier = function( target_count )
             return min( 5, target_count )
         end,
-        
-        tick_trigger = {
-            ["ancient_lava"] = true,
-        },        
     } ),    
 
     ["jadefire_fists"] = Player.createAction( 457974, {
@@ -3630,10 +3682,6 @@ local ww_spells = {
             ["jadefire_brand"] = true,
             ["jadefire_stomp_ww"] = true,
         },
-    
-        tick_trigger = {
-            ["ancient_lava"] = true,
-        },        
     }),
 
     ["jadefire_stomp"] = Player.createAction( 388193, {
@@ -3677,10 +3725,6 @@ local ww_spells = {
             ["jadefire_brand"] = true,
             ["jadefire_stomp_ww"] = true,
         },
-    
-        tick_trigger = {
-            ["ancient_lava"] = true,
-        },        
     } ),
 
     ["tiger_palm"] = Player.createAction( 100780, {
@@ -3773,10 +3817,6 @@ local ww_spells = {
         trigger = {
             ["expel_harm"] = true,
         },
-        
-        tick_trigger = {
-            ["ancient_lava"] = true,
-        },    
     } ),
 
     ["chi_burst"] = Player.createAction( 123986, {
@@ -4064,30 +4104,6 @@ local mw_spells = {
 -- ---------- --
 
 local brm_spells = {
-    -- Djaruun the Elder Flame
-    -- TODO: Generic Actions
-    -- TODO: Actual item scaling? This is very lazy
-    ["ancient_lava"] = Player.createAction( 408836, {
-        background = true,
-        icd = 0.5, -- Missing from spell data
-        bonus_da = function()
-            -- actual scaling isn't quite linear but this should be close
-            local itemLevel = GetDetailedItemLevelInfo( GetInventoryItemLink( "player", 16 ) )
-            local damage = itemLevel < 500 and 17838 - 215 * ( 450 - itemLevel ) or 50835 - 215 * ( 528 - itemLevel )
-            local split = damage / aura_env.target_count
-            return split
-        end,
-        target_count = function()
-            return aura_env.target_count
-        end,
-        target_multiplier = function( target_count )
-            -- Doesn't say in tooltip but damage scales with targets
-            return ( 1 + ( min( 5, target_count ) - 1 ) * 0.15 ) 
-        end,
-        ready = function( self, state )
-            return Player.findAura( 408835 )
-        end,      
-    } ),
 
     ["mainhand_attack"] = Player.createAction( AUTO_ATTACK, {
         background = true,
@@ -4173,6 +4189,112 @@ local brm_spells = {
             ["offhand_attack"] = function( self, state )
                 return Player.off_hand.equipped
             end,            
+        },
+    } ),
+
+    ["high_impact"] = Player.createAction( 451039 , {
+        background = true,
+
+        target_count = function()
+            return aura_env.target_count
+        end,
+        
+        target_multiplier = function( target_count )
+            return 1
+        end,
+
+        ready = function( self, state )
+            return Player.getTalent( "high_impact" ).ok 
+        end,        
+    } ),
+
+    ["flurry_strike_wisdom"] = Player.createAction( 451250, {
+        background = true,
+
+        target_count = function()
+            return aura_env.target_count
+        end,
+        
+        target_multiplier = function( target_count )
+            return 1
+        end,
+        
+        ready = function( self, state )
+            return Player.getBuff( "wisdom_of_the_wall_flurry", state ).up()
+        end,
+    } ),
+
+    ["flurry_strike"] = Player.createAction( 450617, {
+        
+        background = true,
+        
+        critical_rate = function()
+            local cr = Player.crit_bonus
+            
+            cr = cr + Player.getTalent( "pride_of_pandaria" ).effectN( 1 ).roll
+            
+            return min( 1, cr )
+        end,
+        
+        action_multiplier = function( self, state )
+            local am = 1
+            
+            if Player.getBuff( "vigilant_watch", state ).up() then
+                am = am * Player.getBuff( "vigiliant_watch", state ).effectN( 1 ).mod
+            end
+            
+            return am
+        end,
+        
+        ready = function( self, state )
+            return Player.getTalent( "flurry_strikes" ).ok and Player.getBuff( "flurry_charge", state ).up()
+        end,
+    } ),
+
+    ["flurry_strikes"] = Player.createAction( 450615, {
+        
+        background = true,
+        skip_calcs = true,
+        
+        ticks = function()
+            return Player.getBuff( "flurry_charge" ).stacks()
+        end,
+        
+        trigger_rate = function( state )
+            local result = state.result
+            
+            if not result then
+                return 0
+            end
+            
+            local energy = ( Player.primary_resource.type == 3 and state.result.cost ) or state.result.secondary_cost
+            
+            if energy == 0 then
+                return 0
+            end
+            
+            local partial = energy / Player.getTalent( "flurry_strikes" ).effectN( 2 ).base_value
+            
+            return partial
+        end,
+
+        onExecute = function( self, state )
+            Player.getBuff( "vigilant_watch", state ).expire()        
+        end,
+        
+        ready = function( self, state )
+            return Player.getTalent( "flurry_strikes" ).ok and Player.getBuff( "flurry_charge", state ).up()
+        end,
+        
+        tick_trigger = {
+            ["flurry_strike"] = true,
+            ["flurry_strike_wisdom"] = true,
+        },
+    
+        trigger = {
+            ["high_impact"] = function()
+                return aura_env.target_ttd < 10    
+            end,
         },
     } ),
 
@@ -4287,7 +4409,6 @@ local brm_spells = {
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,
         },
     
         trigger = {
@@ -4326,7 +4447,6 @@ local brm_spells = {
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,
         },
     
         trigger = {
@@ -4448,6 +4568,10 @@ local brm_spells = {
             if Player.getTalent( "hit_scheme" ).ok then
                 Player.getBuff( "hit_scheme", state ).increment()
             end
+
+            if Player.getTalent( "vigilant_watch" ).ok then
+                Player.getBuff( "vigilant_watch", state ).increment()
+            end            
         end,
         
         trigger = {
@@ -4456,7 +4580,6 @@ local brm_spells = {
     
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,
             ["charred_passions"] = function( self, state )
                 return Player.getBuff( "charred_passions", state ).up() 
             end,     
@@ -4506,7 +4629,6 @@ local brm_spells = {
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,
             ["charred_passions"] = function( self, state )
                 return Player.getBuff( "charred_passions", state ).up() 
             end, 
@@ -4536,7 +4658,6 @@ local brm_spells = {
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,      
         },      
     } ),
 
@@ -4580,7 +4701,6 @@ local brm_spells = {
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,   
         },
     } ),
 
@@ -4772,7 +4892,6 @@ local brm_spells = {
     
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,  
         },   
     
         trigger = {
@@ -4850,7 +4969,6 @@ local brm_spells = {
     
         tick_trigger = {
             ["exploding_keg_proc"] = true,
-            ["ancient_lava"] = true,
         },    
     
         trigger = {

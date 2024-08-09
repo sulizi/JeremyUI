@@ -16,7 +16,6 @@ Pressure Points
 
 [Windwalker]:
 
-Dual Threat Attack Speed Buff
 Acclamation
 Gale Force
 Ordered Elements
@@ -28,15 +27,7 @@ Improved Niuzao
 
 [Shado-Pan]:
 
-Against All Odds
-Flurry Charge
-Flurry Strikes
-High Impact
 Lead From the Front
-Pride of Pandaria
-Veteran's Eye
-Vigilant Watch Buff
-Wisdom of the Wall
 
 [Conduit of the Celestials]:
 
