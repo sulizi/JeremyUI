@@ -2642,10 +2642,6 @@ local ww_spells = {
             return aura_env.target_count
         end,
         
-        target_multiplier = function( target_count )
-            return 1
-        end,
-
         ready = function( self, state )
             return Player.getTalent( "high_impact" ).ok 
         end,        
@@ -2656,10 +2652,6 @@ local ww_spells = {
 
         target_count = function()
             return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return 1
         end,
         
         ready = function( self, state )
