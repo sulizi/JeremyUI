@@ -121,7 +121,7 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 2.8
+local DBC_Version = 3.0
 local DBC_Critical = 2.6
 local LibDBCache = LibStub( "LibDBCache-1.0", true )
 
@@ -597,13 +597,13 @@ aura_env.CPlayer = {
         action.dot_hasted       = initialize_value( action.dot_hasted, data.dot_hasted )        
         action.base_duration    = initialize_value( action.duration, data.duration )
         action.duration_hasted  = initialize_value( action.duration_hasted, data.duration_hasted )
-        action.duration         = function()
+        action.duration         = function( state )
             local duration = action.base_duration
             if action.duration_hasted then
                 duration = duration / Player.haste
             end            
             if action.duration_multiplier then
-                duration = duration * action.duration_multiplier()
+                duration = duration * action.duration_multiplier( action, state )
             end
             return duration
         end
@@ -722,7 +722,7 @@ aura_env.CPlayer = {
                         local duration = action.duration
                         
                         if duration then
-                            local tick_rate = duration() / ticks_remaining
+                            local tick_rate = duration( action ) / ticks_remaining
                             ticks_gcd = max( 0, ( gcd / tick_rate ) )
                         end
                     end
@@ -753,7 +753,7 @@ aura_env.CPlayer = {
             local gcd = action.gcd( state )
 
             if action.channeled and action.duration and not action.canceled then
-                return max( action.duration(), gcd )
+                return max( action.duration( state ), gcd )
             end
             
             return max( gcd, action.cast_time() )
@@ -1267,6 +1267,9 @@ Player.makeBuff( 452685, "wisdom_of_the_wall_mastery" )
 -- celestial conduit
 Player.makeBuff( 442850, "august_dynasty" )
 Player.makeBuff( 443112, "strength_of_the_black_ox" )
+Player.makeBuff( 456368, "heart_of_the_jade_serpent" )
+Player.makeBuff( 443421, "hotjs_cdr" )
+Player.makeBuff( 443616, "hotjs_cdr_celestial" )
 
 -- ww 
 Player.makeBuff( 424454, "blackout_reinforcement" )
@@ -2775,6 +2778,19 @@ local ww_spells = {
         ww_mastery = true,
         trigger_etl = true,
         
+        duration_multiplier = function( self, state )
+            local dm = 1
+    
+            -- Heart of the Jade Serpent
+            if Player.getBuff( "hotjs_cdr", state ).up then
+                dm = dm * Player.getBuff( "hotjs_cdr", state ).effectN( 5 ).mod
+            elseif Player.getBuff( "hotjs_cdr_celestial", state ).up then
+                dm = dm * Player.getBuff( "hotjs_cdr_celestial", state ).effectN( 5 ).mod
+            end
+            
+            return dm
+        end,
+        
         action_multiplier = function( self, state )
             local am = 1
             
@@ -3586,6 +3602,10 @@ local ww_spells = {
                 local dh_stacks =  Player.getTalent( "darting_hurricane" ).effectN( 2 ).base_value
                 Player.getBuff( "darting_hurricane", state ).increment( dh_stacks )
             end
+            
+            if Player.getBuff( "heart_of_the_jade_serpent", state ).up() then
+                Player.getBuff( "hotjs_cdr", state ).increment()
+            end
         end,          
         
         trigger = {
@@ -3996,7 +4016,7 @@ local ww_spells = {
             return am
         end,
         
-        duration_multiplier = function()
+        duration_multiplier = function( self, state )
             local dm = 1
             
             dm = dm + Player.getTalent( "power_of_the_thunder_king" ).effectN( 2 ).pct
