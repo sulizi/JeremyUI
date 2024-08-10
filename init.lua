@@ -1264,6 +1264,9 @@ Player.makeBuff( 452684, "wisdom_of_the_wall_crit" )
 Player.makeBuff( 452688, "wisdom_of_the_wall_flurry" )
 Player.makeBuff( 452685, "wisdom_of_the_wall_mastery" )
 
+-- celestial conduit
+Player.makeBuff( 442850, "august_dynasty" )
+Player.makeBuff( 443112, "strength_of_the_black_ox" )
 
 -- ww 
 Player.makeBuff( 424454, "blackout_reinforcement" )
@@ -2636,6 +2639,22 @@ local ww_spells = {
         },
     } ),
 
+    ["strength_of_the_black_ox"] = Player.createAction( 443127, {
+        background = true,
+
+        target_count = function()
+            return aura_env.target_count
+        end,
+        
+        target_multiplier = function( target_count )
+            return aura_env.targetScale( target_count, Player.getTalent( "strength_of_the_black_ox" ).effectN( 2 ).base_value )
+        end,
+        
+        ready = function( self, state )
+            return Player.getTalent( "strength_of_the_black_ox" ).ok
+        end,
+    } ),
+
     ["high_impact"] = Player.createAction( 451039 , {
         background = true,
 
@@ -2973,6 +2992,10 @@ local ww_spells = {
                 am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
             end   
             
+            if Player.getBuff( "august_dynasty", state ).up() then
+                am = am * Player.Player.getBuff( "august_dynasty", state ).effectN( 1 ).mod
+            end
+            
             return am
         end,
         
@@ -3269,6 +3292,11 @@ local ww_spells = {
             if Player.getTalent( "vigilant_watch" ).ok then
                 Player.getBuff( "vigilant_watch", state ).increment()
             end
+            
+            if Player.getBuff( "strength_of_the_black_ox", state ).up() then
+                local sotbo_stacks = Player.getTalent( "strength_of_the_black_ox" ).effectN( 3 ).base_value
+                Player.getBuff( "teachings_of_the_monastery", state ).increment( sotbo_stacks )
+            end
         end,
         
         reduces_cd = {
@@ -3324,7 +3352,10 @@ local ww_spells = {
         },
     
         trigger = {
-            ["energy_burst"] = true,    
+            ["energy_burst"] = true,
+            ["strength_of_the_black_ox"] = function( self, state )
+                return Player.getBuff( "strength_of_the_black_ox", state ).up()
+            end,
         },
     
         tick_trigger = {
@@ -3669,6 +3700,13 @@ local ww_spells = {
             return min( 5, target_count )
         end,
         
+        onExecute = function( self, state )
+            if Player.getTalent( "august_dynasty" ).ok then
+                -- todo: cooldown
+                Player.Player.getBuff( "august_dynasty", state ).increment()
+            end
+        end,        
+        
         trigger = {
             ["jadefire_brand"] = true,
             ["jadefire_stomp_ww"] = true,
@@ -3710,6 +3748,13 @@ local ww_spells = {
         
         target_multiplier = function( target_count )
             return min( 5, target_count )
+        end,
+        
+        onExecute = function( self, state )
+            if Player.getTalent( "august_dynasty" ).ok then
+                -- todo: cooldown
+                Player.Player.getBuff( "august_dynasty", state ).increment()
+            end
         end,
         
         trigger = {
@@ -3913,7 +3958,7 @@ local ww_spells = {
         
         ready = function( self, state )
             return Player.getBuff( "chi_energy", state ).up()
-        end
+        end,
     } ),
 
     ["thunderfist"] = Player.createAction( 393566, {
@@ -3967,8 +4012,6 @@ local ww_spells = {
             Player.getBuff( "the_emperors_capacitor", state ).expire()
         end,
         
-        tick_trigger = {
-        },
     } ),
 
     -- TODO: Refactor this to debuff at some point?

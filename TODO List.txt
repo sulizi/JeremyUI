@@ -19,6 +19,7 @@ Pressure Points
 Acclamation
 Gale Force
 Ordered Elements
+Adjust 4PC
 
 [Brewmaster]:
 
@@ -31,18 +32,9 @@ Lead From the Front
 
 [Conduit of the Celestials]:
 
-August Dynasty
-Celestial Conduit
-Courage of the White Tiger
 Flight of the Red Crane
 Heart of the Jade Serpent
-Inner Compass
-Jade Sanctuary
-Niuzao's Protection
-Restore Balance
 Strength of the Black Ox
-Unity Within
-Yulon's Knowledge
 
 [Master of Harmony]:
 

@@ -1776,31 +1776,6 @@ function(event, ...)
                                 end
                             end
                             
-                            if spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"] then
-                                
-                                -- Storm, Earth, and Fire while channeling
-                                -- If you use an action that isn't copied by SEF, while channeling an ability copied by SEF
-                                -- the images will continue to channel
-                                if Player.channel.spellID and Player.channel.action then
-                                    if not action.background and not action.copied_by_sef and Player.channel.action.copied_by_sef then
-                                        local SEF = Player.findAura( 137639 ) 
-                                        
-                                        if SEF and SEF.remaining > 1 then 
-                                            -- TODO: DBC Value
-                                            -- The contribution is SEF value * ( 3 / 2 ) because the player themselves stops channeling
-                                            local tick_value = Player.channel.raw / Player.channel.ticks * 0.84
-                                            local time_remaining = math.min( SEF.remaining, Player.channel.remaining ) - action_delay
-                                            if time_remaining > 0 then
-                                                local ticks_remaining = 1 + floor( time_remaining / Player.channel.tick_rate )
-                                                local sef_gain = tick_value * ticks_remaining * ( 1 + aura_env.error_margin )
-                                                
-                                                adjusted = adjusted + sef_gain
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                            
                             -- Resource Gain
                             if Player.primary_resource then
                                 
