@@ -2675,7 +2675,7 @@ local ww_spells = {
         end,
         
         ready = function( self, state )
-            return Player.getBuff( "wisdom_of_the_wall_flurry", state ).up()
+            return Player.getTalent( "wisdom_of_the_wall" ).ok
         end,
     } ),
 
@@ -2701,7 +2701,7 @@ local ww_spells = {
         end,
         
         ready = function( self, state )
-            return Player.getTalent( "flurry_strikes" ).ok and Player.getBuff( "flurry_charge", state ).up()
+            return Player.getTalent( "flurry_strikes" ).ok
         end,
     } ),
 
@@ -2736,12 +2736,16 @@ local ww_spells = {
         end,
         
         ready = function( self, state )
-            return Player.getTalent( "flurry_strikes" ).ok and Player.getBuff( "flurry_charge", state ).up()
+            return Player.getTalent( "flurry_strikes" ).ok
         end,
         
         tick_trigger = {
-            ["flurry_strike"] = true,
-            ["flurry_strike_wisdom"] = true,
+            ["flurry_strike"] = function( self, state )
+                return Player.getBuff( "flurry_charge", state ).up()
+            end,
+            ["flurry_strike_wisdom"] = function( self, state )
+                return Player.getBuff( "wisdom_of_the_wall_flurry", state ).up()
+            end,
         },
     
         trigger = {
@@ -4233,10 +4237,6 @@ local brm_spells = {
             return aura_env.target_count
         end,
         
-        target_multiplier = function( target_count )
-            return 1
-        end,
-
         ready = function( self, state )
             return Player.getTalent( "high_impact" ).ok 
         end,        
@@ -4249,17 +4249,12 @@ local brm_spells = {
             return aura_env.target_count
         end,
         
-        target_multiplier = function( target_count )
-            return 1
-        end,
-        
         ready = function( self, state )
-            return Player.getBuff( "wisdom_of_the_wall_flurry", state ).up()
+            return Player.getTalent( "wisdom_of_the_wall" ).ok
         end,
     } ),
 
     ["flurry_strike"] = Player.createAction( 450617, {
-        
         background = true,
         
         critical_rate = function()
@@ -4281,12 +4276,11 @@ local brm_spells = {
         end,
         
         ready = function( self, state )
-            return Player.getTalent( "flurry_strikes" ).ok and Player.getBuff( "flurry_charge", state ).up()
+            return Player.getTalent( "flurry_strikes" ).ok
         end,
     } ),
 
     ["flurry_strikes"] = Player.createAction( 450615, {
-        
         background = true,
         skip_calcs = true,
         
@@ -4317,12 +4311,16 @@ local brm_spells = {
         end,
         
         ready = function( self, state )
-            return Player.getTalent( "flurry_strikes" ).ok and Player.getBuff( "flurry_charge", state ).up()
+            return Player.getTalent( "flurry_strikes" ).ok
         end,
         
         tick_trigger = {
-            ["flurry_strike"] = true,
-            ["flurry_strike_wisdom"] = true,
+            ["flurry_strike"] = function( self, state )
+                return Player.getBuff( "flurry_charge", state ).up()
+            end,
+            ["flurry_strike_wisdom"] = function( self, state )
+                return Player.getBuff( "wisdom_of_the_wall_flurry", state ).up()
+            end,
         },
     
         trigger = {
