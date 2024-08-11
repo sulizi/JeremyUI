@@ -2170,7 +2170,7 @@ aura_env.actionPostProcessor = function( result )
     local action = result.callback
     
     -- Wisdom of the Wall: Critical Damage Bonus
-    if Player.getBuff( "wisdom_of_the_wall_crit" ).p() then
+    if Player.getBuff( "wisdom_of_the_wall_crit" ).up() then
         local wisdom = Player.getBuff( "wisdom_of_the_wall_crit" ).effectN( 1 )
         
         if LibDBCache:spell_affected_by_effect( action.spellID, wisdom ) then
@@ -2482,7 +2482,7 @@ Player.action_multiplier = function( action, state )
             am = am * Player.mast_bonus
         end
         
-        if LibDBCache:spell_affected_by_effect( action.spellID, Player.buffs.hit_combo.effectN( 1 ) )
+        if LibDBCache:spell_affected_by_effect( action.spellID, Player.buffs.hit_combo.effectN( 1 ) ) then
             am = am * ( 1 + hit_combo * Player.buffs.hit_combo.effectN( 1 ).pct )
         end
     end
@@ -3876,6 +3876,7 @@ local ww_spells = {
         
         trigger = {
             ["expel_harm"] = true,
+            ["flurry_strikes"] = true,
         },
     } ),
 
@@ -3911,6 +3912,7 @@ local ww_spells = {
     } ),
 
     ["expel_harm"] = Player.createAction( 451968, {
+        background = true,
         trigger_etl = true,
         ww_mastery = true,
         usable_during_sck = true,
@@ -4036,6 +4038,9 @@ local ww_spells = {
             Player.getBuff( "the_emperors_capacitor", state ).expire()
         end,
         
+        trigger = {
+            ["flurry_strikes"] = true,
+        },
     } ),
 
     -- TODO: Refactor this to debuff at some point?
@@ -4415,6 +4420,7 @@ local brm_spells = {
         
         trigger = {
             ["healing_sphere"] = false, -- These are added to the base amount instead
+            ["flurry_strikes"] = true,
         },
     
         reduce_stagger = function()
@@ -4689,6 +4695,7 @@ local brm_spells = {
         trigger = {
             ["healing_spheres"] = true,   
             ["shuffle"] = true,
+            ["flurry_strikes"] = true,            
         },
     } ),
 
@@ -4753,6 +4760,10 @@ local brm_spells = {
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,
+        },
+    
+        trigger = {
+            ["flurry_strikes"] = true,            
         },
     } ),
 
@@ -5032,6 +5043,7 @@ local brm_spells = {
             end,
             ["weapons_of_order_debuff"] = true,
             ["shuffle"] = true,
+            ["flurry_strikes"] = true,            
         },
     } ),
 
