@@ -1904,6 +1904,10 @@ function(event, ...)
                             end
                         end
                         
+                        if not next( list ) then
+                            return {}
+                        end
+                        
                         while true do
                             
                             local delta_s = s - previous_s
