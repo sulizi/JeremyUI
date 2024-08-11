@@ -502,7 +502,7 @@ function(event, ...)
                 local TargetFilter = function()
                     
                     local validTargets = {}
-                    local checkTod = Player.getCooldown( "touch_of_death" ) == 0 and aura_env.config.tod_glow > 1
+                    local checkTod = spells[ "touch_of_death" ] and Player.getCooldown( "touch_of_death" ) == 0 and aura_env.config.tod_glow > 1
                     
                     for _, nameplateframe in pairs( GetNamePlates() ) do
                         
