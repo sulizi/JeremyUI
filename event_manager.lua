@@ -1418,7 +1418,7 @@ function(event, ...)
                                                 local cdr = cdr_value  
                                                 
                                                 if type( cdr ) == "function" then
-                                                    cdr = cdr()
+                                                    cdr = cdr( spell, state )
                                                 end
                                                 
                                                 if state.cooldown[ cdr_spell ] then
@@ -1686,7 +1686,7 @@ function(event, ...)
                                 local brew_list = { "purifying_brew", "celestial_brew", "fortifying_brew", "black_ox_brew" }
                                 
                                 if type( brew_cdr ) == "function" then
-                                    brew_cdr = brew_cdr()
+                                    brew_cdr = brew_cdr( action )
                                 end
                                 
                                 if brew_cdr > 0 then
@@ -1720,7 +1720,7 @@ function(event, ...)
                                     local total_cdr = 0
                                     
                                     if type(cdr) == "function" then
-                                        cdr = cdr()
+                                        cdr = cdr( action )
                                     end
                                     
                                     local spell_action = spells[ spell ]

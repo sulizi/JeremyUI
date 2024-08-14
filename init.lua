@@ -27,7 +27,7 @@ local GetSpellCooldown = GetSpellCooldown or function( spellID )
     return info.startTime, info.duration, info.isEnabled
 end
 local GetSpellCount = GetSpellCount or C_Spell.GetSpellCastCount
-local GetSpellDescription = GetSpellDescription
+local GetSpellDescription = GetSpellDescription or C_Spell.GetSpellDescription
 local GetSpellInfo = GetSpellInfo or function( spellID )
     if not spellID then
         return nil
@@ -2943,7 +2943,7 @@ local ww_spells = {
         end,
 
         reduces_cd = {
-            ["fists_of_fury"] = function() 
+            ["fists_of_fury"] = function( self, state ) 
                 return Player.getTalent( "xuens_battlegear" ).effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
             end,
         },
@@ -3048,7 +3048,7 @@ local ww_spells = {
         },
 
         reduces_cd = {
-            ["fists_of_fury"] = function() 
+            ["fists_of_fury"] = function( self, state ) 
                 return Player.getTalent( "xuens_battlegear" ).effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
             end,
         },
@@ -3320,7 +3320,7 @@ local ww_spells = {
         end,
         
         reduces_cd = {
-            ["rising_sun_kick"] = function( state ) 
+            ["rising_sun_kick"] = function( self, state )  
                 local cdr = spell.blackout_kick.effectN( 3 ).seconds 
                 
                 if Player.getTalent( "teachings_of_the_monastery" ).ok then
@@ -3340,7 +3340,7 @@ local ww_spells = {
                 return cdr
             end,
             
-            ["fists_of_fury"] = function( state )
+            ["fists_of_fury"] = function( self, state ) 
                 local cdr = spell.blackout_kick.effectN( 3 ).seconds
                 
                 if Player.getBuff( "blackout_reinforcement", state ).up() then
@@ -3350,7 +3350,7 @@ local ww_spells = {
                 return cdr
             end,
             
-            ["strike_of_the_windlord"] = function( state )
+            ["strike_of_the_windlord"] = function( self, state ) 
                 local cdr = 0
                 
                 if Player.getBuff( "blackout_reinforcement", state ).up() then
@@ -3360,7 +3360,7 @@ local ww_spells = {
                 return cdr
             end,
             
-            ["whirling_dragon_punch"] = function( state )
+            ["whirling_dragon_punch"] = function( self, state ) 
                 local cdr = 0
                 
                 if Player.getBuff( "blackout_reinforcement", state ).up() then
@@ -3435,7 +3435,7 @@ local ww_spells = {
             end
             
             local brain_lag = 1.25
-            local grace_period = 0
+            local grace_period = 1.5
             local gcd = state.callback.gcd()
             local fof_cd = Player.getCooldown( "fists_of_fury", state )
             local rsk_cd = Player.getCooldown( "rising_sun_kick", state )
@@ -4945,9 +4945,9 @@ local brm_spells = {
         end,
         
         reduces_cd = {
-            ["breath_of_fire"] = function ()
+            ["breath_of_fire"] = function( self, state )
                 if Player.getTalent( "salsalabims_strength" ).ok then
-                    return Player.getCooldown( "breath_of_fire" )
+                    return Player.getCooldown( "breath_of_fire", state )
                 end
                 return 0 
             end,
@@ -5022,9 +5022,9 @@ local brm_spells = {
         end,        
         
         reduces_cd = {
-            ["breath_of_fire"] = function ()
+            ["breath_of_fire"] = function ( self, state )
                 if Player.getTalent( "salsalabims_strength" ).ok then
-                    return Player.getCooldown( "breath_of_fire" )
+                    return Player.getCooldown( "breath_of_fire", state )
                 end
                 return 0 
             end,
@@ -5417,7 +5417,7 @@ local brm_spells = {
             local pb_cur, pb_max = GetSpellCharges( 119582 )
             
             if pb_cur < pb_max then
-                local charge_cd = Player.getCooldown( "purifying_brew" )
+                local charge_cd = Player.getCooldown( "purifying_brew", state )
                 if charge_cd > 6 then
                     if not Player.buffs.heavy_stagger.up() then
                         return false
@@ -5515,15 +5515,15 @@ local brm_spells = {
         
         ready = function( self, state )
             -- Require Celestial Brew on CD
-            return Player.getCooldown( "celestial_brew" ) > 0
+            return Player.getCooldown( "celestial_brew", state ) > 0
         end,
         
         reduces_cd = {
-            ["celestial_brew"] = function( ) 
-                return Player.getCooldown( "celestial_brew" )
+            ["celestial_brew"] = function( self, state ) 
+                return Player.getCooldown( "celestial_brew", state )
             end,          
-            ["purifying_brew"] = function( ) 
-                local cdr = Player.getCooldown( "purifying_brew" )
+            ["purifying_brew"] = function( self, state ) 
+                local cdr = Player.getCooldown( "purifying_brew", state )
                 local currentCharges, maxCharges, _, cooldownDuration = GetSpellCharges( 119582 )
                 
                 local fullCharges = maxCharges - currentCharges - 1
