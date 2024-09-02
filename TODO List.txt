@@ -4,15 +4,13 @@ Absorb Shield SpellIDs
 Debuff States
 PPM Effects
 Generate target multiplier function on action initialization using SimC style variables
+Refactor and compound miss for background triggered spells
 
 [DBC / Spell Datamining]:
 
+Hasted GCD
 Hasted Cooldown
 Action Usable Off GCD?
-
-[Class Tree]:
-
-Pressure Points
 
 [Windwalker]:
 
@@ -29,8 +27,6 @@ Improved Niuzao
 [Shado-Pan]:
 
 Lead From the Front
-
-[Conduit of the Celestials]:
 
 [Master of Harmony]:
 

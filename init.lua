@@ -21,7 +21,17 @@ local getmetatable = getmetatable
 local GetParryChance = GetParryChance
 local GetSpecialization = GetSpecialization
 local GetSpellBaseCooldown = GetSpellBaseCooldown
-local GetSpellCharges = GetSpellCharges or WeakAuras.GetSpellCharges
+local GetSpellCharges = GetSpellCharges or function( spellID )
+    if not spellID then
+        return nil
+    end
+    
+    local chargeInfo = C_Spell.GetSpellCharges( spellID )
+    
+    if chargeInfo then
+        return chargeInfo.currentCharges, chargeInfo.maxCharges, chargeInfo.cooldownStartTime, chargeInfo.cooldownDuration, chargeInfo.chargeModRate
+    end
+end
 local GetSpellCooldown = GetSpellCooldown or function( spellID )
     local info = C_Spell.GetSpellCooldown( spellID )
     return info.startTime, info.duration, info.isEnabled
@@ -467,6 +477,9 @@ aura_env.CPlayer = {
     },    
     primary_stat = 0,
     recent_dtps = 0,
+    react = {
+        spellsteal = false,    
+    },
     role = "DAMAGER",
     set_pieces = {},
     spec = 0,
@@ -700,7 +713,7 @@ aura_env.CPlayer = {
             end
             
             local ret_s = max( 0, ret_ms / 1000 )
-            return action.modify_gcd( action, sate, ret_s )
+            return action.modify_gcd( action, state, ret_s )
         end        
     
         -- Ticks
@@ -1172,6 +1185,7 @@ aura_env.GetEnemy = function( srcGUID )
             npcid = srcGUID:match( "(%d+)-%x-$" ),
             priority_modifier = 1.0,
             range = 40,
+            stealable_auras = {},
             stunTarget = false,
             ttd = nil,
             
@@ -1238,6 +1252,7 @@ aura_env.ResetEnemy = function( GUID, dead )
     Enemy.lastSeen = nil
     Enemy.needsFullUpdate = true
     Enemy.range = 40
+    Enemy.stealable_auras = {}
     Enemy.ttd = nil
     
     if aura_env.sef_fixate and aura_env.sef_fixate == GUID then
@@ -2697,7 +2712,7 @@ local ww_spells = {
             local am = 1
             
             if Player.getBuff( "vigilant_watch", state ).up() then
-                am = am * Player.getBuff( "vigiliant_watch", state ).effectN( 1 ).mod
+                am = am * Player.getBuff( "vigilant_watch", state ).effectN( 1 ).mod
             end
             
             return am
@@ -3635,33 +3650,6 @@ local ww_spells = {
         end,
     } ),
 
-    -- TODO: Refactor this with proper Debuffs
-    ["jadefire_brand"] = {
-        type = "damage_buff",
-        debuff = true,
-        spellID = 395414,
-        pct = function()
-            return spell.jadefire_brand_dmg.effectN( 1 ).pct
-        end,
-        duration = function()
-            local base_duration = 10
-            local duration = base_duration
-            
-            if Player.jfh_targets > 0 then
-                local target_count = aura_env.learnedFrontalTargets( 388201 )
-                local target_limit = 5
-                duration = base_duration - ( Player.jfh_dur_total / Player.jfh_targets )
-                duration = ( duration * min( target_count, Player.jfh_targets ) )
-                duration = duration + ( base_duration * min( target_limit, ( target_count - Player.jfh_targets ) ) )
-                duration = duration / target_count
-            end
-            return max( 0, duration )
-        end,
-        ready = function( self, state )
-            return Player.getTalent( "jadefire_harmony" ).ok
-        end,
-    },
-
     ["jadefire_stomp_ww"] = Player.createAction( 388201, {
 
         background = true,
@@ -3732,7 +3720,6 @@ local ww_spells = {
         end,        
         
         trigger = {
-            ["jadefire_brand"] = true,
             ["jadefire_stomp_ww"] = true,
         },
     }),
@@ -3782,7 +3769,6 @@ local ww_spells = {
         end,
         
         trigger = {
-            ["jadefire_brand"] = true,
             ["jadefire_stomp_ww"] = true,
         },
     } ),
@@ -4043,6 +4029,14 @@ local ww_spells = {
         },
     } ),
 
+    ["paralysis"] = Player.createAction( 115078, {
+        skip_calcs = true,     
+        
+        ready = function( self, state )
+            return Player.getTalent( "pressure_points" ).ok and Player.react.spellsteal
+        end,
+    } ),
+
     -- TODO: Refactor this to debuff at some point?
     ["touch_of_karma"] = Player.createAction( 122470, {
 
@@ -4294,7 +4288,7 @@ local brm_spells = {
             local am = 1
             
             if Player.getBuff( "vigilant_watch", state ).up() then
-                am = am * Player.getBuff( "vigiliant_watch", state ).effectN( 1 ).mod
+                am = am * Player.getBuff( "vigilant_watch", state ).effectN( 1 ).mod
             end
             
             return am
@@ -4515,7 +4509,6 @@ local brm_spells = {
                 
                 return false
             end,
-            ["weapons_of_order_debuff"] = true,
             ["chi_wave"] = function( self, state )
                 return Player.getBuff( "chi_wave", state ).up()
             end,
@@ -4843,6 +4836,14 @@ local brm_spells = {
         end,
     } ),
 
+    ["paralysis"] = Player.createAction( 115078, {
+        skip_calcs = true,     
+        
+        ready = function( self, state )
+            return Player.getTalent( "pressure_points" ).ok and Player.react.spellsteal
+        end,
+    } ),
+
     ["diffuse_magic"] = Player.createAction( 122783, {
         skip_calcs = true,     
         
@@ -5041,7 +5042,6 @@ local brm_spells = {
                 end
                 return false
             end,
-            ["weapons_of_order_debuff"] = true,
             ["shuffle"] = true,
             ["flurry_strikes"] = true,            
         },
@@ -5577,34 +5577,6 @@ local brm_spells = {
         },
     } ),
 
-    -- TODO: Refactor with proper debuffs
-    ["weapons_of_order_debuff"] = {
-        type = "damage_buff",
-        debuff = true,
-        spellID = 387179,
-        pct = function()
-            local woo_buff = Player.findAura( 387184 )
-            return min( 4, 1 + ( woo_buff and woo_buff.stacks or 0 ) ) * 0.08
-        end,
-        duration = function()
-            local base_duration = 10
-            local duration = base_duration
-            
-            if Player.woo_targets > 0 then
-                local target_count = aura_env.target_count
-                duration = base_duration - ( Player.woo_dur_total / Player.woo_targets )
-                duration = ( duration * min( target_count, Player.woo_targets ) )
-                duration = duration + ( base_duration * ( target_count - Player.woo_targets ) )
-                duration = duration / target_count
-            end
-            
-            return max( 0, duration )
-        end,
-        ready = function( self, state )
-            return Player.getTalent( "weapons_of_order" ).ok and Player.findAura( 387184 )
-        end,
-    },
-
     ["charred_dreams_damage"] = Player.createAction( 425299, {
         background = true,
         skip_calcs = true, -- Uses state result
@@ -5843,6 +5815,9 @@ SetCVar( "ActionButtonUseKeyDown", 1 )
 SetCVar( "cameraDistanceMaxZoomFactor", 2.6 )
 SetCVar( "cameraIndirectVisibility", 1 ) 
 SetCVar( "cameraIndirectOffset", 10 ) 
+SetCVar( "floatingCombatTextCombatDamage", 1 )
+SetCVar( "floatingCombatTextCombatHealing", 1 )
+SetCVar( "WorldTextScale", 0.5 )
 
 BNToastFrame:SetPoint ( "Left", 0, 0 ) 
 

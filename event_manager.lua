@@ -53,7 +53,17 @@ function(event, ...)
     local frameTime = GetTime()
     local GetPowerRegen = GetPowerRegen
     local GetRaidTargetIndex = GetRaidTargetIndex
-    local GetSpellCharges = GetSpellCharges or WeakAuras.GetSpellCharges
+    local GetSpellCharges = GetSpellCharges or function( spellID )
+        if not spellID then
+            return nil
+        end
+        
+        local chargeInfo = C_Spell.GetSpellCharges( spellID )
+        
+        if chargeInfo then
+            return chargeInfo.currentCharges, chargeInfo.maxCharges, chargeInfo.cooldownStartTime, chargeInfo.cooldownDuration, chargeInfo.chargeModRate
+        end
+    end
     local GetSpellCooldown = GetSpellCooldown or function( spellID )
         local info = C_Spell.GetSpellCooldown( spellID )
         return info.startTime, info.duration, info.isEnabled
@@ -555,7 +565,6 @@ function(event, ...)
                                 aura_env.targetAuras[unitID] = {}
                                 aura_env.targetAuras[unitID]["priority_check"] = { amp = ( unitID == "target" and 0.01 ) or 0, expire = frameTime + 3600 }
                             else
-                                
                                 -- ToD off CD and option enabled
                                 if checkTod then
                                     -- Valid ToD Target
@@ -637,6 +646,7 @@ function(event, ...)
                     
                     if enemy.unitID == "target" then
                         aura_env.targetHealthRemaining = enemy.healthActual
+                        Player.react.spellsteal = next( enemy.stealable_auras ) ~= nil
                     end
                     
                     ParseAuras( enemy, enemy.unitID )
@@ -759,84 +769,7 @@ function(event, ...)
                     local spellID = action.spellID
                     local action_type = action.type
                     
-                    if action_type == "damage_buff"
-                    or action_type == "healing_buff" then
-                        local pct = ( type( action.pct ) == "function" and action.pct() or action.pct ) or 0
-                        pct = max( 0, pct )
-                        
-                        local active = Player.findAura( spellID )
-                        local remains = ( active and active.remaining or 0 )
-                        local refresh_behavior = aura_env.buff_refresh_behavior[ action.refresh_behavior or "DURATION" ]
-                        local base_duration = ( type( action.base_duration ) == "function" and action.base_duration() or action.base_duration ) or 0
-                        local buff_duration = ( type( action.duration ) == "function" and action.duration( base_duration ) or action.duration ) or 0
-                        
-                        -- TODO: Proper Debuffs
-                        if not action.debuff then
-                            if active then 
-                                if refresh_behavior == aura_env.buff_refresh_behavior[ "DISABLED" ] then
-                                    buff_duration = 0
-                                else
-                                    if refresh_behavior == aura_env.buff_refresh_behavior[ "DURATION" ] then
-                                        buff_duration = buff_duration - remains
-                                    elseif refresh_behavior == aura_env.buff_refresh_behavior[ "PANDEMIC" ] then
-                                        buff_duration = buff_duration + min( 0.3 * buff_duration, remains )
-                                    elseif refresh_behavior == aura_env.buff_refresh_behavior[ "MAX" ] then
-                                        buff_duration = max( buff_duration, remains )
-                                        -- else 
-                                        -- Refresh to given duration plus remaining duration
-                                        -- ( buff_duration = buff_duration )
-                                    end
-                                end
-                            end
-                            
-                            buff_duration = min( aura_env.fight_remains, buff_duration )
-                        end
-                        
-                        local raw = 0 
-                        local sequence_t = 0
-                        for _, sequence_name in pairs( Player.action_sequence ) do
-                            local cached_action = aura_env.action_cache[ sequence_name ]
-                            if cached_action then
-                                local cached_result = spells[ sequence_name ] and spells[ sequence_name ].result
-                                if cached_result then
-                                    raw = raw + ( action_type == "damage_buff" and cached_result.damage or cached_result.self_healing + cached_result.group_healing )
-                                    sequence_t = sequence_t + cached_action.execute_time
-                                end
-                            end
-                        end
-                        raw = raw / ( sequence_t + 1 )
-                        raw = raw * pct * math.max( 1, buff_duration )
-                        raw = math.max ( 0, raw )
-                        
-                        if not Player.ready( action ) then
-                            raw = 0
-                        end
-                        
-                        action.result = {
-                            callback                = action,
-                            ticks                   = nil,
-                            target_count            = nil,
-                            damage                  = raw,
-                            self_healing            = 0,
-                            group_healing           = 0,
-                            mitigation              = 0,
-                            crit_rate               = 0,
-                            crit_mod                = 1,
-                            critical_damage         = 0,
-                            critical_healing        = 0,
-                            critical_group_healing  = 0,
-                        }
-                        
-                        action_set({
-                                type = action_type,
-                                name = name,
-                                raw = raw,
-                                cost = 0,
-                                execute_time = 0,
-                                background = true,
-                        })
-                        
-                    elseif spellID ~= nil then
+                    if spellID ~= nil then
                         
                         -- Cache AP/SP values
                         -- these sometimes change in PvP combat so we'll cache that as well
@@ -1627,7 +1560,7 @@ function(event, ...)
                                 -- Adjust damage / heal value based on spec roles
                                 local D = results.damage
                                 
-                                if Player.role ~= "DAMAGER" then
+                                if Player.role ~= "DAMAGER" or not IsInGroup() then
                                     D = ( D * 0.5 ) + results.self_healing
                                     
                                     if Player.role == "TANK" then
@@ -1726,33 +1659,35 @@ function(event, ...)
                                     local spell_action = spells[ spell ]
                                     local base_cd = Player.getBaseCooldown( spell )
                                     
-                                    if spell_action and cdr > 0 then
-                                        if useResult then
-                                            total_cdr = cdr
-                                        else
-                                            local timeLeft = Player.getCooldown( spell )
-                                            
-                                            if timeLeft > 0 then
-                                            
-                                                total_cdr = min( cdr, timeLeft - execute_time )
+                                    if base_cd > 1 then
+                                        if spell_action and cdr > 0 then
+                                            if useResult then
+                                                total_cdr = cdr
+                                            else
+                                                local timeLeft = Player.getCooldown( spell )
                                                 
-                                                local mod_rate = aura_env.actionModRate( spell_action )
+                                                if timeLeft > 0 then
                                                 
-                                                if mod_rate < 1 then
-                                                    total_cdr = total_cdr * ( 1 - mod_rate )
-                                                end  
+                                                    total_cdr = min( cdr, timeLeft - execute_time )
+                                                    
+                                                    local mod_rate = aura_env.actionModRate( spell_action )
+                                                    
+                                                    if mod_rate < 1 then
+                                                        total_cdr = total_cdr * ( 1 - mod_rate )
+                                                    end  
+                                                end
                                             end
                                         end
-                                    end
-
-                                    if total_cdr > 0 then
-                                        local spell_raw = spellRaw( spell )
-                                        local spell_time = spell_action.time_total or spell_action.execute_time()
-                                        if spell_raw > adjusted then
-                                            spell_raw = spell_raw - adjusted
-                                            cdr_value = cdr_value + ( total_cdr / base_cd * spell_raw )
-                                            cdr_cost  = cdr_cost + ( max( 0, ( spell_action.cost_total or 0 ) ) * total_cdr / base_cd )
-                                            cdr_time  = cdr_time + ( spell_time * total_cdr / base_cd )
+    
+                                        if total_cdr > 0 then
+                                            local spell_raw = spellRaw( spell )
+                                            local spell_time = spell_action.time_total or spell_action.execute_time()
+                                            if spell_raw > adjusted then
+                                                spell_raw = spell_raw - adjusted
+                                                cdr_value = cdr_value + ( total_cdr / base_cd * spell_raw )
+                                                cdr_cost  = cdr_cost + ( max( 0, ( spell_action.cost_total or 0 ) ) * total_cdr / base_cd )
+                                                cdr_time  = cdr_time + ( spell_time * total_cdr / base_cd )
+                                            end
                                         end
                                     end
                                 end
@@ -2377,6 +2312,8 @@ function(event, ...)
                     if Unit == Player then
                         Unit.diffuse_auras = {}
                         Unit.diffuse_reflects = {}
+                    else
+                        Unit.stealable_auras = {}
                     end
                     
                     local auraSlots = { UnitAuraSlots( unitID, "HELPFUL|HARMFUL" ) }
@@ -2399,6 +2336,10 @@ function(event, ...)
                                     if valid_diffuse.reflect then
                                         Unit.diffuse_reflects[ instanceID  ] = true
                                     end
+                                end
+                            else
+                                if auraData.isStealable then
+                                    Unit.stealable_auras[ instanceID ] = true
                                 end
                             end
                             
@@ -2433,7 +2374,11 @@ function(event, ...)
                                         Unit.diffuse_reflects[ instanceID ] = true
                                     end
                                 end
-                            end                            
+                            else
+                                if auraData.isStealable then
+                                    Unit.stealable_auras[ instanceID ] = true
+                                end
+                            end                          
                             
                             Unit.auraInstancesByID[ spellId ] = Unit.auraInstancesByID[ spellId ] or {}
                             Unit.auraInstancesByID[ spellId ][ instanceID ] = true 
@@ -2467,7 +2412,9 @@ function(event, ...)
                             if Unit == Player then
                                 Unit.diffuse_auras[ instanceID ] = nil
                                 Unit.diffuse_reflects[ instanceID ] = nil
-                            end       
+                            else
+                                Unit.stealable_auras[ instanceID ] = nil
+                            end
                             
                             if Unit.auraDataByInstance[ instanceID ] then
                                 local spellId = Unit.auraDataByInstance[ instanceID ].spellId
