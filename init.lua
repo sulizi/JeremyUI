@@ -629,9 +629,7 @@ aura_env.CPlayer = {
         action.may_miss         = initialize_value( action.may_miss, _tick_data.may_miss )
         action.may_crit         = initialize_value( action.may_crit, _tick_data.may_crit )
         
-        
         -- Parse Effects
-        
         local effect_type = function( e )
             if e.is_heal then
                 if action.target_count then
@@ -748,7 +746,6 @@ aura_env.CPlayer = {
         end
         
         -- Cast Time / Execute Time functions
-        
         action.cast_time = initialize_value( action.cast_time, function() 
             if action.background then 
                 return 0
@@ -773,10 +770,38 @@ aura_env.CPlayer = {
         end )
         
         -- Trigger Auto Attacks
-        
         action.trigger = action.trigger or {}
-        action.trigger[ "auto_attack" ] = function()
-            return InCombatLockdown() or action.starts_combat
+        action.trigger[ "auto_attack" ] = function( self, state )
+            return self.spellID ~= AUTO_ATTACK and ( InCombatLockdown() or action.starts_combat )
+        end
+        
+        -- Combat Roll
+        action.miss = function( self, state )
+            if self.background 
+            or self.type ~= "damage"
+            or not self.may_miss then
+                return 1
+            end
+            
+            local target_count = self.target_count and self.target_count() or 1
+            local target_level = target_count > 1 and Combat.avg_level or UnitLevel( "target" )
+            
+            local miss = target_level > 0 and min( 1, max( 0, 0.03 + ( ( target_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
+            
+            -- Auto attack miss penalty
+            if self.spellID == AUTO_ATTACK then
+                if Player.off_hand.equipped then
+                    miss = miss + 0.19
+                end
+            end
+            
+            return ( 1 - miss )
+        end
+        
+        action.success = function( self, state )
+            -- Currently only tracking miss, this function is a placeholder if other
+            -- things become relevant
+            return self.miss( self, state )
         end
         
         -- Action Ready
@@ -1345,16 +1370,13 @@ aura_env.combo_strike = {
     [101545] = false, -- Flying Serpent Kick
     [113656] = true,  -- Fists of Fury
     [101546] = true,  -- Spinning Crane Kick
-    [116847] = true,  -- Rushing Jade Wind
     [152175] = true,  -- Whirling Dragon Punch
-    [123986] = true,  -- Chi Burst
+    [416404] = true,  -- Chi Burst
     [117952] = true,  -- Crackling Jade Lightning
     [392983] = true,  -- Strike of the Windlord
     [322109] = true,  -- Touch of Death
-    [322101] = true,  -- Expel Harm
-    [310454] = true,  -- Weapons of Order
+    [322101] = false,  -- Expel Harm
     [388193] = true,  -- Jadefire Stomp
-    [388686] = true,  -- White Tiger Statue
     [137639] = true,  -- Storm, Earth, and Fire
 }
 
@@ -2056,21 +2078,6 @@ aura_env.global_modifier = function( callback, future, real )
         if callback == Player.default_action then
             aura_env.base_gm = gm
         end
-        
-          -- Miss
-        if callback.may_miss then
-            local enemy_level = target_count == 1 and UnitLevel( "target" ) or Combat.avg_level
-            local miss = enemy_level > 0 and min( 1, max( 0, 0.03 + ( ( enemy_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
-            
-            -- Auto attack miss penalty
-            if callback.spellID == AUTO_ATTACK then
-                if Player.off_hand.equipped then
-                    miss = miss + 0.19
-                end
-            end
-            
-            gm = gm * ( 1 - miss )
-        end      
         
         -- Dynamic Buffs/Debuffs
         if Player.buffs.press_the_advantage.up() and LibDBCache:spell_affected_by_effect( callback.spellID, Player.buffs.press_the_advantage.effectN( 1 ) ) then
@@ -3866,7 +3873,7 @@ local ww_spells = {
         },
     } ),
 
-    ["chi_burst"] = Player.createAction( 123986, {
+    ["chi_burst"] = Player.createAction( 461404, {
 
         triggerSpell = 148135,
         
@@ -4760,7 +4767,7 @@ local brm_spells = {
         },
     } ),
 
-    ["chi_burst"] = Player.createAction( 123986, {
+    ["chi_burst"] = Player.createAction( 461404, {
 
         triggerSpell = 148135,
 

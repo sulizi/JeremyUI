@@ -4,7 +4,6 @@ Absorb Shield SpellIDs
 Debuff States
 PPM Effects
 Generate target multiplier function on action initialization using SimC style variables
-Refactor and compound miss for background triggered spells
 
 [DBC / Spell Datamining]:
 

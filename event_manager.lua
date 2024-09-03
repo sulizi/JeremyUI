@@ -975,7 +975,7 @@ function(event, ...)
                             end
                             
                             tooltip = tooltip * ( Player.is_pvp and action.aura_modifier_pvp or action.aura_modifier_pve )
-                    
+                        
                             -- Bonus damage and healing not related to ap or sp modifier
                             local bonus_damage = action.bonus_da and action.bonus_da() or 0
                             local bonus_healing = action.bonus_heal and action.bonus_heal() or 0
@@ -996,6 +996,12 @@ function(event, ...)
                             damage          = damage * Player.vers_bonus
                             healing         = healing * Player.vers_bonus
                             group_healing   = group_healing * Player.vers_bonus
+                            
+                            -- Success Chance
+                            local success_rate = action.success( action )
+                            damage          = damage * success_rate
+                            healing         = healing * success_rate
+                            group_healing   = group_healing * success_rate
                             
                             -- Critical modifiers
                             local crit_damage        = 0
@@ -1116,12 +1122,13 @@ function(event, ...)
                                                 -- Pass driver callbacks to trigger
                                                 callback_state = state_table[ l ] or 
                                                 {
-                                                    time        = execute_time + action_delay,
-                                                    primary     = min( Player.primary_resource.max, ( Player.primary_resource.current + gain ) ) - cost,
-                                                    secondary   = min( Player.secondary_resource.max, ( Player.secondary_resource.current + secondary_gain ) ) - secondary_cost,
-                                                    buffs       = {},
-                                                    cooldown    = { [ true_name ] = max( 0, Player.getBaseCooldown( true_name ) - execute_time ) },
-                                                    invalid     = false,
+                                                    time         = execute_time + action_delay,
+                                                    success_rate = success_rate,
+                                                    primary      = min( Player.primary_resource.max, ( Player.primary_resource.current + gain ) ) - cost,
+                                                    secondary    = min( Player.secondary_resource.max, ( Player.secondary_resource.current + secondary_gain ) ) - secondary_cost,
+                                                    buffs        = {},
+                                                    cooldown     = { [ true_name ] = max( 0, Player.getBaseCooldown( true_name ) - execute_time ) },
+                                                    invalid      = false,
                                                 },
                                                 callback_stack = callback_stack,
                                                 callback_name = _driverName,
@@ -1219,6 +1226,7 @@ function(event, ...)
                                         copyState( "time" )
                                         copyState( "buffs" )
                                         copyState( "cooldown" )
+                                        copyState( "success_rate" )
                                     end
                                     
                                     local result = state.result
@@ -1380,10 +1388,13 @@ function(event, ...)
                                             end
                                         end      
                                         
-                                        damage_out     = damage_out + trigger_damage * tick_count
-                                        healing_out    = healing_out + trigger_healing * tick_count
-                                        group_heal_out = group_heal_out + trigger_group_heal * tick_count
-                                        mitigate_out   = mitigate_out + trigger_mitigate * tick_count
+                                        -- Compounded Success Rate
+                                        state.success_rate = state.success_rate * spell.success( spell, state )
+                                        
+                                        damage_out     = damage_out + ( trigger_damage * tick_count * state.success_rate )
+                                        healing_out    = healing_out + ( trigger_healing * tick_count * state.success_rate )
+                                        group_heal_out = group_heal_out + ( trigger_group_heal * tick_count * state.success_rate )
+                                        mitigate_out   = mitigate_out + ( trigger_mitigate * tick_count * state.success_rate )
                                         
                                     end
 
@@ -1394,8 +1405,6 @@ function(event, ...)
                                         trigger_delay     = max( action_delay, action_cd_remains ) - action_delay
                                         start_cooldown[ #start_cooldown + 1] = trigger.spell
                                     end
-                                    
-                                    
                                     
                                     -- Update Resources
                                     state.primary = state.primary - ( spell.base_cost or 0 )
