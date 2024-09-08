@@ -131,8 +131,8 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 3.0
-local DBC_Critical = 2.6
+local DBC_Version = 3.2
+local DBC_Critical = 3.2
 local LibDBCache = LibStub( "LibDBCache-1.0", true )
 
 if not LibDBCache then
@@ -632,7 +632,7 @@ aura_env.CPlayer = {
         -- Parse Effects
         local effect_type = function( e )
             if e.is_heal then
-                if action.target_count then
+                if action.aoe then
                     return "smart_heal"
                 end
                 return "self_heal"
@@ -649,6 +649,7 @@ aura_env.CPlayer = {
                     action.ap = function()
                         return effect.ap_coefficient
                     end
+                    action.aoe          = initialize_value( action.aoe, effect.max_targets )
                     action.is_periodic  = initialize_value( action.is_periodic, effect.is_periodic )
                     action.type         = initialize_value( action.type, effect_type( effect ) )
                     break
@@ -666,6 +667,7 @@ aura_env.CPlayer = {
                     action.sp = function() 
                         return effect.sp_coefficient
                     end
+                    action.aoe          = initialize_value( action.aoe, effect.max_targets )
                     action.is_periodic  = initialize_value( action.is_periodic, effect.is_periodic  )
                     action.type         = initialize_value( action.type, effect_type( effect ) )
                     break
@@ -682,9 +684,110 @@ aura_env.CPlayer = {
         
         action.type = initialize_value( action.type, "damage" )
         
+        -- Echo Procs
+        -- Example: Bonedust Brew, Charred Passions
+        if action.echo_callback then
+            action.skip_calcs = true
+            action.echo_pct = initialize_value( action.echo_pct, 0 )
+            action.action_multiplier = function( self, state )
+                local echo = self.echo_pct
+                
+                if type( echo ) == "function" then
+                    echo = echo()
+                end
+                
+                local result = state.result
+                if result then
+                    local tick_value = 0
+                    
+                    if self.type == "damage" then
+                        tick_value = result.damage / state.count
+                    elseif self.type == "self_heal" then
+                        tick_value = result.self_healing / state.count
+                    else
+                        tick_value = result.group_healing / state.count
+                    end
+                    
+                    echo = echo * tick_value
+                end
+                
+                return echo
+            end
+        end
+        
+        -- Area of Effect Functions
+        if action.aoe then
+            action.max_aoe_targets          = ( action.aoe == -1 and 20 ) or max( 1, min( 20, action.aoe ) )
+            action.sqrt_after               = initialize_value( action.sqrt_after, 0 )
+            action.primary_aoe_targets      = initialize_value( action.primary_aoe_targets, ( action.secondary_target_multiplier and 1 or 0 ) )
+            -- Overrideable AoE Functions
+            action.secondary_target_multiplier = initialize_value( action.secondary_target_multiplier, function( self, state ) 
+                return 1
+            end )
+            action.primary_target_multiplier = initialize_value( action.primary_target_multiplier, function( self, state ) 
+                return 1
+            end )            
+        end
+        
+        action.composite_target_count = initialize_value( action.composite_target_count, function( self, state, count )
+            -- Overridable function, state and count passed as arguments
+            return count
+        end )
+        
+        action.target_count = function( self, state )
+            local spell_targets = 1
+            
+            if self.frontal then
+                spell_targets = aura_env.learnedFrontalTargets( trigger_data and trigger_data.id or self.spellID  )
+            elseif self.aoe then
+                spell_targets = aura_env.target_count
+            end
+            
+            spell_targets = min( spell_targets, action.max_aoe_targets )
+            
+            return max( 1, min( 20, action.composite_target_count( spell_targets ) ) )
+        end
+        
+        action.target_multiplier = function( self, state, target_count )
+            
+            local primary_target_multiplier     = action.primary_target_multiplier( self, state )
+            local secondary_target_multipier    = action.secondary_target_multiplier( self, state )
+            
+            if target_count == 1 then
+                return primary_target_multiplier
+            else
+                local result = 0
+                
+                local targets           = target_count
+                local sqrt_targets      = action.sqrt_after
+                
+                if type( sqrt_targets ) == "function" then
+                    sqrt_targets = sqrt_targets()
+                end
+                
+                local primary_targets   = min( targets, action.primary_aoe_targets )
+                local secondary_targets = targets - primary_targets 
+                
+                if primary_targets > 0 then
+                    result = result + ( primary_targets * primary_target_multiplier )
+                    targets = targets - primary_targets
+                end
+                
+                if targets > 0 then
+                    local secondary_result = ( sqrt_targets > 0 and sqrt( sqrt_targets / target_count ) ) or 1
+                    
+                    secondary_result = secondary_result * targets * secondary_target_multiplier
+                    
+                    result = result + secondary_result
+                end
+                
+                return result
+            end
+        end
+    
         -- GCD Value
         action.modify_gcd = initialize_value( action.modify_gcd, function( self, state, gcd )
-            -- Overridable function, state and base GCD passed as argument
+            -- Overridable function, state and base GCD passed as arguments
             return gcd 
         end )
         
@@ -784,7 +887,7 @@ aura_env.CPlayer = {
             end
             
             local target_count = self.target_count and self.target_count() or 1
-            local target_level = target_count > 1 and Combat.avg_level or UnitLevel( "target" )
+            local target_level = target_count > 1 and Player.combat.avg_level or UnitLevel( "target" )
             
             local miss = target_level > 0 and min( 1, max( 0, 0.03 + ( ( target_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
             
@@ -2666,13 +2769,9 @@ local ww_spells = {
 
     ["strength_of_the_black_ox"] = Player.createAction( 443127, {
         background = true,
-
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, Player.getTalent( "strength_of_the_black_ox" ).effectN( 2 ).base_value )
+    
+        sqrt_after = function()
+            return Player.getTalent( "strength_of_the_black_ox" ).effectN( 2 ).base_value
         end,
         
         ready = function( self, state )
@@ -2683,10 +2782,6 @@ local ww_spells = {
     ["high_impact"] = Player.createAction( 451039 , {
         background = true,
 
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
         ready = function( self, state )
             return Player.getTalent( "high_impact" ).ok 
         end,        
@@ -2694,10 +2789,6 @@ local ww_spells = {
 
     ["flurry_strike_wisdom"] = Player.createAction( 451250, {
         background = true,
-
-        target_count = function()
-            return aura_env.target_count
-        end,
         
         ready = function( self, state )
             return Player.getTalent( "wisdom_of_the_wall" ).ok
@@ -2800,6 +2891,8 @@ local ww_spells = {
         ww_mastery = true,
         trigger_etl = true,
         
+        sqrt_after = spell.fists_of_fury.effectN( 1 ).base_value,
+        
         duration_multiplier = function( self, state )
             local dm = 1
     
@@ -2867,14 +2960,8 @@ local ww_spells = {
             return am
         end,
         
-        target_count = function()
-            return aura_env.learnedFrontalTargets( 117418 )
-        end,
-        
-        target_multiplier = function( target_count )  
-            local primary_multiplier = 1
-            
-            return aura_env.targetScale( target_count, spell.fists_of_fury.effectN( 1 ).base_value, 1, spell.fists_of_fury.effectN( 6 ).pct, primary_multiplier )
+        secondary_target_multiplier = function( self, state )
+            return spell.fists_of_fury.effectN( 6 ).pct
         end,
         
         onImpact = function( self, state )
@@ -3097,6 +3184,8 @@ local ww_spells = {
         trigger_etl = true,
         ww_mastery = true,
         
+        sqrt_after = spell.spinning_crane_kick.effectN( 1 ).base_value,
+        
         action_multiplier = function( self, state )
             local am = 1
             local motc_stacks = CurrentCraneStacks( state )
@@ -3127,14 +3216,6 @@ local ww_spells = {
             end   
             
             return am
-        end,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, spell.spinning_crane_kick.effectN( 1 ).base_value )
         end,
         
         onExecute = function( self, state )
@@ -3299,15 +3380,10 @@ local ww_spells = {
             return am
         end,
         
-        target_count = function()
-            return min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
+        secondary_target_multiplier = function( self, state )
+            return Player.getTalent( "shadowboxing_treads" ).effectN( 3 ).pct 
         end,
-        
-        target_multiplier = function( target_count )
-            local chain_targets = min( 0, target_count - 1 )
-            return 1 + ( chain_targets * Player.getTalent( "shadowboxing_treads" ).effectN( 3 ).pct )
-        end,
-        
+
         onImpact = function( self, state )
             if Player.getTalent( "martial_mixture" ).ok then
                 Player.getBuff( "martial_mixture", state ).increment()
@@ -3446,6 +3522,10 @@ local ww_spells = {
         usable_during_sck = true,    
         trigger_etl = true,
         
+        sqrt_after = function()
+            return Player.getTalent( "whirling_dragon_punch" ).effectN( 1 ).base_value 
+        end,
+        
         ready = function( self, state )
             -- Not talented into WDP
             if not Player.getTalent( "whirling_dragon_punch" ).ok then
@@ -3489,13 +3569,6 @@ local ww_spells = {
             return am
         end,  
         
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, Player.getTalent( "whirling_dragon_punch" ).effectN( 1 ).base_value )
-        end,
         
         onExecute = function( self, state )
             if Player.getTalent( "revolving_whirl" ).ok then
@@ -3540,12 +3613,8 @@ local ww_spells = {
             return am      
         end,  
         
-        target_count = function()
-            return aura_env.learnedFrontalTargets( 395521 )
-        end,
-        
-        target_multiplier = function( target_count )
-            return ( 1 + 1 / target_count * ( target_count - 1 ) )
+        secondary_target_multiplier = function( self, state )
+            return ( 1 / self.target_count( self, state ) )
         end,
     } ),
 
@@ -3592,12 +3661,8 @@ local ww_spells = {
             return am      
         end, 
         
-        target_count = function()
-            return aura_env.learnedFrontalTargets( 395521 )
-        end,
-        
-        target_multiplier = function( target_count )
-            return ( 1 + 1 / target_count * ( target_count - 1 ) )
+        secondary_target_multiplier = function( self, state )
+            return ( 1 / self.target_count( self, state ) )
         end,
 
         onImpact = function( self, state )
@@ -3648,13 +3713,7 @@ local ww_spells = {
         ww_mastery = true,
         trigger_etl = true,
 
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, spell.rushing_jade_wind.effectN( 1 ).base_value )
-        end,
+        sqrt_after = spell.rushing_jade_wind.effectN( 1 ).base_value,
     } ),
 
     ["jadefire_stomp_ww"] = Player.createAction( 388201, {
@@ -3664,6 +3723,8 @@ local ww_spells = {
         trigger_etl = true,
         ignore_armor = true,
         ww_mastery = true,
+        
+        aoe = 5, -- Missing from spell data
         
         action_multiplier = function( self, state )
             local am = 1
@@ -3675,12 +3736,6 @@ local ww_spells = {
             
             return am
         end,
-        target_count = function()
-            return aura_env.learnedFrontalTargets( 388201 )
-        end,
-        target_multiplier = function( target_count )
-            return min( 5, target_count )
-        end,
     } ),    
 
     ["jadefire_fists"] = Player.createAction( 457974, {
@@ -3689,6 +3744,8 @@ local ww_spells = {
         triggerSpell = 388207,
         trigger_etl = true,
         ww_mastery = true,
+        
+        aoe = 5, -- Missing from spell data
         
         ready = function( self, state )
             return Player.getTalent( "jadefire_fists" ).ok
@@ -3707,16 +3764,8 @@ local ww_spells = {
             return am
         end,
         
-        target_count = function()
-            local targets = aura_env.learnedFrontalTargets( 388201 )
-            
-            targets = max( 1, targets + Player.getTalent( "singularly_focused_jade" ).effectN( 1 ).base_value )
-            
-            return targets
-        end,
-        
-        target_multiplier = function( target_count )
-            return min( 5, target_count )
+        composite_target_count = function( self, state, count )
+            return count + Player.getTalent( "singularly_focused_jade" ).effectN( 1 ).base_value
         end,
         
         onExecute = function( self, state )
@@ -3739,6 +3788,8 @@ local ww_spells = {
         trigger_etl = true,
         ww_mastery = true,
         
+        aoe = 5, -- Missing from spell data
+        
         ready = function( self, state )
             return Player.getTalent( "jadefire_stomp" ).ok and aura_env.fight_remains > 5 and Player.moving == false
         end,
@@ -3756,16 +3807,8 @@ local ww_spells = {
             return am
         end,
         
-        target_count = function()
-            local targets = aura_env.learnedFrontalTargets( 388201 )
-            
-            targets = max( 1, targets + Player.getTalent( "singularly_focused_jade" ).effectN( 1 ).base_value )
-            
-            return targets
-        end,
-        
-        target_multiplier = function( target_count )
-            return min( 5, target_count )
+        composite_target_count = function( self, state, count )
+            return count + Player.getTalent( "singularly_focused_jade" ).effectN( 1 ).base_value
         end,
         
         onExecute = function( self, state )
@@ -3778,6 +3821,20 @@ local ww_spells = {
         trigger = {
             ["jadefire_stomp_ww"] = true,
         },
+    } ),
+
+    ["tigers_ferocity"] = Player.createAction( 454508, { 
+        background = true,
+        
+        aoe = -1, -- Missing from data
+        sqrt_after = spell.t33_ww_4pc.effectN( 2 ).base_value,
+        
+        echo_callback = true,
+        echo_pct = spell.t33_ww_4pc.effectN( 1 ).pct,
+        
+        ready = function( self, state )
+            return Player.set_pieces[ 33 ] >= 4
+        end,        
     } ),
 
     ["tiger_palm"] = Player.createAction( 100780, {
@@ -3833,22 +3890,6 @@ local ww_spells = {
             return am
         end,
         
-        target_count = function()
-            if Player.set_pieces[ 33 ] >= 4 then
-                return aura_env.target_count
-            end
-            
-            return 1
-        end,
-
-        target_multiplier = function( target_count )
-            if Player.set_pieces[ 33 ] >= 4 then
-                return aura_env.targetScale( target_count, spell.t33_ww_4pc.effectN( 2 ).base_value, 1, spell.t33_ww_4pc.effectN( 1 ).pct )
-            end
-            
-            return 1
-        end,
-        
         onExecute = function( self, state )
             if Player.getTalent( "teachings_of_the_monastery" ).ok then
                 Player.getBuff( "teachings_of_the_monastery", state ).increment()
@@ -3870,26 +3911,15 @@ local ww_spells = {
         trigger = {
             ["expel_harm"] = true,
             ["flurry_strikes"] = true,
+            ["tigers_ferocity"] = true,
         },
     } ),
 
     ["chi_burst"] = Player.createAction( 461404, {
-
         triggerSpell = 148135,
         
         trigger_etl = true,
         ww_mastery = true,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return target_count
-        end,
-        
-        tick_trigger = {
-        },
     } ),
 
     ["chi_wave"] = Player.createAction( 450391, {
@@ -3899,16 +3929,10 @@ local ww_spells = {
         
         ww_mastery = true,
         trigger_etl = true,
- 
-        tick_trigger = {
-        },        
     } ),
 
     ["expel_harm"] = Player.createAction( 451968, {
         background = true,
-        trigger_etl = true,
-        ww_mastery = true,
-        usable_during_sck = true,
         
         action_multiplier = function( self, state )
             local h = 1
@@ -3959,20 +3983,16 @@ local ww_spells = {
         trigger_etl = true,
         ww_mastery = false,
         
+        sqrt_after = function()
+            return Player.getTalent( "jade_ignition" ).effectN( 3 ).base_value
+        end,
+        
         action_multiplier = function( self, state )
             local am = 1
             
             am = am * ( 1 + Player.getBuff( "chi_energy", state ).stacks() * Player.getBuff( "chi_energy", state ).effectN( 1 ).pct )
             
             return am
-        end,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, Player.getTalent( "jade_ignition" ).effectN( 3 ).base_value )
         end,
         
         ready = function( self, state )
@@ -4019,12 +4039,8 @@ local ww_spells = {
             return dm
         end,
         
-        target_count = function()
-            return 1 + Player.getTalent( "power_of_the_thunder_king" ).effectN( 1 ).base_value
-        end,
-        
-        target_multiplier = function( target_count )
-            return target_count
+        composite_target_count = function( self, state, count )
+            return count + Player.getTalent( "power_of_the_thunder_king" ).effectN( 1 ).base_value
         end,
         
         onExecute = function( self, state )
@@ -4128,11 +4144,6 @@ local ww_spells = {
             return InCombatLockdown() and Player.buffs.storm_earth_and_fire.remains() >= 1
             and 
             (
-                (
-                    -- We have already fixated and we're using the Call to Dominance trinket
-                    aura_env.sef_fixate and IsEquippedItem( 204202 ) and ( not arrogance or arrogance.stacks < 10 )
-                )
-                or
                 (   -- We haven't fixated yet, we have full marks, and our target (tiger palm) is taking increased damage
                     not aura_env.sef_fixate and aura_env.unmarked_targets() == 0 and aura_env.forwardModifier() < aura_env.forwardModifier( aura_env.spells["tiger_palm"], 1 ) 
                 ) 
@@ -4153,14 +4164,7 @@ local ww_spells = {
 -- --------- --
 
 local mw_spells = {
-    ["spinning_crane_kick"] = Player.createAction( 101546, {
-        target_count = function()
-            return aura_env.target_count
-        end,
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, 5 )
-        end,
-    } ),
+    ["spinning_crane_kick"] = Player.createAction( 101546, {} ),
 }
 
 -- ---------- --
@@ -4259,10 +4263,6 @@ local brm_spells = {
     ["high_impact"] = Player.createAction( 451039 , {
         background = true,
 
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
         ready = function( self, state )
             return Player.getTalent( "high_impact" ).ok 
         end,        
@@ -4270,10 +4270,6 @@ local brm_spells = {
 
     ["flurry_strike_wisdom"] = Player.createAction( 451250, {
         background = true,
-
-        target_count = function()
-            return aura_env.target_count
-        end,
         
         ready = function( self, state )
             return Player.getTalent( "wisdom_of_the_wall" ).ok
@@ -4525,21 +4521,11 @@ local brm_spells = {
 
     ["charred_passions"] = Player.createAction( 386959, {
         background = true,
-        skip_calcs = true, -- Uses state result
         
-        action_multiplier = function( self, state )
-            local am = Player.getTalent( "charred_passions" ).effectN( 1 ).pct
-            if state then
-                local result = state.result
-                
-                if result and result.damage > 0 then
-                    local tick_value = result.damage / state.count
-                    
-                    am = am * tick_value
-                end
-            end
-            return am
-        end,
+        echo_callback = true,
+        echo_pct = function()
+            return Player.getTalent( "charred_passions" ).effectN( 1 ).pct
+        end
         
         ready = function( self, state )
             return Player.getTalent( "charred_passions" ).ok
@@ -4588,14 +4574,10 @@ local brm_spells = {
             return am
         end,
         
-        target_count = function()
-            return min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
+        composite_target_count = function( self, state, count )
+            return count + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value
         end,
-        
-        target_multiplier = function( target_count )
-            return target_count
-        end,
-        
+    
         reduce_stagger = function()
             local amount = 0
             
@@ -4653,6 +4635,8 @@ local brm_spells = {
         ticks = 4,
         delay_aa = true, -- Missing from spell data
         
+        sqrt_after = spell.spinning_crane_kick.effectN( 1 ).base_value,
+        
         critical_rate = function()
             local cr = Player.crit_bonus
             
@@ -4672,15 +4656,7 @@ local brm_spells = {
             
             return am
         end,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, spell.spinning_crane_kick.effectN( 1 ).base_value )
-        end,
-        
+    
         onExecute = function( self, state )
             Player.getBuff( "counterstrike", state ).expire()    
         end,
@@ -4707,13 +4683,7 @@ local brm_spells = {
         
         usable_during_sck = true,     
 
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, spell.rushing_jade_wind.effectN( 1 ).base_value )
-        end,
+        sqrt_after = spell.rushing_jade_wind.effectN( 1 ).base_value,
         
         tick_trigger = {
             ["exploding_keg_proc"] = true,
@@ -4777,14 +4747,6 @@ local brm_spells = {
             am = am * Player.getTalent( "manifestation" ).effectN( 1 ).mod
         
             return am
-        end,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return target_count
         end,
         
         tick_trigger = {
@@ -4878,10 +4840,6 @@ local brm_spells = {
             return Player.getTalent( "press_the_advantage" ).effectN( 4 ).mod
         end,
         
-        target_count = function()
-            return aura_env.target_count
-        end,    
-        
         ready = function( self, state )
             return Player.getTalent( "chi_surge" ).ok
         end,
@@ -4892,6 +4850,8 @@ local brm_spells = {
 
     ["pta_keg_smash"] = Player.createAction( 121253, {
         background = true,
+        
+        sqrt_after = spell.keg_smash.effectN( 7 ).base_value,
         
         action_multiplier = function( self, state )
             local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
@@ -4929,14 +4889,6 @@ local brm_spells = {
             end
             
             return am
-        end,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, spell.keg_smash.effectN( 7 ).base_value )
         end,
         
         brew_cdr = function()
@@ -4981,6 +4933,8 @@ local brm_spells = {
         
         usable_during_sck = true,
 
+        sqrt_after = spell.keg_smash.effectN( 7 ).base_value,
+
         action_multiplier = function( self, state )
             local am = 1
             
@@ -5004,14 +4958,6 @@ local brm_spells = {
             end            
             
             return am
-        end,
-        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, spell.keg_smash.effectN( 7 ).base_value )
         end,
         
         brew_cdr = function()
@@ -5060,14 +5006,7 @@ local brm_spells = {
         },
     
         usable_during_sck = true,        
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return target_count
-        end,
-        
+
         mitigate = function()
             -- same as 100% dodge
             return dodgeMitigation( 1.0, exploding_keg_duration )
@@ -5151,6 +5090,9 @@ local brm_spells = {
         
         usable_during_sck = true, 
         
+        sqrt_after = 5,
+        primary_aoe_targets = 1,
+        
         action_multiplier = function( self, state )
             local am = 1
             
@@ -5178,14 +5120,6 @@ local brm_spells = {
             return am
         end,
         
-        target_count = function()
-            return aura_env.learnedFrontalTargets( 115181 )
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, 5, 1 )
-        end, 
-        
         onExecute = function( self, state )
             Player.getBuff( "blackout_combo", state ).expire()
         end,           
@@ -5207,18 +5141,13 @@ local brm_spells = {
     ["dragonfire"] = Player.createAction( 387621, {
         
         background = true,
+
+        sqrt_after = 5,
+        primary_aoe_targets = 1,
         
         ticks = function()
             return Player.getTalent( "dragonfire_brew" ).effectN( 1 ).base_value
         end,
-        
-        target_count = function()
-            return aura_env.learnedFrontalTargets( 387621 )    
-        end,
-        
-        target_multiplier = function( target_count )
-            return aura_env.targetScale( target_count, 5, 1 )
-        end,  
         
         ready = function( self, state )
             return Player.getTalent( "dragonfire_brew" ).ok
@@ -5237,25 +5166,21 @@ local brm_spells = {
         action_multiplier = function( self, state )
             local am = 1
             
-            if Player.getBuff( "blackout_combo", state )then
+            if Player.getBuff( "blackout_combo", state ) then
                 am = am * Player.getBuff( "blackout_combo", state ).effectN( 5 ).mod
             end         
             
             return am
         end,
         
-        target_count = function()
+        composite_target_count = function( self, state, count )
             if Player.bof_targets > 0 then
                 return Player.bof_targets
             else
                 return min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets )
             end
         end,
-        
-        target_multiplier = function( target_count )
-            return target_count
-        end,  
-        
+    
         mitigate = function( state )
             local ratio = min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets ) / aura_env.target_count 
             local dr = spell.breath_of_fire_dot.effectN( 2 ).pct
@@ -5550,14 +5475,6 @@ local brm_spells = {
     ["special_delivery"] = Player.createAction( 196733, {
         background = true,
         
-        target_count = function()
-            return aura_env.target_count
-        end,
-        
-        target_multiplier = function( target_count )
-            return target_count
-        end,    
-        
         ready = function( self, state )
             return Player.getTalent( "special_delivery" ).ok
         end,
@@ -5582,53 +5499,6 @@ local brm_spells = {
         tick_trigger = {
 
         },
-    } ),
-
-    ["charred_dreams_damage"] = Player.createAction( 425299, {
-        background = true,
-        skip_calcs = true, -- Uses state result
-        
-        action_multiplier = function( self, state )
-            local am = spell.t31_brm_2pc.effectN( 1 ).pct
-
-            if state then
-                local result = state.result
-                
-                if result and result.damage > 0 then
-                    local tick_value = result.damage / state.count 
-                    
-                    am = am * tick_value
-                end
-            end
-            return am
-        end,
-        
-        ready = function( self, state )
-            return ( Player.set_pieces[ 31 ] >= 2 or Player.set_pieces[ 32 ] >= 2 )
-        end,
-    } ),
-
-    ["charred_dreams_heal"] = Player.createAction( 425298, {
-        background = true,
-        skip_calcs = true, -- Uses state result
-        
-        action_multiplier = function( self, state )
-            local am = spell.t31_brm_2pc.effectN( 2 ).pct
-            if state then
-                local result = state.result
-                
-                if result and result.damage > 0 then
-                    local tick_value = result.damage / state.count
-                    
-                    am = am * tick_value
-                end
-            end
-            return am
-        end,
-        
-        ready = function( self, state )
-            return ( Player.set_pieces[ 31 ] >= 2 or Player.set_pieces[ 32 ] >= 2  )
-        end,
     } ),
 }
 

@@ -3,7 +3,7 @@
 Absorb Shield SpellIDs
 Debuff States
 PPM Effects
-Generate target multiplier function on action initialization using SimC style variables
+Refactor spell caching
 
 [DBC / Spell Datamining]:
 
@@ -16,7 +16,8 @@ Action Usable Off GCD?
 Acclamation
 Gale Force
 Ordered Elements
-Adjust 4PC
+Refactor SEF
+Refactor ETL
 
 [Brewmaster]:
 
