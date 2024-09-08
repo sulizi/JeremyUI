@@ -743,15 +743,17 @@ aura_env.CPlayer = {
                 spell_targets = aura_env.target_count
             end
             
-            spell_targets = min( spell_targets, action.max_aoe_targets )
+            if action.max_aoe_targets then
+                spell_targets = min( spell_targets, action.max_aoe_targets )
+            end
             
-            return max( 1, min( 20, action.composite_target_count( spell_targets ) ) )
+            return max( 1, min( 20, action.composite_target_count( self, state, spell_targets ) ) )
         end
         
         action.target_multiplier = function( self, state, target_count )
             
-            local primary_target_multiplier     = action.primary_target_multiplier( self, state )
-            local secondary_target_multipier    = action.secondary_target_multiplier( self, state )
+            local primary_target_multiplier     = action.aoe and action.primary_target_multiplier( self, state ) or 1
+            local secondary_target_multipier    = action.aoe and action.secondary_target_multiplier( self, state ) or 1
             
             if target_count == 1 then
                 return primary_target_multiplier
@@ -759,13 +761,13 @@ aura_env.CPlayer = {
                 local result = 0
                 
                 local targets           = target_count
-                local sqrt_targets      = action.sqrt_after
+                local sqrt_targets      = action.sqrt_after or 0
                 
                 if type( sqrt_targets ) == "function" then
                     sqrt_targets = sqrt_targets()
                 end
                 
-                local primary_targets   = min( targets, action.primary_aoe_targets )
+                local primary_targets   = action.aoe and min( targets, action.primary_aoe_targets ) or 0
                 local secondary_targets = targets - primary_targets 
                 
                 if primary_targets > 0 then
@@ -886,7 +888,7 @@ aura_env.CPlayer = {
                 return 1
             end
             
-            local target_count = self.target_count and self.target_count() or 1
+            local target_count = self.target_count and self.target_count( self, state ) or 1
             local target_level = target_count > 1 and Player.combat.avg_level or UnitLevel( "target" )
             
             local miss = target_level > 0 and min( 1, max( 0, 0.03 + ( ( target_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
@@ -2017,7 +2019,7 @@ aura_env.targetAuras = { }
 aura_env.targetAuraEffect = function( callback, future )
     
     future = future or 0
-    local target_count = max( 1, min( 20, ( callback.target_count and callback.target_count() or 1 ) ) )
+    local target_count = callback.target_count( callback )
     local execute_time = callback.execute_time and callback.execute_time() or 1 
     local callback_type = callback.type or "damage"
     
@@ -2121,7 +2123,7 @@ aura_env.global_modifier = function( callback, future, real )
     future = future or 0
     real = real or true
     
-    local target_count = max( 1, min( 20, ( callback.target_count and callback.target_count() or 1 ) ) )
+    local target_count = callback.target_count( callback )
     local execute_time = callback.execute_time and callback.execute_time() or 1
     local callback_type = callback.type or "damage"
     
@@ -2937,7 +2939,7 @@ local ww_spells = {
                     local ticks = floor( self.ticks() )
 
                     if ticks > 1 then
-                        local targets = self.target_count()
+                        local targets = self.target_count( self )
                         local max_stacks = Player.buffs.momentum_boost.max_stacks()
     
                         -- The first tick will be unbuffed 
@@ -4525,7 +4527,7 @@ local brm_spells = {
         echo_callback = true,
         echo_pct = function()
             return Player.getTalent( "charred_passions" ).effectN( 1 ).pct
-        end
+        end,
         
         ready = function( self, state )
             return Player.getTalent( "charred_passions" ).ok
@@ -5692,6 +5694,7 @@ SetCVar( "ActionButtonUseKeyDown", 1 )
 SetCVar( "cameraDistanceMaxZoomFactor", 2.6 )
 SetCVar( "cameraIndirectVisibility", 1 ) 
 SetCVar( "cameraIndirectOffset", 10 ) 
+SetCVar( "occludedSilhouettePlayer", 1 )
 SetCVar( "floatingCombatTextCombatDamage", 1 )
 SetCVar( "floatingCombatTextCombatHealing", 1 )
 SetCVar( "WorldTextScale", 0.5 )

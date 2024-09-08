@@ -238,7 +238,7 @@ function(event, ...)
         local spells = aura_env.spells
         local actionlist = {}
         local actionhash = {}
-        local default_action = Player.default_action
+        local default_action = aura_env.spells[ Player.default_action ]
         local rate_time = function()
             return ( aura_env.base_gm and Player.action_modifier / aura_env.base_gm ) or 1
         end
@@ -466,6 +466,8 @@ function(event, ...)
                 
                 aura_env.boss_lockdown = false
                 aura_env.woo_best = 0
+                
+                Player.react.spellsteal = false
                 
                 Player.motc_targets = 0
                 Player.jfh_targets = 0
@@ -819,7 +821,7 @@ function(event, ...)
                             tooltip = ticks * ( attack_power * ap_mod )
                         end
                         
-                        local action_targets    = max( 1, min( 20, ( action.target_count and action.target_count() ) or 1 ) )
+                        local action_targets    = action.target_count( action )
                         local action_delay      = 0
                         local start_cooldown    = action.start_cooldown or {}
                         local combo_base        = action.combo_base
@@ -1043,10 +1045,10 @@ function(event, ...)
                                     mul = 0
                                     for t_it = 1, action_targets do
                                         local target = aura_env.healer_targets[ t_it ]
-                                        mul = mul + ( action.target_multiplier and action.target_multiplier( target ) or 1 )
+                                        mul = mul + action.target_multiplier( action, nil, target )
                                     end
-                                elseif action.target_multiplier then
-                                    mul = action.target_multiplier( action_targets )
+                                else
+                                    mul = action.target_multiplier( action, nil, action_targets )
                                 end
                                 return mul
                             end
