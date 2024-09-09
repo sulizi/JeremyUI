@@ -338,6 +338,7 @@ if BigWigs then
         if v.key then
             aura_env.bw_config[ v.key ] = {
                 enabled = v.enabled,
+                offset = v.offset,
                 count = v.count,
                 type = "ADD_SPAWN",
             }
@@ -348,6 +349,7 @@ if BigWigs then
         if v.key then
             aura_env.bw_config[ v.key ] = {
                 enabled = v.enabled,
+                offset = v.offset,
                 count = v.count,
                 type = "ADD_SPAWN",
             }
@@ -358,6 +360,7 @@ if BigWigs then
         if v.key then
             aura_env.bw_config[ v.key ] = {
                 enabled = v.enabled,
+                offset = v.offset,
                 unitid = v.unitid,
                 type = "INTERMISSION",
             }
@@ -368,6 +371,7 @@ if BigWigs then
         if v.key then
             aura_env.bw_config[ v.key ] = {
                 enabled     = v.enabled,
+                offset = v.offset,
                 damage_type = v.type,
                 affects     = v.affects,
                 type = "TANKBUSTER",
@@ -379,6 +383,7 @@ if BigWigs then
         if v.key then
             aura_env.bw_config[ v.key ] = {
                 enabled     = v.enabled,
+                offset = v.offset,
                 damage_type = v.type,
                 affects     = v.affects,
                 type = "TANKBUSTER",
@@ -387,9 +392,17 @@ if BigWigs then
     end        
     
     local plugin = BigWigs:GetPlugin( "JeremyUI", true ) or BigWigs:NewPlugin("JeremyUI")
-    BW_RegisterMessage( plugin, "BigWigs_StartBar", function(...)   
-            ScanEvents( "JEREMY_STARTBAR", ... )
-    end)
+    BW_RegisterMessage( plugin, "BigWigs_StartBar", function( ... )
+        local _, _, key, msg, time = ...
+        ScanEvents( "JEREMY_STARTBAR", nil, nil, key, time )
+    end )
+    BW_RegisterMessage( plugin, "BigWigs_StartNameplate", function( ... )
+        local _, _, guid, key, length, icon = ...
+        if GetSpellInfo( key ) then
+            local nameplate_settings = { overwrite = icon or 0, }    
+            ScanEvents( "JEREMY_STARTBAR", nameplate_settings, guid, key, length )
+        end
+    end )
 end
 
 aura_env.earlyDeath = {}
@@ -4142,7 +4155,6 @@ local ww_spells = {
         skip_calcs = true,
         
         ready = function( self, state )
-            local arrogance = Player.findAura( 411661 )
             return InCombatLockdown() and Player.buffs.storm_earth_and_fire.remains() >= 1
             and 
             (
@@ -5698,6 +5710,10 @@ SetCVar( "occludedSilhouettePlayer", 1 )
 SetCVar( "floatingCombatTextCombatDamage", 1 )
 SetCVar( "floatingCombatTextCombatHealing", 1 )
 SetCVar( "WorldTextScale", 0.5 )
+SetCVar( "projectedTextures", 1 )
+SetCVar( "graphicsProjectedTextures", 1 )
+SetCVar( "RAIDprojectedTextures", 1 )
+SetCVar( "raidGraphicsProjectedTextures", 1 )
 
 BNToastFrame:SetPoint ( "Left", 0, 0 ) 
 

@@ -2018,69 +2018,61 @@ function(event, ...)
     
     if event == "JEREMY_STARTBAR" or event == "RELOE_SPELLCD_STATE_UPDATE" then
         
-        local key, time, spell, srcGUID
+        local nameplate_settings, srcGUID, key, time = ...
         
-        if event == "RELOE_SPELLCD_STATE_UPDATE" then
-            spell, srcGUID, key, time = ...
-            if not ( spell and time ) then
-                return
-            end
-        else
-            key  = select( 3, ... )
-            time = select( 5, ... )
+        if not key 
+        or not time then
+            return false
         end
         
         key = tostring( key )
+
+        local config = aura_env.bw_config[ key ] 
         
-        if key and time then
+        if config and config.enabled then
+            local expirationTime = frameTime + time + ( config.offset or 0 )
+            local config_type = config.type or "ERROR"
             
-            local config = aura_env.bw_config[ key ] 
+            local t_key = (srcGUID or "SB").."-"..key
             
-            if config and config.enabled then
-                local expirationTime = frameTime + time
-                local config_type = config.type or "ERROR"
+            if config_type == "ADD_SPAWN" then
+                aura_env.BW_add_timers[ t_key ] = {
+                    key = key,
+                    expire = expirationTime,
+                    count = config.count or 0,
+                    encounterId = aura_env.encounter_id or -1,
+                    srcGUID = srcGUID,
+                    type = config_type,
+                }
+            elseif config_type == "INTERMISSION" then
+                aura_env.BW_intermission_timers[ t_key ] =  {
+                    key = key,
+                    expire = expirationTime,
+                    unitid = config.unitid or "boss1",
+                    encounterId = aura_env.encounter_id or -1,
+                    srcGUID = srcGUID,                        
+                    type = config_type,
+                }           
+            elseif config_type == "TANKBUSTER" then
                 
-                local t_key = (srcGUID or "SB").."-"..key
-                
-                if config_type == "ADD_SPAWN" then
-                    aura_env.BW_add_timers[ t_key ] = {
+                local affects = config.affects or 1
+                if affects == 1 and Player.role == "TANK"
+                or affects == 2 and Player.role ~= "TANK"
+                or affects == 3 then
+                    -- Send custom message to Raid Ability Timeline
+                    if nameplate_settings then
+                        local Enemy = aura_env.GetEnemy( srcGUID )
+                        ScanEvents( "JEREMY_TIMELINE_UPDATE", nameplate_settings, srcGUID, key, time, Enemy.marker )
+                    end
+                    
+                    aura_env.BW_buster_timers [ t_key ] = {
                         key = key,
                         expire = expirationTime,
-                        count = config.count or 0,
+                        damage_type = config.damage_type or 1,
                         encounterId = aura_env.encounter_id or -1,
                         srcGUID = srcGUID,
                         type = config_type,
                     }
-                elseif config_type == "INTERMISSION" then
-                    aura_env.BW_intermission_timers[ t_key ] =  {
-                        key = key,
-                        expire = expirationTime,
-                        unitid = config.unitid or "boss1",
-                        encounterId = aura_env.encounter_id or -1,
-                        srcGUID = srcGUID,                        
-                        type = config_type,
-                    }           
-                elseif config_type == "TANKBUSTER" then
-                    
-                    local affects = config.affects or 1
-                    if affects == 1 and Player.role == "TANK"
-                    or affects == 2 and Player.role ~= "TANK"
-                    or affects == 3 then
-                        -- Send message to Raid Ability Timeline
-                        if event == "RELOE_SPELLCD_STATE_UPDATE" then
-                            local Enemy = aura_env.GetEnemy( srcGUID )
-                            ScanEvents( "JEREMY_TIMELINE_UPDATE", spell, srcGUID, key, time, Enemy.marker )
-                        end
-                        
-                        aura_env.BW_buster_timers [ t_key ] = {
-                            key = key,
-                            expire = expirationTime,
-                            damage_type = config.damage_type or 1,
-                            encounterId = aura_env.encounter_id or -1,
-                            srcGUID = srcGUID,
-                            type = config_type,
-                        }
-                    end
                 end
             end
         end
