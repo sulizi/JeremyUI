@@ -131,7 +131,7 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 3.2
+local DBC_Version = 3.3
 local DBC_Critical = 3.2
 local LibDBCache = LibStub( "LibDBCache-1.0", true )
 
@@ -929,7 +929,7 @@ aura_env.CPlayer = {
                 return false
             end
             
-            if ( action.background or action.debuff or IsSpellKnown( action.replaces or action.spellID ) ) then
+            if ( action.background or IsSpellKnown( action.replaces or action.spellID ) ) then
                 return ready( self, state )
             end
             
@@ -1414,6 +1414,7 @@ Player.makeBuff( 426553, "annihilating_flame" )
 -- general
 Player.makeBuff( 450832, "fatal_touch" )
 Player.makeBuff( 390105, "save_them_all" )
+Player.makeBuff( 460490, "chi_burst" )
 
 -- shadopan
 Player.makeBuff( 451021, "flurry_charge" )
@@ -3554,6 +3555,7 @@ local ww_spells = {
             local brain_lag = 1.25
             local grace_period = 1.5
             local gcd = state.callback.gcd()
+            
             local fof_cd = Player.getCooldown( "fists_of_fury", state )
             local rsk_cd = Player.getCooldown( "rising_sun_kick", state )
             local wdp_cd = Player.getCooldown( "whirling_dragon_punch", state )
@@ -3935,6 +3937,10 @@ local ww_spells = {
         
         trigger_etl = true,
         ww_mastery = true,
+        
+        ready = function( self, state )
+            return Player.getBuff( "chi_burst", state ).up()    
+        end,
     } ),
 
     ["chi_wave"] = Player.createAction( 450391, {
@@ -4761,6 +4767,10 @@ local brm_spells = {
             am = am * Player.getTalent( "manifestation" ).effectN( 1 ).mod
         
             return am
+        end,
+
+        ready = function( self, state )
+            return Player.getBuff( "chi_burst", state ).up()    
         end,
         
         tick_trigger = {
