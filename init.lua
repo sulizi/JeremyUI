@@ -2643,7 +2643,7 @@ Player.ready = function( action, state )
     
     if Player.spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ] then
         -- Hardcoded check to not break Mastery
-        if action.ww_mastery and not IsComboStrike( action, state ) then
+        if action.ww_mastery and not action.allow_mastery_break and not IsComboStrike( action, state ) then
             ready = false
         end
     end
@@ -2664,21 +2664,7 @@ local ww_spells = {
         
         triggerSpell = 451839,
         trigger_rate = function( state )
-            
-            local rate = Player.getTalent( "dual_threat" ).effectN( 1 ).pct
-            
-            -- Dual Threat does not trigger from misses
-            local enemy_level = UnitLevel( "target" )
-            local miss = enemy_level > 0 and min( 1, max( 0, 0.03 + ( ( enemy_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
-            
-            if Player.off_hand.equipped then
-                miss = miss + 0.19
-            end
-
-            rate = rate * ( 1 - miss )
-            -- ------------------------------
-            
-            return rate
+            return Player.getTalent( "dual_threat" ).effectN( 1 ).pct
         end,
         
         bonus_da = function()
@@ -3092,7 +3078,6 @@ local ww_spells = {
         hasted_cooldown = true,
         
         generate_marks = 1,
-        usable_during_sck = true,
         trigger_etl = true,
         ww_mastery = true,
         
@@ -3347,7 +3332,6 @@ local ww_spells = {
         
         ap_type = "BOTH",
         
-        usable_during_sck = true,       
         trigger_etl = true,
         ww_mastery = true,
         
@@ -3535,7 +3519,6 @@ local ww_spells = {
         hasted_cooldown = true,
         
         ww_mastery = true,
-        usable_during_sck = true,    
         trigger_etl = true,
         
         sqrt_after = function()
@@ -3651,7 +3634,6 @@ local ww_spells = {
         triggerSpell = 395521, -- OH hit
         
         ww_mastery = true,
-        usable_during_sck = true,   
         trigger_etl = true,
         
         motc_gain = function()
@@ -3801,7 +3783,6 @@ local ww_spells = {
         
         triggerSpell = 388207, 
 
-        usable_during_sck = true,       
         trigger_etl = true,
         ww_mastery = true,
         
@@ -3869,9 +3850,9 @@ local ww_spells = {
         end,
         
         generate_marks = 1,
-        usable_during_sck = true,     
         trigger_etl = true,
         ww_mastery = true,
+        allow_mastery_break = true,
         
         modify_gcd = function( self, state, gcd )
             local t = gcd
