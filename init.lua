@@ -46,7 +46,7 @@ local GetSpellInfo = GetSpellInfo or function( spellID )
     local spellInfo = C_Spell.GetSpellInfo( spellID )
     
     if spellInfo then
-      return spellInfo.name, nil, spellInfo.iconID, spellInfo.castTime, spellInfo.minRange, spellInfo.maxRange, spellInfo.spellID, spellInfo.originalIconID
+        return spellInfo.name, nil, spellInfo.iconID, spellInfo.castTime, spellInfo.minRange, spellInfo.maxRange, spellInfo.spellID, spellInfo.originalIconID
     end
 end
 local _GetTime = GetTime
@@ -393,15 +393,15 @@ if BigWigs then
     
     local plugin = BigWigs:GetPlugin( "JeremyUI", true ) or BigWigs:NewPlugin("JeremyUI")
     BW_RegisterMessage( plugin, "BigWigs_StartBar", function( ... )
-        local _, _, key, msg, time = ...
-        ScanEvents( "JEREMY_STARTBAR", nil, nil, key, time )
+            local _, _, key, msg, time = ...
+            ScanEvents( "JEREMY_STARTBAR", nil, nil, key, time )
     end )
     BW_RegisterMessage( plugin, "BigWigs_StartNameplate", function( ... )
-        local _, _, guid, key, length, icon = ...
-        if GetSpellInfo( key ) then
-            local nameplate_settings = { overwrite = icon or 0, }    
-            ScanEvents( "JEREMY_STARTBAR", nameplate_settings, guid, key, length )
-        end
+            local _, _, guid, key, length, icon = ...
+            if GetSpellInfo( key ) then
+                local nameplate_settings = { overwrite = icon or 0, }    
+                ScanEvents( "JEREMY_STARTBAR", nameplate_settings, guid, key, length )
+            end
     end )
 end
 
@@ -544,7 +544,7 @@ aura_env.CPlayer = {
     ready = function( action, state )
         return action.ready( action, state )
     end,
-
+    
     --
     
     auraExists = function ( spellId, callback )
@@ -618,7 +618,7 @@ aura_env.CPlayer = {
         action.channeled        = initialize_value( action.channeled, data.channeled )
         action.delay_aa         = initialize_value( action.delay_aa, data.delay_auto_attack )
         action.starts_combat    = initialize_value( action.starts_combat, data.starts_combat )
- 
+        
         action.tick_zero        = initialize_value( action.tick_zero, data.tick_zero )
         action.dot_hasted       = initialize_value( action.dot_hasted, data.dot_hasted )        
         action.base_duration    = initialize_value( action.duration, data.duration )
@@ -735,16 +735,16 @@ aura_env.CPlayer = {
             action.primary_aoe_targets      = initialize_value( action.primary_aoe_targets, ( action.secondary_target_multiplier and 1 or 0 ) )
             -- Overrideable AoE Functions
             action.secondary_target_multiplier = initialize_value( action.secondary_target_multiplier, function( self, state ) 
-                return 1
+                    return 1
             end )
             action.primary_target_multiplier = initialize_value( action.primary_target_multiplier, function( self, state ) 
-                return 1
+                    return 1
             end )            
         end
         
         action.composite_target_count = initialize_value( action.composite_target_count, function( self, state, count )
-            -- Overridable function, state and count passed as arguments
-            return count
+                -- Overridable function, state and count passed as arguments
+                return count
         end )
         
         action.target_count = function( self, state )
@@ -765,8 +765,8 @@ aura_env.CPlayer = {
         
         action.target_multiplier = function( self, state, target_count )
             
-            local primary_target_multiplier     = action.aoe and action.primary_target_multiplier( self, state ) or 1
-            local secondary_target_multipier    = action.aoe and action.secondary_target_multiplier( self, state ) or 1
+            local primary_target_multiplier     = ( action.aoe and action.primary_target_multiplier( self, state ) ) or 1
+            local secondary_target_multiplier    = ( action.aoe and action.secondary_target_multiplier( self, state ) ) or 1
             
             if target_count == 1 then
                 return primary_target_multiplier
@@ -799,17 +799,17 @@ aura_env.CPlayer = {
                 return result
             end
         end
-    
+        
         -- GCD Value
         action.modify_gcd = initialize_value( action.modify_gcd, function( self, state, gcd )
-            -- Overridable function, state and base GCD passed as arguments
-            return gcd 
+                -- Overridable function, state and base GCD passed as arguments
+                return gcd 
         end )
         
         action.gcd = function( state )
             local _, gcd = GetSpellBaseCooldown( action.spellID )
             local ret_ms = gcd or 0
-        
+            
             local spec_aura = Player.spec_aura
             
             if spec_aura and spec_aura.effectN then
@@ -831,7 +831,7 @@ aura_env.CPlayer = {
             local ret_s = max( 0, ret_ms / 1000 )
             return action.modify_gcd( action, state, ret_s )
         end        
-    
+        
         -- Ticks
         
         if not action.ticks and action.base_duration and action.base_tick_rate and action.base_tick_rate > 0 then
@@ -865,26 +865,26 @@ aura_env.CPlayer = {
         
         -- Cast Time / Execute Time functions
         action.cast_time = initialize_value( action.cast_time, function() 
-            if action.background then 
-                return 0
-            end
-            
-            local cast_time_ms = select( 4, GetSpellInfo( action.spellID ) ) or 0
-            return cast_time_ms / 1000
+                if action.background then 
+                    return 0
+                end
+                
+                local cast_time_ms = select( 4, GetSpellInfo( action.spellID ) ) or 0
+                return cast_time_ms / 1000
         end )
         
         action.execute_time = initialize_value( action.execute_time, function( state )
-            if action.background then
-                return 0
-            end
-            
-            local gcd = action.gcd( state )
-
-            if action.channeled and action.duration and not action.canceled then
-                return max( action.duration( state ), gcd )
-            end
-            
-            return max( gcd, action.cast_time() )
+                if action.background then
+                    return 0
+                end
+                
+                local gcd = action.gcd( state )
+                
+                if action.channeled and action.duration and not action.canceled then
+                    return max( action.duration( state ), gcd )
+                end
+                
+                return max( gcd, action.cast_time() )
         end )
         
         -- Trigger Auto Attacks
@@ -901,7 +901,7 @@ aura_env.CPlayer = {
                 return 1
             end
             
-            local target_count = self.target_count and self.target_count( self, state ) or 1
+            local target_count = ( self.target_count and self.target_count( self, state ) ) or 1
             local target_level = target_count > 1 and Player.combat.avg_level or UnitLevel( "target" )
             
             local miss = target_level > 0 and min( 1, max( 0, 0.03 + ( ( target_level - UnitLevel( "player" ) ) * 0.015 ) ) ) or 0.03
@@ -1093,9 +1093,9 @@ aura_env.CPlayer = {
         
         return remaining, ( remaining > 0 and duration or 0 )
     end, 
-
-    getBaseCooldown = function( name )
     
+    getBaseCooldown = function( name )
+        
         local self = aura_env.CPlayer
         local action = aura_env.spells[ name ]
         
@@ -1109,7 +1109,7 @@ aura_env.CPlayer = {
         end
         
         local cooldown = GetSpellBaseCooldown( action.spellID ) / 1000
-
+        
         if cooldown > 0 then
             if action.hasted_cooldown then
                 cooldown = cooldown / self.haste
@@ -1117,7 +1117,7 @@ aura_env.CPlayer = {
         end
         
         cooldown = cooldown * aura_env.actionModRate( action )
-    
+        
         return cooldown
     end,
     
@@ -1282,7 +1282,7 @@ aura_env.CPlayer = {
             if Player.channel.remaining > 0 and Player.gcd_remains == 0 then
                 aura_env.tick_update = GetTime() + ( Player.channel.remaining % Player.channel.tick_rate )
             end
-
+            
         end
         
         -- Player Aura Information
@@ -1367,7 +1367,7 @@ aura_env.GetEnemy = function( srcGUID )
     end
     
     aura_env.CEnemy[ srcGUID ].unitID = UnitTokenFromGUID( srcGUID )
-   
+    
     return aura_env.CEnemy[ srcGUID ];
 end
 
@@ -1445,14 +1445,14 @@ Player.makeBuff( 129914, "combat_wisdom" )
 Player.makeBuff( 337482, "pressure_point" )
 Player.makeBuff( 137639, "storm_earth_and_fire" )
 Player.makeBuff( 202090, "teachings_of_the_monastery", {
-    max_stacks = function()
-        local self = Player.buffs.teachings_of_the_monastery
-        local ms = self._max_stacks
-        
-        ms = ms + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 3 ).base_value
-        
-        return ms
-    end,
+        max_stacks = function()
+            local self = Player.buffs.teachings_of_the_monastery
+            local ms = self._max_stacks
+            
+            ms = ms + Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 3 ).base_value
+            
+            return ms
+        end,
 } )
 Player.makeBuff( 454485, "tiger_strikes" )
 Player.makeBuff( 454502, "tigers_ferocity" )
@@ -1732,7 +1732,7 @@ aura_env.nextPullListener = function( )
 end
 
 aura_env.coneTickListener = function ( spellID, GUID )
-
+    
     if not Player.coneListeners[ spellID ] then
         return
     end
@@ -2034,7 +2034,7 @@ aura_env.targetAuraEffect = function( callback, future )
     
     future = future or 0
     local target_count = callback.target_count( callback )
-    local execute_time = callback.execute_time and callback.execute_time() or 1 
+    local execute_time = ( callback.execute_time and callback.execute_time() ) or 1 
     local callback_type = callback.type or "damage"
     
     local amp = 1
@@ -2138,7 +2138,7 @@ aura_env.global_modifier = function( callback, future, real )
     real = real or true
     
     local target_count = callback.target_count( callback )
-    local execute_time = callback.execute_time and callback.execute_time() or 1
+    local execute_time = ( callback.execute_time and callback.execute_time() ) or 1
     local callback_type = callback.type or "damage"
     
     if callback_type == "smart_heal" or callback_type == "self_heal" then
@@ -2147,7 +2147,7 @@ aura_env.global_modifier = function( callback, future, real )
         if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 2 ) ) then
             gm = gm * Player.getTalent( "chi_proficiency" ).effectN( 2 ).mod
         end
-                
+        
         
         -- Self Healing
         if callback.type == "self_heal" then
@@ -2187,7 +2187,7 @@ aura_env.global_modifier = function( callback, future, real )
         if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "chi_proficiency" ).effectN( 1 ) ) then
             gm = gm * Player.getTalent( "chi_proficiency" ).effectN( 1 ).mod
         end
-    
+        
         -- Martial Instincts
         if LibDBCache:spell_affected_by_effect( callback.spellID, Player.getTalent( "martial_instincts" ).effectN( 1 ) ) then
             gm = gm * Player.getTalent( "martial_instincts" ).effectN( 1 ).mod
@@ -2212,9 +2212,9 @@ aura_env.global_modifier = function( callback, future, real )
         if Player.getTalent( "storm_earth_and_fire" ).ok and Player.getBuff( "storm_earth_and_fire" ).remains() > future then
             local SEF_Bonus = ( 1 + Player.getTalent( "storm_earth_and_fire" ).effectN( 1 ).pct ) * 3 -- Saved as (-0.6)
             local isCopiedBySEF = LibDBCache:spell_affected_by_effect( callback.spellID, Player.getBuff( "storm_earth_and_fire" ).effectN( 1 ) )
-                                or LibDBCache:spell_affected_by_effect( callback.spellID, Player.getBuff( "storm_earth_and_fire" ).effectN( 2 ) )
-                                or callback.spellID == AUTO_ATTACK
-                                
+            or LibDBCache:spell_affected_by_effect( callback.spellID, Player.getBuff( "storm_earth_and_fire" ).effectN( 2 ) )
+            or callback.spellID == AUTO_ATTACK
+            
             if isCopiedBySEF then
                 gm = gm * ( 1 + ( SEF_Bonus - 1 ) * ( execute_time > 1 and min( 1, ( Player.getBuff( "storm_earth_and_fire" ).remains() - future ) / execute_time ) or 1 ) )    
             end
@@ -2390,7 +2390,7 @@ local function deepcopy(orig, copies)
 end
 
 local function generateCones( actions )
- 
+    
     for action, init in pairs( actions ) do
         local id = init.spellID
         if id and not Player.coneListeners[ id ] then
@@ -2402,7 +2402,7 @@ local function generateCones( actions )
 end
 
 local function generateChannels( actions )
-
+    
     for action, init in pairs( actions ) do
         if init.channeled and not init.canceled then
             local canceled_name = action .. "_cancel"
@@ -2471,7 +2471,7 @@ local function generateCallbacks( spells )
                                     return false
                                 end
                             end
-
+                            
                             spells[ name ] = Player.createAction( _init.spellID, _init )
                             
                             recursive = false
@@ -2494,7 +2494,7 @@ aura_env.auraEffectForSpell = function ( spellID, periodic )
     local spec_aura = Player.spec_aura
     
     if spec_aura and spec_aura.effectN then
-    
+        
         local it = 1
         local effect = 0
         while ( effect ~= nil ) do
@@ -2541,7 +2541,7 @@ local CurrentCraneStacks = function( state )
                 motc_gain = ( type( motc_gain ) == "function" and motc_gain() or motc_gain ) or 0
                 
                 if motc_gain > 0 then
-
+                    
                     if Player.buffs.storm_earth_and_fire.up() and not aura_env.sef_fixate then
                         motc_gain = motc_gain * 3
                     end
@@ -2612,7 +2612,7 @@ Player.action_multiplier = function( action, state )
     if Player.getBuff( "fatal_touch", state ).up() and LibDBCache:spell_affected_by_effect( action.spellID, Player.getBuff( "fatal_touch", state ).effectN( 1 ) ) then
         am = am * Player.getBuff( "fatal_touch", state ).effectN( 1 ).mod    
     end
-
+    
     
     if Player.spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ]  then
         
@@ -2643,14 +2643,16 @@ Player.ready = function( action, state )
     
     if Player.spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ] then
         -- Hardcoded check to not break Mastery
-        if action.ww_mastery and not action.allow_mastery_break and not IsComboStrike( action, state ) then
+        if action.ww_mastery 
+        and ( not action.allow_mastery_break or not action.allow_mastery_break( action, state ) ) 
+        and not IsComboStrike( action, state ) then
             ready = false
         end
     end
     
     return ready
 end
-    
+
 ------------------------------------------------
 
 -- --------- --
@@ -2658,1505 +2660,1508 @@ end
 -- --------- --
 
 local ww_spells = {
-
+    
     ["dual_threat"] = Player.createAction( 451823, {
-        background = true,
-        
-        triggerSpell = 451839,
-        trigger_rate = function( state )
-            return Player.getTalent( "dual_threat" ).effectN( 1 ).pct
-        end,
-        
-        bonus_da = function()
-            return -1 * Player.main_hand.swing_damage
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "dual_threat" ).ok
-        end,
+            background = true,
+            
+            triggerSpell = 451839,
+            trigger_rate = function( state )
+                return Player.getTalent( "dual_threat" ).effectN( 1 ).pct
+            end,
+            
+            bonus_da = function()
+                return -1 * Player.main_hand.swing_damage
+            end,
+            
+            ready = function( self, state )
+                return Player.getTalent( "dual_threat" ).ok
+            end,
     } ),
-
+    
     ["mainhand_attack"] = Player.createAction( AUTO_ATTACK, {
-        background = true,
-        school = 0x1,
-        may_miss = true,
-        may_crit = true,
-        ap_type = "NONE",
-
-        trigger_rate = function( state )
-            local duration = 0
-            local swing_timer = select( 1, UnitAttackSpeed( "player" ) ) or 2.6 
-            local _, stack = ipairs( state.callback_stack )
-            for cb_idx = 1, #stack do
-                if cb_idx == #stack then
-                    break
-                end   
-                local callback = stack[ cb_idx ] 
-                if callback.result then
-                    if not callback.delay_aa and callback.result.execute_time then
-                        duration = duration + callback.result.execute_time + callback.result.delay
+            background = true,
+            school = 0x1,
+            may_miss = true,
+            may_crit = true,
+            ap_type = "NONE",
+            
+            trigger_rate = function( state )
+                local duration = 0
+                local swing_timer = select( 1, UnitAttackSpeed( "player" ) ) or 2.6 
+                local _, stack = ipairs( state.callback_stack )
+                for cb_idx = 1, #stack do
+                    if cb_idx == #stack then
+                        break
+                    end   
+                    local callback = stack[ cb_idx ] 
+                    if callback.result then
+                        if not callback.delay_aa and callback.result.execute_time then
+                            duration = duration + callback.result.execute_time + callback.result.delay
+                        end
                     end
                 end
-            end
-            
-            return duration / swing_timer
-        end,
-        
-        bonus_da = function()
-            return Player.main_hand.swing_damage
-        end,
-        
-        trigger = {
-            ["thunderfist"] = function( self, state )
-                return Player.getBuff( "thunderfist", state ).up()
+                
+                return duration / swing_timer
             end,
-            ["dual_threat"] = true,
-        },
+            
+            bonus_da = function()
+                return Player.main_hand.swing_damage
+            end,
+            
+            trigger = {
+                ["thunderfist"] = function( self, state )
+                    return Player.getBuff( "thunderfist", state ).up()
+                end,
+                ["dual_threat"] = true,
+            },
     } ),
-
+    
     ["offhand_attack"] = Player.createAction( AUTO_ATTACK, {
-        background = true,
-        school = 0x1,
-        may_miss = true,
-        may_crit = true,
-        ap_type = "NONE",
-        
-        trigger_rate = function( state )
-            local duration = 0
-            local swing_timer = select( 2, UnitAttackSpeed( "player" ) ) or 2.6 
-            local _, stack = ipairs( state.callback_stack )
-            for cb_idx = 1, #stack do
-                if cb_idx == #stack then
-                    break
-                end   
-                local callback = stack[ cb_idx ] 
-                if callback.result then
-                    if not callback.delay_aa and callback.result.execute_time then
-                        duration = duration + callback.result.execute_time + callback.result.delay
+            background = true,
+            school = 0x1,
+            may_miss = true,
+            may_crit = true,
+            ap_type = "NONE",
+            
+            trigger_rate = function( state )
+                local duration = 0
+                local swing_timer = select( 2, UnitAttackSpeed( "player" ) ) or 2.6 
+                local _, stack = ipairs( state.callback_stack )
+                for cb_idx = 1, #stack do
+                    if cb_idx == #stack then
+                        break
+                    end   
+                    local callback = stack[ cb_idx ] 
+                    if callback.result then
+                        if not callback.delay_aa and callback.result.execute_time then
+                            duration = duration + callback.result.execute_time + callback.result.delay
+                        end
                     end
                 end
-            end
-            
-            return duration / swing_timer
-        end,
-        
-        bonus_da = function()
-            return Player.off_hand.swing_damage
-        end,
-        
-        trigger = {
-            ["thunderfist"] = function( self, state )
-                return Player.getBuff( "thunderfist", state ).up()
+                
+                return duration / swing_timer
             end,
-            ["dual_threat"] = true,
-        },        
+            
+            bonus_da = function()
+                return Player.off_hand.swing_damage
+            end,
+            
+            trigger = {
+                ["thunderfist"] = function( self, state )
+                    return Player.getBuff( "thunderfist", state ).up()
+                end,
+                ["dual_threat"] = true,
+            },        
     } ),
-
+    
     ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
-        skip_calcs = true, -- This is just the script that triggers the individual hits
-        
-        ready = function( self, state )
-            return aura_env.unitRange( "target" ) < 8 
-        end,
-        
-        trigger = {
-            ["mainhand_attack"] = function( self, state )
-                return Player.main_hand.equipped 
+            skip_calcs = true, -- This is just the script that triggers the individual hits
+            
+            ready = function( self, state )
+                return aura_env.unitRange( "target" ) < 8 
             end,
-            ["offhand_attack"] = function( self, state )
-                return Player.off_hand.equipped
-            end,            
-        },
+            
+            trigger = {
+                ["mainhand_attack"] = function( self, state )
+                    return Player.main_hand.equipped 
+                end,
+                ["offhand_attack"] = function( self, state )
+                    return Player.off_hand.equipped
+                end,            
+            },
     } ),
-
+    
     ["strength_of_the_black_ox"] = Player.createAction( 443127, {
-        background = true,
-    
-        sqrt_after = function()
-            return Player.getTalent( "strength_of_the_black_ox" ).effectN( 2 ).base_value
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "strength_of_the_black_ox" ).ok
-        end,
+            background = true,
+            
+            sqrt_after = function()
+                return Player.getTalent( "strength_of_the_black_ox" ).effectN( 2 ).base_value
+            end,
+            
+            ready = function( self, state )
+                return Player.getTalent( "strength_of_the_black_ox" ).ok
+            end,
     } ),
-
+    
     ["high_impact"] = Player.createAction( 451039 , {
-        background = true,
-
-        ready = function( self, state )
-            return Player.getTalent( "high_impact" ).ok 
-        end,        
+            background = true,
+            
+            ready = function( self, state )
+                return Player.getTalent( "high_impact" ).ok 
+            end,        
     } ),
-
+    
     ["flurry_strike_wisdom"] = Player.createAction( 451250, {
-        background = true,
-        
-        ready = function( self, state )
-            return Player.getTalent( "wisdom_of_the_wall" ).ok
-        end,
+            background = true,
+            
+            ready = function( self, state )
+                return Player.getTalent( "wisdom_of_the_wall" ).ok
+            end,
     } ),
-
+    
     ["flurry_strike"] = Player.createAction( 450617, {
-        background = true,
-        
-        critical_rate = function()
-            local cr = Player.crit_bonus
+            background = true,
             
-            cr = cr + Player.getTalent( "pride_of_pandaria" ).effectN( 1 ).roll
+            critical_rate = function()
+                local cr = Player.crit_bonus
+                
+                cr = cr + Player.getTalent( "pride_of_pandaria" ).effectN( 1 ).roll
+                
+                return min( 1, cr )
+            end,
             
-            return min( 1, cr )
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.getBuff( "vigilant_watch", state ).up() then
+                    am = am * Player.getBuff( "vigilant_watch", state ).effectN( 1 ).mod
+                end
+                
+                return am
+            end,
             
-            if Player.getBuff( "vigilant_watch", state ).up() then
-                am = am * Player.getBuff( "vigilant_watch", state ).effectN( 1 ).mod
-            end
-            
-            return am
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "flurry_strikes" ).ok
-        end,
+            ready = function( self, state )
+                return Player.getTalent( "flurry_strikes" ).ok
+            end,
     } ),
-
+    
     ["flurry_strikes"] = Player.createAction( 450615, {
-        background = true,
-        skip_calcs = true,
-        
-        ticks = function()
-            return Player.getBuff( "flurry_charge" ).stacks()
-        end,
-        
-        trigger_rate = function( state )
-            local result = state.result
+            background = true,
+            skip_calcs = true,
             
-            if not result then
-                return 0
-            end
-            
-            local energy = ( Player.primary_resource.type == 3 and state.result.cost ) or state.result.secondary_cost
-            
-            if energy == 0 then
-                return 0
-            end
-            
-            local partial = energy / Player.getTalent( "flurry_strikes" ).effectN( 2 ).base_value
-            
-            return partial
-        end,
-
-        onExecute = function( self, state )
-            Player.getBuff( "vigilant_watch", state ).expire()        
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "flurry_strikes" ).ok
-        end,
-        
-        tick_trigger = {
-            ["flurry_strike"] = function( self, state )
-                return Player.getBuff( "flurry_charge", state ).up()
+            ticks = function()
+                return Player.getBuff( "flurry_charge" ).stacks()
             end,
-            ["flurry_strike_wisdom"] = function( self, state )
-                return Player.getBuff( "wisdom_of_the_wall_flurry", state ).up()
+            
+            trigger_rate = function( state )
+                local result = state.result
+                
+                if not result then
+                    return 0
+                end
+                
+                local energy = ( Player.primary_resource.type == 3 and state.result.cost ) or state.result.secondary_cost
+                
+                if energy == 0 then
+                    return 0
+                end
+                
+                local partial = energy / Player.getTalent( "flurry_strikes" ).effectN( 2 ).base_value
+                
+                return partial
             end,
-        },
-    
-        trigger = {
-            ["high_impact"] = function()
-                return aura_env.target_ttd < 10    
+            
+            onExecute = function( self, state )
+                Player.getBuff( "vigilant_watch", state ).expire()        
             end,
-        },
+            
+            ready = function( self, state )
+                return Player.getTalent( "flurry_strikes" ).ok
+            end,
+            
+            tick_trigger = {
+                ["flurry_strike"] = function( self, state )
+                    return Player.getBuff( "flurry_charge", state ).up()
+                end,
+                ["flurry_strike_wisdom"] = function( self, state )
+                    return Player.getBuff( "wisdom_of_the_wall_flurry", state ).up()
+                end,
+            },
+            
+            trigger = {
+                ["high_impact"] = function()
+                    return aura_env.target_ttd < 10    
+                end,
+            },
     } ),
-
+    
     ["fists_of_fury"] = Player.createAction( 113656, {
-        callbacks = {
-            -- Chi generators
-            "tiger_palm",
-            "expel_harm",
-            "chi_burst",
-            
-            "blackout_kick", -- CDR / Transfer the Power
-            "rising_sun_kick", -- Transfer the Power
-            "spinning_crane_kick", -- Transfer the Power
-        },
-        
-        triggerSpell = 117418,
-        
-        ticks = 5,
-        hasted_cooldown = true,
-
-        ww_mastery = true,
-        trigger_etl = true,
-        
-        sqrt_after = spell.fists_of_fury.effectN( 1 ).base_value,
-        
-        duration_multiplier = function( self, state )
-            local dm = 1
-    
-            -- Heart of the Jade Serpent
-            if Player.getBuff( "hotjs_cdr", state ).up then
-                dm = dm * Player.getBuff( "hotjs_cdr", state ).effectN( 5 ).mod
-            elseif Player.getBuff( "hotjs_cdr_celestial", state ).up then
-                dm = dm * Player.getBuff( "hotjs_cdr_celestial", state ).effectN( 5 ).mod
-            end
-            
-            return dm
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            am = am * ( 1 + Player.getBuff( "transfer_the_power", state ).stacks() * Player.getTalent( "transfer_the_power" ).effectN( 1 ).pct )
-            
-            if Player.getBuff( "fists_of_flowing_momentum", state ).up() then
-                am = am * ( 1 + Player.getBuff( "fists_of_flowing_momentum", state ).stacks() * Player.getBuff( "fists_of_flowing_momentum", state ).effectN( 1 ).pct )
-            end
-            
-            if Player.set_pieces[ 31 ] >= 4 then
-                am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end
-            
-            am = am * Player.getTalent( "one_versus_many" ).effectN( 2 ).mod
-            
-            am = am * Player.getTalent( "temple_training" ).effectN( 2 ).mod
-            
-            if Player.getTalent( "momentum_boost" ).ok then
+            callbacks = {
+                -- Chi generators
+                "tiger_palm",
+                "expel_harm",
+                "chi_burst",
                 
-                -- Momentum Boost's first effect, increase damage by n% of haste
-                am = am * ( 1 + ( Player.haste * Player.getTalent( "momentum_boost" ).effectN( 1 ).pct ) )
+                "blackout_kick", -- CDR / Transfer the Power
+                "rising_sun_kick", -- Transfer the Power
+                "spinning_crane_kick", -- Transfer the Power
+            },
+            
+            triggerSpell = 117418,
+            
+            ticks = 5,
+            hasted_cooldown = true,
+            
+            ww_mastery = true,
+            trigger_etl = true,
+            
+            sqrt_after = spell.fists_of_fury.effectN( 1 ).base_value,
+            
+            duration_multiplier = function( self, state )
+                local dm = 1
                 
-                -- Second effect, increase damage by n% per stack
-                if state then
-                    -- if state is available we can use the buff state
-                    am = am * ( 1 + Player.getBuff( "momentum_boost", state ).stacks() * Player.getBuff( "momentum_boost", state ).effectN( 1 ).pct  )
-                else
-                    -- otherwise this can be solved using an algebraic series formula
-                    local ticks = floor( self.ticks() )
-
-                    if ticks > 1 then
-                        local targets = self.target_count( self )
-                        local max_stacks = Player.buffs.momentum_boost.max_stacks()
-    
-                        -- The first tick will be unbuffed 
-                        local uncapped = ( ticks - 1 ) * targets <= max_stacks and ( ticks - 1 ) or floor( max_stacks / targets )
-                        local capped = ticks - 1 - uncapped
-    
-                        local m = Player.buffs.momentum_boost.effectN( 1 ).pct / ticks -- Effect value divided by *TOTAL* ticks for this action
-                        local momentum = ( uncapped / 2 ) * ( 2 * ( targets * m ) + ( uncapped - 1 ) * ( targets * m ) ) + ( max_stacks * m ) * capped
-    
-                        am = am * ( 1 + momentum )
+                -- Heart of the Jade Serpent
+                if Player.getBuff( "hotjs_cdr", state ).up then
+                    dm = dm * Player.getBuff( "hotjs_cdr", state ).effectN( 5 ).mod
+                elseif Player.getBuff( "hotjs_cdr_celestial", state ).up then
+                    dm = dm * Player.getBuff( "hotjs_cdr_celestial", state ).effectN( 5 ).mod
+                end
+                
+                return dm
+            end,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * ( 1 + Player.getBuff( "transfer_the_power", state ).stacks() * Player.getTalent( "transfer_the_power" ).effectN( 1 ).pct )
+                
+                if Player.getBuff( "fists_of_flowing_momentum", state ).up() then
+                    am = am * ( 1 + Player.getBuff( "fists_of_flowing_momentum", state ).stacks() * Player.getBuff( "fists_of_flowing_momentum", state ).effectN( 1 ).pct )
+                end
+                
+                if Player.set_pieces[ 31 ] >= 4 then
+                    am = am * spell.t31_ww_4pc.effectN( 2 ).mod
+                end
+                
+                am = am * Player.getTalent( "one_versus_many" ).effectN( 2 ).mod
+                
+                am = am * Player.getTalent( "temple_training" ).effectN( 2 ).mod
+                
+                if Player.getTalent( "momentum_boost" ).ok then
+                    
+                    -- Momentum Boost's first effect, increase damage by n% of haste
+                    am = am * ( 1 + ( Player.haste * Player.getTalent( "momentum_boost" ).effectN( 1 ).pct ) )
+                    
+                    -- Second effect, increase damage by n% per stack
+                    if state then
+                        -- if state is available we can use the buff state
+                        am = am * ( 1 + Player.getBuff( "momentum_boost", state ).stacks() * Player.getBuff( "momentum_boost", state ).effectN( 1 ).pct  )
+                    else
+                        -- otherwise this can be solved using an algebraic series formula
+                        local ticks = floor( self.ticks() )
+                        
+                        if ticks > 1 then
+                            local targets = self.target_count( self )
+                            local max_stacks = Player.buffs.momentum_boost.max_stacks()
+                            
+                            -- The first tick will be unbuffed 
+                            local uncapped = ( ticks - 1 ) * targets <= max_stacks and ( ticks - 1 ) or floor( max_stacks / targets )
+                            local capped = ticks - 1 - uncapped
+                            
+                            local m = Player.buffs.momentum_boost.effectN( 1 ).pct / ticks -- Effect value divided by *TOTAL* ticks for this action
+                            local momentum = ( uncapped / 2 ) * ( 2 * ( targets * m ) + ( uncapped - 1 ) * ( targets * m ) ) + ( max_stacks * m ) * capped
+                            
+                            am = am * ( 1 + momentum )
+                        end
                     end
                 end
-            end
-
-            -- T33 Windwalker 2PC
-            if Player.getBuff( "tiger_strikes", state ).up() then
-                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
-            end            
-            
-            return am
-        end,
-        
-        secondary_target_multiplier = function( self, state )
-            return spell.fists_of_fury.effectN( 6 ).pct
-        end,
-        
-        onImpact = function( self, state )
-            if Player.getTalent( "momentum_boost", state ).ok then
-                Player.getBuff( "momentum_boost", state ).increment()
-            end
-            
-            if Player.getTalent( "jade_ignition", state ).ok then
-                Player.getBuff( "chi_energy", state ).increment()
-            end
-        end,
-        
-        onExecute = function( self, state )
-            if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
-                local stacks = ( ( Player.set_pieces[ 29 ] >= 4 or Player.set_pieces[ 32 ] >= 4 ) and 3 ) or 2
-                Player.getBuff( "kicks_of_flowing_momentum", state ).increment( stacks )
-            end
-            
-            if Player.set_pieces[ 33 ] >= 4 then
-                Player.getBuff( "tigers_ferocity", state ).increment()
-            end
-        
-            Player.getBuff( "transfer_the_power", state ).expire()
-            Player.getBuff( "momentum_boost", state ).expire()
-            
-            if Player.getTalent( "last_emperors_capacitor" ).ok then
-                Player.getBuff( "the_emperors_capacitor", state ).increment()
-            end            
-        end,
-        
-        trigger = {
-            ["jadefire_fists"] = true,
-        },
-    } ),
-
-    ["glory_of_the_dawn"] = Player.createAction( 392959, {
-        background = true,
-
-        trigger_etl = true,
-        ww_mastery = true,
-
-        critical_rate = function()
-            local cr = Player.crit_bonus
-            
-            -- Buff isn't gained until channel ends but still affects RSK if you break the channel with it
-            if ( Player.channel.spellID and Player.channel.spellID == 113656 and Player.getTalent( "xuens_battlegear" ).ok )
-            -- 
-            or Player.buffs.pressure_point.up() then
-                cr = cr + Player.buffs.pressure_point.effectN( 1 ).roll
-            end
-            
-            return min(1, cr)
-        end,
-        
-        critical_modifier = function()
-            local cm = 1
-            
-            cm = cm * Player.getTalent( "rising_star" ).effectN( 2 ).mod
-            
-            return cm
-        end,   
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
-            
-            am = am * Player.getTalent( "rising_star" ).effectN( 1 ).mod
-
-            -- T33 Windwalker 2PC
-            if Player.getBuff( "tiger_strikes", state ).up() then
-                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
-            end   
-            
-            return am
-        end,
-        
-        chi_gain = function()
-            return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).base_value     
-        end,
-        
-        trigger_rate = function() 
-            return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).roll * Player.haste
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "glory_of_the_dawn" ).ok
-        end,
-
-        reduces_cd = {
-            ["fists_of_fury"] = function( self, state ) 
-                return Player.getTalent( "xuens_battlegear" ).effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
+                
+                -- T33 Windwalker 2PC
+                if Player.getBuff( "tiger_strikes", state ).up() then
+                    am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+                end            
+                
+                return am
             end,
-        },
-    
-    } ),
-
-    ["rising_sun_kick"] = Player.createAction( 107428, {
-        callbacks = {
-            -- Chi generators
-            "tiger_palm",
-            "expel_harm",
-            "chi_burst",
             
-            "blackout_kick", -- CDR
-            "fists_of_fury", -- Pressure Point / T29 + T32 Set
-        },
-        
-        ap_type = "BOTH",
-        triggerSpell = 185099, -- This spell is really weird and triggers 185099 for the damage event even though it's not channeled
-        
-        hasted_cooldown = true,
-        
-        generate_marks = 1,
-        trigger_etl = true,
-        ww_mastery = true,
-        
-        critical_rate = function()
-            local cr = Player.crit_bonus
-            
-            -- Buff isn't gained until channel ends but still affects RSK if you break the channel with it
-            if ( Player.channel.spellID and Player.channel.spellID == 113656 and Player.getTalent( "xuens_battlegear" ).ok )
-            -- 
-            or Player.buffs.pressure_point.up() then
-                cr = cr + Player.buffs.pressure_point.effectN( 1 ).roll
-            end
-            
-            return min(1, cr)
-        end,
-        
-        critical_modifier = function()
-            local cm = 1
-            
-            cm = cm * Player.getTalent( "rising_star" ).effectN( 2 ).mod
-            
-            return cm
-        end,   
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
-            
-            am = am * Player.getTalent( "rising_star" ).effectN( 1 ).mod
-            
-            if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
-                am = am * Player.getBuff( "kicks_of_flowing_momentum", state ).effectN( 1 ).mod
-            end
-            
-            if Player.set_pieces[ 31 ] >= 4 then
-                am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end
-
-            -- T33 Windwalker 2PC
-            if Player.getBuff( "tiger_strikes", state ).up() then
-                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
-            end   
-            
-            if Player.getBuff( "august_dynasty", state ).up() then
-                am = am * Player.Player.getBuff( "august_dynasty", state ).effectN( 1 ).mod
-            end
-            
-            return am
-        end,
-        
-        onExecute = function( self, state )
-            if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
-                if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
-                    Player.getBuff( "kicks_of_flowing_momentum", state ).decrement()
-                    Player.getBuff( "fists_of_flowing_momentum", state ).increment()
-                end
-            end
-            
-            if Player.set_pieces[ 33 ] >= 4 then
-                Player.getBuff( "tigers_ferocity", state ).increment()
-            end
-        
-            if Player.getTalent( "transfer_the_power" ).ok then
-                Player.getBuff( "transfer_the_power", state ).increment()
-            end
-            
-            if Player.getTalent( "last_emperors_capacitor" ).ok then
-                Player.getBuff( "the_emperors_capacitor", state ).increment()
-            end            
-        end,        
-        
-        trigger = {
-            ["glory_of_the_dawn"] = true,
-            ["chi_wave"] = function( self, state )
-                return Player.getBuff( "chi_wave", state ).up()
+            secondary_target_multiplier = function( self, state )
+                return spell.fists_of_fury.effectN( 6 ).pct
             end,
-        },
-
-        reduces_cd = {
-            ["fists_of_fury"] = function( self, state ) 
-                return Player.getTalent( "xuens_battlegear" ).effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
-            end,
-        },
-    
-    } ),
-
-    ["spinning_crane_kick"] = Player.createAction( 101546, {
-        callbacks = {
-            -- Chi generators
-            "tiger_palm", -- also MotC and Mastery eval.
-            "expel_harm", -- also Mastery eval.
-            "chi_burst",
             
-            "fists_of_fury", -- Tier 29 / Tier 32
-            "blackout_kick", -- MotC and Mastery eval.
-            "strike_of_the_windlord", -- Mastery eval.
-            "whirling_dragon_punch", -- Mastery eval.
-        },
-        
-        ap_type = "BOTH",
-        triggerSpell = 107270,
-        ticks = 4,
-        
-        trigger_etl = true,
-        ww_mastery = true,
-        
-        sqrt_after = spell.spinning_crane_kick.effectN( 1 ).base_value,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            local motc_stacks = CurrentCraneStacks( state )
-            
-            if motc_stacks > 0 then
-                am = am * ( 1 + ( motc_stacks * spell.cyclone_strikes.effectN( 1 ).pct ) )
-            end
-            
-            if Player.getBuff( "dance_of_chiji", state ).up() then
-                am = am * Player.getTalent( "dance_of_chiji" ).effectN( 1 ).mod
-            end
-            
-            am = am * Player.getTalent( "crane_vortex" ).effectN( 1 ).mod
-            
-            if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
-                am = am * Player.getBuff( "kicks_of_flowing_momentum", state ).effectN( 1 ).mod
-            end
-            
-            am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
-
-            am = am * Player.getTalent( "efficient_training" ).effectN( 5 ).mod
-            
-            am = am * Player.getTalent( "temple_training" ).effectN( 2 ).mod
-
-            -- T33 Windwalker 2PC
-            if Player.getBuff( "tiger_strikes", state ).up() then
-                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
-            end   
-            
-            return am
-        end,
-        
-        onExecute = function( self, state )
-            if Player.set_pieces[ 31 ] >= 2 and self.base_cost == 0 then
-                Player.getBuff( "blackout_reinforcement", state ).increment()
-            end
-            
-            if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
-                if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
-                    Player.getBuff( "kicks_of_flowing_momentum", state ).decrement()
-                    Player.getBuff( "fists_of_flowing_momentum", state ).increment()
-                end
-            end      
-            
-            if Player.getBuff( "dance_of_chiji", state ).up() then
-                if Player.getTalent( "sequenced_strikes" ).ok then 
-                    Player.getBuff( "bok_proc", state ).increment()
+            onImpact = function( self, state )
+                if Player.getTalent( "momentum_boost", state ).ok then
+                    Player.getBuff( "momentum_boost", state ).increment()
                 end
                 
-                Player.getBuff( "dance_of_chiji", state ).decrement()
-            end
+                if Player.getTalent( "jade_ignition", state ).ok then
+                    Player.getBuff( "chi_energy", state ).increment()
+                end
+            end,
             
-            if Player.getTalent( "transfer_the_power" ).ok then
-                Player.getBuff( "transfer_the_power", state ).increment()
-            end
+            onExecute = function( self, state )
+                if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
+                    local stacks = ( ( Player.set_pieces[ 29 ] >= 4 or Player.set_pieces[ 32 ] >= 4 ) and 3 ) or 2
+                    Player.getBuff( "kicks_of_flowing_momentum", state ).increment( stacks )
+                end
+                
+                if Player.set_pieces[ 33 ] >= 4 then
+                    Player.getBuff( "tigers_ferocity", state ).increment()
+                end
+                
+                Player.getBuff( "transfer_the_power", state ).expire()
+                Player.getBuff( "momentum_boost", state ).expire()
+                
+                if Player.getTalent( "last_emperors_capacitor" ).ok then
+                    Player.getBuff( "the_emperors_capacitor", state ).increment()
+                end            
+            end,
             
-            Player.getBuff( "chi_energy", state ).expire()
-            
-            if Player.getTalent( "last_emperors_capacitor" ).ok then
-                Player.getBuff( "the_emperors_capacitor", state ).increment()
-            end            
-        end,
-         
-        trigger = {
-            ["chi_explosion"] = true,
-        },
+            trigger = {
+                ["jadefire_fists"] = true,
+            },
+    } ),
     
+    ["glory_of_the_dawn"] = Player.createAction( 392959, {
+            background = true,
+            
+            trigger_etl = true,
+            ww_mastery = true,
+            
+            critical_rate = function()
+                local cr = Player.crit_bonus
+                
+                -- Buff isn't gained until channel ends but still affects RSK if you break the channel with it
+                if ( Player.channel.spellID and Player.channel.spellID == 113656 and Player.getTalent( "xuens_battlegear" ).ok )
+                -- 
+                or Player.buffs.pressure_point.up() then
+                    cr = cr + Player.buffs.pressure_point.effectN( 1 ).roll
+                end
+                
+                return min(1, cr)
+            end,
+            
+            critical_modifier = function()
+                local cm = 1
+                
+                cm = cm * Player.getTalent( "rising_star" ).effectN( 2 ).mod
+                
+                return cm
+            end,   
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
+                
+                am = am * Player.getTalent( "rising_star" ).effectN( 1 ).mod
+                
+                -- T33 Windwalker 2PC
+                if Player.getBuff( "tiger_strikes", state ).up() then
+                    am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+                end   
+                
+                return am
+            end,
+            
+            chi_gain = function()
+                return Player.getTalent( "glory_of_the_dawn" ).effectN( 3 ).base_value     
+            end,
+            
+            trigger_rate = function() 
+                return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).roll * Player.haste
+            end,
+            
+            ready = function( self, state )
+                return Player.getTalent( "glory_of_the_dawn" ).ok
+            end,
+            
+            reduces_cd = {
+                ["fists_of_fury"] = function( self, state ) 
+                    return Player.getTalent( "xuens_battlegear" ).effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
+                end,
+            },
+            
     } ),
-
+    
+    ["rising_sun_kick"] = Player.createAction( 107428, {
+            callbacks = {
+                -- Chi generators
+                "tiger_palm",
+                "expel_harm",
+                "chi_burst",
+                
+                "blackout_kick", -- CDR
+                "fists_of_fury", -- Pressure Point / T29 + T32 Set
+            },
+            
+            ap_type = "BOTH",
+            triggerSpell = 185099, -- This spell is really weird and triggers 185099 for the damage event even though it's not channeled
+            
+            hasted_cooldown = true,
+            
+            generate_marks = 1,
+            trigger_etl = true,
+            ww_mastery = true,
+            
+            critical_rate = function()
+                local cr = Player.crit_bonus
+                
+                -- Buff isn't gained until channel ends but still affects RSK if you break the channel with it
+                if ( Player.channel.spellID and Player.channel.spellID == 113656 and Player.getTalent( "xuens_battlegear" ).ok )
+                -- 
+                or Player.buffs.pressure_point.up() then
+                    cr = cr + Player.buffs.pressure_point.effectN( 1 ).roll
+                end
+                
+                return min(1, cr)
+            end,
+            
+            critical_modifier = function()
+                local cm = 1
+                
+                cm = cm * Player.getTalent( "rising_star" ).effectN( 2 ).mod
+                
+                return cm
+            end,   
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
+                
+                am = am * Player.getTalent( "rising_star" ).effectN( 1 ).mod
+                
+                if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
+                    am = am * Player.getBuff( "kicks_of_flowing_momentum", state ).effectN( 1 ).mod
+                end
+                
+                if Player.set_pieces[ 31 ] >= 4 then
+                    am = am * spell.t31_ww_4pc.effectN( 2 ).mod
+                end
+                
+                -- T33 Windwalker 2PC
+                if Player.getBuff( "tiger_strikes", state ).up() then
+                    am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+                end   
+                
+                if Player.getBuff( "august_dynasty", state ).up() then
+                    am = am * Player.Player.getBuff( "august_dynasty", state ).effectN( 1 ).mod
+                end
+                
+                return am
+            end,
+            
+            onExecute = function( self, state )
+                if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
+                    if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
+                        Player.getBuff( "kicks_of_flowing_momentum", state ).decrement()
+                        Player.getBuff( "fists_of_flowing_momentum", state ).increment()
+                    end
+                end
+                
+                if Player.set_pieces[ 33 ] >= 4 then
+                    Player.getBuff( "tigers_ferocity", state ).increment()
+                end
+                
+                if Player.getTalent( "transfer_the_power" ).ok then
+                    Player.getBuff( "transfer_the_power", state ).increment()
+                end
+                
+                if Player.getTalent( "last_emperors_capacitor" ).ok then
+                    Player.getBuff( "the_emperors_capacitor", state ).increment()
+                end            
+            end,        
+            
+            trigger = {
+                ["glory_of_the_dawn"] = true,
+                ["chi_wave"] = function( self, state )
+                    return Player.getBuff( "chi_wave", state ).up()
+                end,
+            },
+            
+            reduces_cd = {
+                ["fists_of_fury"] = function( self, state ) 
+                    return Player.getTalent( "xuens_battlegear" ).effectN( 2 ).seconds * aura_env.spells["rising_sun_kick"].critical_rate()
+                end,
+            },
+            
+    } ),
+    
+    ["spinning_crane_kick"] = Player.createAction( 101546, {
+            callbacks = {
+                -- Chi generators
+                "tiger_palm", -- also MotC and Mastery eval.
+                "expel_harm", -- also Mastery eval.
+                "chi_burst",
+                
+                "fists_of_fury", -- Tier 29 / Tier 32
+                "blackout_kick", -- MotC and Mastery eval.
+                "strike_of_the_windlord", -- Mastery eval.
+                "whirling_dragon_punch", -- Mastery eval.
+            },
+            
+            ap_type = "BOTH",
+            triggerSpell = 107270,
+            ticks = 4,
+            
+            trigger_etl = true,
+            ww_mastery = true,
+            
+            sqrt_after = spell.spinning_crane_kick.effectN( 1 ).base_value,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                local motc_stacks = CurrentCraneStacks( state )
+                
+                if motc_stacks > 0 then
+                    am = am * ( 1 + ( motc_stacks * spell.cyclone_strikes.effectN( 1 ).pct ) )
+                end
+                
+                if Player.getBuff( "dance_of_chiji", state ).up() then
+                    am = am * Player.getTalent( "dance_of_chiji" ).effectN( 1 ).mod
+                end
+                
+                am = am * Player.getTalent( "crane_vortex" ).effectN( 1 ).mod
+                
+                if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
+                    am = am * Player.getBuff( "kicks_of_flowing_momentum", state ).effectN( 1 ).mod
+                end
+                
+                am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
+                
+                am = am * Player.getTalent( "efficient_training" ).effectN( 5 ).mod
+                
+                am = am * Player.getTalent( "temple_training" ).effectN( 2 ).mod
+                
+                -- T33 Windwalker 2PC
+                if Player.getBuff( "tiger_strikes", state ).up() then
+                    am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+                end   
+                
+                return am
+            end,
+            
+            onExecute = function( self, state )
+                if Player.set_pieces[ 31 ] >= 2 and self.base_cost == 0 then
+                    Player.getBuff( "blackout_reinforcement", state ).increment()
+                end
+                
+                if Player.set_pieces[ 29 ] >= 2 or Player.set_pieces[ 32 ] >= 2 then
+                    if Player.getBuff( "kicks_of_flowing_momentum", state ).up() then
+                        Player.getBuff( "kicks_of_flowing_momentum", state ).decrement()
+                        Player.getBuff( "fists_of_flowing_momentum", state ).increment()
+                    end
+                end      
+                
+                if Player.getBuff( "dance_of_chiji", state ).up() then
+                    if Player.getTalent( "sequenced_strikes" ).ok then 
+                        Player.getBuff( "bok_proc", state ).increment()
+                    end
+                    
+                    Player.getBuff( "dance_of_chiji", state ).decrement()
+                end
+                
+                if Player.getTalent( "transfer_the_power" ).ok then
+                    Player.getBuff( "transfer_the_power", state ).increment()
+                end
+                
+                Player.getBuff( "chi_energy", state ).expire()
+                
+                if Player.getTalent( "last_emperors_capacitor" ).ok then
+                    Player.getBuff( "the_emperors_capacitor", state ).increment()
+                end            
+            end,
+            
+            trigger = {
+                ["chi_explosion"] = true,
+            },
+            
+    } ),
+    
     ["blackout_kick_totm"] = Player.createAction( 228649, {
-        
-        background = true,
-        
-        trigger_etl = true,
-        ww_mastery = false,
-        
-        trigger_rate = function( state )
-            return Player.getBuff( "teachings_of_the_monastery", state ).stacks()
-        end,
-        
-        critical_rate = function()
-            local cr = Player.crit_bonus
             
-            cr = cr + Player.getTalent( "hardened_soles" ).effectN( 1 ).roll
+            background = true,
             
-            return min(1, cr)
-        end,
-        
-        critical_modifier = function()
-            local cm = 1
+            trigger_etl = true,
+            ww_mastery = false,
             
-            cm = cm * Player.getTalent( "hardened_soles" ).effectN( 2 ).mod
+            trigger_rate = function( state )
+                return Player.getBuff( "teachings_of_the_monastery", state ).stacks()
+            end,
             
-            return cm
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
+            critical_rate = function()
+                local cr = Player.crit_bonus
+                
+                cr = cr + Player.getTalent( "hardened_soles" ).effectN( 1 ).roll
+                
+                return min(1, cr)
+            end,
             
-            am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
+            critical_modifier = function()
+                local cm = 1
+                
+                cm = cm * Player.getTalent( "hardened_soles" ).effectN( 2 ).mod
+                
+                return cm
+            end,
             
-            am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
+                
+                am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
+                
+                return am
+            end,
             
-            return am
-        end,
-        
-        onImpact = function( self, state )
-            if Player.getTalent( "martial_mixture" ).ok then
-                Player.getBuff( "martial_mixture", state ).increment()
-            end    
-        end,        
+            onImpact = function( self, state )
+                if Player.getTalent( "martial_mixture" ).ok then
+                    Player.getBuff( "martial_mixture", state ).increment()
+                end    
+            end,        
     } ),
-
+    
     ["energy_burst"] = Player.createAction( 451498, {
-        background = true,
-        
-        chi_gain = function( state )
-            return Player.getTalent( "energy_burst" ).effectN( 2 ).base_value
-        end,
-        
-        trigger_rate = function( callback )
-            return Player.getTalent( "energy_burst" ).effectN( 1 ).roll
-        end,
-        
-        ready = function( self, state )
-            return Player.getBuff( "bok_proc", state ).up()
-        end,
+            background = true,
+            
+            chi_gain = function( state )
+                return Player.getTalent( "energy_burst" ).effectN( 2 ).base_value
+            end,
+            
+            trigger_rate = function( callback )
+                return Player.getTalent( "energy_burst" ).effectN( 1 ).roll
+            end,
+            
+            ready = function( self, state )
+                return Player.getBuff( "bok_proc", state ).up()
+            end,
     } ),
-
+    
     ["blackout_kick"] = Player.createAction( 100784, {
-        callbacks = {
-            -- Chi generators
-            "tiger_palm", -- also TotM
-            "expel_harm",
-            "chi_burst",      
+            callbacks = {
+                -- Chi generators
+                "tiger_palm", -- also TotM
+                "expel_harm",
+                "chi_burst",      
+                
+                "spinning_crane_kick", -- T31 Set Bonus
+                "rising_sun_kick", -- CDR
+                "fists_of_fury", -- CDR
+                "strike_of_the_windlord", -- CDR (T31)
+                "whirling_dragon_punch", -- CDR (T31)
+            },
             
-            "spinning_crane_kick", -- T31 Set Bonus
-            "rising_sun_kick", -- CDR
-            "fists_of_fury", -- CDR
-            "strike_of_the_windlord", -- CDR (T31)
-            "whirling_dragon_punch", -- CDR (T31)
-        },
-        
-        ap_type = "BOTH",
-        
-        trigger_etl = true,
-        ww_mastery = true,
-        
-        generate_marks = function()
-            return 1
-        end,
-        
-        critical_rate = function()
-            local cr = Player.crit_bonus
+            ap_type = "BOTH",
             
-            cr = cr + Player.getTalent( "hardened_soles" ).effectN( 1 ).roll
+            trigger_etl = true,
+            ww_mastery = true,
             
-            return min(1, cr)
-        end,
-        
-        critical_modifier = function()
-            local cm = 1
+            generate_marks = function()
+                return 1
+            end,
             
-            cm = cm * Player.getTalent( "hardened_soles" ).effectN( 2 ).mod
+            critical_rate = function()
+                local cr = Player.crit_bonus
+                
+                cr = cr + Player.getTalent( "hardened_soles" ).effectN( 1 ).roll
+                
+                return min(1, cr)
+            end,
             
-            cm = cm * Player.getTalent( "vigilant_watch" ).effectN( 1 ).mod
+            critical_modifier = function()
+                local cm = 1
+                
+                cm = cm * Player.getTalent( "hardened_soles" ).effectN( 2 ).mod
+                
+                cm = cm * Player.getTalent( "vigilant_watch" ).effectN( 1 ).mod
+                
+                return cm
+            end,   
             
-            return cm
-        end,   
-        
-        action_multiplier = function( self, state )
-            local am = 1
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
+                
+                if Player.getBuff( "blackout_reinforcement", state ).up() then
+                    am = am * Player.getBuff( "blackout_reinforcement", state ).effectN( 1 ).mod
+                end
+                
+                am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
+                
+                if Player.getBuff( "bok_proc", state ).up() then
+                    am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
+                end
+                
+                -- T33 Windwalker 2PC
+                if Player.getBuff( "tiger_strikes", state ).up() then
+                    am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+                end   
+                
+                return am
+            end,
             
-            am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
+            secondary_target_multiplier = function( self, state )
+                return Player.getTalent( "shadowboxing_treads" ).effectN( 3 ).pct 
+            end,
             
-            if Player.getBuff( "blackout_reinforcement", state ).up() then
-                am = am * Player.getBuff( "blackout_reinforcement", state ).effectN( 1 ).mod
-            end
+            onImpact = function( self, state )
+                if Player.getTalent( "martial_mixture" ).ok then
+                    Player.getBuff( "martial_mixture", state ).increment()
+                end    
+            end,
             
-            am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
+            onExecute = function( self, state )
+                Player.getBuff( "blackout_reinforcement", state ).decrement()
+                Player.getBuff( "bok_proc", state ).decrement()
+                Player.getBuff( "teachings_of_the_monastery", state ).expire()
+                
+                if Player.set_pieces[ 33 ] >= 4 then
+                    Player.getBuff( "tigers_ferocity", state ).increment()
+                end
+                
+                if Player.getTalent( "transfer_the_power" ).ok then
+                    Player.getBuff( "transfer_the_power", state ).increment()
+                end
+                
+                if Player.getTalent( "last_emperors_capacitor" ).ok then
+                    Player.getBuff( "the_emperors_capacitor", state ).increment()
+                end     
+                
+                if Player.getTalent( "vigilant_watch" ).ok then
+                    Player.getBuff( "vigilant_watch", state ).increment()
+                end
+                
+                if Player.getBuff( "strength_of_the_black_ox", state ).up() then
+                    local sotbo_stacks = Player.getTalent( "strength_of_the_black_ox" ).effectN( 3 ).base_value
+                    Player.getBuff( "teachings_of_the_monastery", state ).increment( sotbo_stacks )
+                end
+            end,
             
-            if Player.getBuff( "bok_proc", state ).up() then
-                am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
-            end
-
-            -- T33 Windwalker 2PC
-            if Player.getBuff( "tiger_strikes", state ).up() then
-                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
-            end   
+            reduces_cd = {
+                ["rising_sun_kick"] = function( self, state )  
+                    local cdr = spell.blackout_kick.effectN( 3 ).seconds 
+                    
+                    if Player.getTalent( "teachings_of_the_monastery" ).ok then
+                        local remaining = Player.getCooldown( "rising_sun_kick", state )
+                        if remaining > 0 then
+                            local targets = min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
+                            local totm_stacks = Player.getBuff( "teachings_of_the_monastery", state ).stacks()
+                            
+                            cdr = cdr + ( min( 1, Player.getTalent( "teachings_of_the_monastery" ).effectN( 1 ).roll * targets * ( 1 + totm_stacks ) ) * remaining )
+                        end
+                    end
+                    
+                    if Player.getBuff( "blackout_reinforcement", state ).up() then
+                        cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
+                    end
+                    
+                    return cdr
+                end,
+                
+                ["fists_of_fury"] = function( self, state ) 
+                    local cdr = spell.blackout_kick.effectN( 3 ).seconds
+                    
+                    if Player.getBuff( "blackout_reinforcement", state ).up() then
+                        cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
+                    end                
+                    
+                    return cdr
+                end,
+                
+                ["strike_of_the_windlord"] = function( self, state ) 
+                    local cdr = 0
+                    
+                    if Player.getBuff( "blackout_reinforcement", state ).up() then
+                        cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
+                    end                
+                    
+                    return cdr
+                end,
+                
+                ["whirling_dragon_punch"] = function( self, state ) 
+                    local cdr = 0
+                    
+                    if Player.getBuff( "blackout_reinforcement", state ).up() then
+                        cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
+                    end             
+                    
+                    return cdr
+                end,            
+            },
             
-            return am
-        end,
-        
-        secondary_target_multiplier = function( self, state )
-            return Player.getTalent( "shadowboxing_treads" ).effectN( 3 ).pct 
-        end,
-
-        onImpact = function( self, state )
-            if Player.getTalent( "martial_mixture" ).ok then
-                Player.getBuff( "martial_mixture", state ).increment()
-            end    
-        end,
-        
-        onExecute = function( self, state )
-            Player.getBuff( "blackout_reinforcement", state ).decrement()
-            Player.getBuff( "bok_proc", state ).decrement()
-            Player.getBuff( "teachings_of_the_monastery", state ).expire()
+            trigger = {
+                ["energy_burst"] = true,
+                ["strength_of_the_black_ox"] = function( self, state )
+                    return Player.getBuff( "strength_of_the_black_ox", state ).up()
+                end,
+            },
             
-            if Player.set_pieces[ 33 ] >= 4 then
-                Player.getBuff( "tigers_ferocity", state ).increment()
-            end
+            tick_trigger = {
+                ["blackout_kick_totm"] = function( self, state )
+                    return Player.getBuff( "teachings_of_the_monastery", state ).up()
+                end,
+            },    
+    } ),
+    
+    ["wdp_st_tick"] = Player.createAction( 451767, {
+            background = true,
             
-            if Player.getTalent( "transfer_the_power" ).ok then
-                Player.getBuff( "transfer_the_power", state ).increment()
-            end
+            ww_mastery = true,
+            trigger_etl = true,
             
-            if Player.getTalent( "last_emperors_capacitor" ).ok then
-                Player.getBuff( "the_emperors_capacitor", state ).increment()
-            end     
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.set_pieces[ 31 ] >= 4 then
+                    am = am * spell.t31_ww_4pc.effectN( 2 ).mod
+                end    
+                
+                am = am * Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 2 ).mod
+                
+                -- T33 Windwalker 2PC
+                if Player.getBuff( "tiger_strikes", state ).up() then
+                    am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+                end   
+                
+                return am
+            end,        
+    }),
+    
+    ["whirling_dragon_punch"] = Player.createAction( 152175, {
+            callbacks = {
+                "rising_sun_kick", -- Spell activation
+                "fists_of_fury", -- Spell activation
+                "spinning_crane_kick", -- Revolving Whirl
+            },
             
-            if Player.getTalent( "vigilant_watch" ).ok then
-                Player.getBuff( "vigilant_watch", state ).increment()
-            end
+            triggerSpell = 158221,
+            ticks = 3,
+            hasted_cooldown = true,
             
-            if Player.getBuff( "strength_of_the_black_ox", state ).up() then
-                local sotbo_stacks = Player.getTalent( "strength_of_the_black_ox" ).effectN( 3 ).base_value
-                Player.getBuff( "teachings_of_the_monastery", state ).increment( sotbo_stacks )
-            end
-        end,
-        
-        reduces_cd = {
-            ["rising_sun_kick"] = function( self, state )  
-                local cdr = spell.blackout_kick.effectN( 3 ).seconds 
+            ww_mastery = true,
+            trigger_etl = true,
+            
+            sqrt_after = function()
+                return Player.getTalent( "whirling_dragon_punch" ).effectN( 1 ).base_value 
+            end,
+            
+            ready = function( self, state )
+                -- Not talented into WDP
+                if not Player.getTalent( "whirling_dragon_punch" ).ok then
+                    return false
+                end
+                
+                if not state then
+                    return true
+                end
+                
+                local brain_lag = 1.25
+                local grace_period = 1.5
+                local gcd = state.callback.gcd()
+                
+                local fof_cd = Player.getCooldown( "fists_of_fury", state )
+                local rsk_cd = Player.getCooldown( "rising_sun_kick", state )
+                local wdp_cd = Player.getCooldown( "whirling_dragon_punch", state )
+                
+                if  fof_cd > ( gcd + brain_lag - grace_period ) 
+                and rsk_cd > ( gcd + brain_lag - grace_period )
+                and wdp_cd < ( gcd + grace_period ) then
+                    return false
+                end
+                
+                return true     
+            end,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.set_pieces[ 31 ] >= 4 then
+                    am = am * spell.t31_ww_4pc.effectN( 2 ).mod
+                end
+                
+                am = am * Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 2 ).mod
+                
+                -- T33 Windwalker 2PC
+                if Player.getBuff( "tiger_strikes", state ).up() then
+                    am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+                end   
+                
+                return am
+            end,  
+            
+            
+            onExecute = function( self, state )
+                if Player.getTalent( "revolving_whirl" ).ok then
+                    Player.getBuff( "dance_of_chiji", state ).increment()
+                end
                 
                 if Player.getTalent( "teachings_of_the_monastery" ).ok then
-                    local remaining = Player.getCooldown( "rising_sun_kick", state )
-                    if remaining > 0 then
-                        local targets = min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
-                        local totm_stacks = Player.getBuff( "teachings_of_the_monastery", state ).stacks()
-                        
-                        cdr = cdr + ( min( 1, Player.getTalent( "teachings_of_the_monastery" ).effectN( 1 ).roll * targets * ( 1 + totm_stacks ) ) * remaining )
+                    if Player.getTalent( "knowledge_of_the_broken_temple" ).ok then
+                        Player.getBuff( "teachings_of_the_monastery", state ).increment( Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )
                     end
                 end
                 
-                if Player.getBuff( "blackout_reinforcement", state ).up() then
-                    cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
-                end
-                
-                return cdr
+                if Player.set_pieces[ 33 ] >= 4 then
+                    Player.getBuff( "tigers_ferocity", state ).increment()
+                end            
             end,
             
-            ["fists_of_fury"] = function( self, state ) 
-                local cdr = spell.blackout_kick.effectN( 3 ).seconds
-                
-                if Player.getBuff( "blackout_reinforcement", state ).up() then
-                    cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
-                end                
-                
-                return cdr
-            end,
-            
-            ["strike_of_the_windlord"] = function( self, state ) 
-                local cdr = 0
-                
-                if Player.getBuff( "blackout_reinforcement", state ).up() then
-                    cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
-                end                
-                
-                return cdr
-            end,
-            
-            ["whirling_dragon_punch"] = function( self, state ) 
-                local cdr = 0
-                
-                if Player.getBuff( "blackout_reinforcement", state ).up() then
-                    cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
-                end             
-                
-                return cdr
-            end,            
-        },
-    
-        trigger = {
-            ["energy_burst"] = true,
-            ["strength_of_the_black_ox"] = function( self, state )
-                return Player.getBuff( "strength_of_the_black_ox", state ).up()
-            end,
-        },
-    
-        tick_trigger = {
-            ["blackout_kick_totm"] = function( self, state )
-                return Player.getBuff( "teachings_of_the_monastery", state ).up()
-            end,
-        },    
+            trigger = {
+                ["wdp_st_tick"] = true,
+            },
     } ),
-
-    ["wdp_st_tick"] = Player.createAction( 451767, {
-        background = true,
-        
-        ww_mastery = true,
-        trigger_etl = true,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            if Player.set_pieces[ 31 ] >= 4 then
-                am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end    
-            
-            am = am * Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 2 ).mod
-
-            -- T33 Windwalker 2PC
-            if Player.getBuff( "tiger_strikes", state ).up() then
-                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
-            end   
-            
-            return am
-        end,        
-    }),
-
-    ["whirling_dragon_punch"] = Player.createAction( 152175, {
-        callbacks = {
-            "rising_sun_kick", -- Spell activation
-            "fists_of_fury", -- Spell activation
-            "spinning_crane_kick", -- Revolving Whirl
-        },
-        
-        triggerSpell = 158221,
-        ticks = 3,
-        hasted_cooldown = true,
-        
-        ww_mastery = true,
-        trigger_etl = true,
-        
-        sqrt_after = function()
-            return Player.getTalent( "whirling_dragon_punch" ).effectN( 1 ).base_value 
-        end,
-        
-        ready = function( self, state )
-            -- Not talented into WDP
-            if not Player.getTalent( "whirling_dragon_punch" ).ok then
-                return false
-            end
-            
-            if not state then
-                return true
-            end
-            
-            local brain_lag = 1.25
-            local grace_period = 1.5
-            local gcd = state.callback.gcd()
-            
-            local fof_cd = Player.getCooldown( "fists_of_fury", state )
-            local rsk_cd = Player.getCooldown( "rising_sun_kick", state )
-            local wdp_cd = Player.getCooldown( "whirling_dragon_punch", state )
-            
-            if  fof_cd > ( gcd + brain_lag - grace_period ) 
-            and rsk_cd > ( gcd + brain_lag - grace_period )
-            and wdp_cd < ( gcd + grace_period ) then
-                return false
-            end
-            
-            return true     
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            if Player.set_pieces[ 31 ] >= 4 then
-                am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end
-            
-            am = am * Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 2 ).mod
-
-            -- T33 Windwalker 2PC
-            if Player.getBuff( "tiger_strikes", state ).up() then
-                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
-            end   
-            
-            return am
-        end,  
-        
-        
-        onExecute = function( self, state )
-            if Player.getTalent( "revolving_whirl" ).ok then
-                Player.getBuff( "dance_of_chiji", state ).increment()
-            end
-            
-            if Player.getTalent( "teachings_of_the_monastery" ).ok then
-                if Player.getTalent( "knowledge_of_the_broken_temple" ).ok then
-                    Player.getBuff( "teachings_of_the_monastery", state ).increment( Player.getTalent( "knowledge_of_the_broken_temple" ).effectN( 1 ).base_value )
-                end
-            end
-            
-            if Player.set_pieces[ 33 ] >= 4 then
-                Player.getBuff( "tigers_ferocity", state ).increment()
-            end            
-        end,
-        
-        trigger = {
-            ["wdp_st_tick"] = true,
-        },
-    } ),
-
+    
     ["strike_of_the_windlord_mh"] = Player.createAction( 395519, {
-        background = true,
-        
-        ww_mastery = true,
-        trigger_etl = true,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            if Player.set_pieces[ 31 ] >= 4 then
-                am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end        
+            background = true,
             
-            am = am * Player.getTalent( "communion_with_wind" ).effectN( 2 ).mod
-
-            -- T33 Windwalker 2PC
-            if Player.getBuff( "tiger_strikes", state ).up() then
-                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
-            end   
+            ww_mastery = true,
+            trigger_etl = true,
             
-            return am      
-        end,  
-        
-        secondary_target_multiplier = function( self, state )
-            return ( 1 / self.target_count( self, state ) )
-        end,
+            action_multiplier = function( self, state )
+                local am = 1
+                if Player.set_pieces[ 31 ] >= 4 then
+                    am = am * spell.t31_ww_4pc.effectN( 2 ).mod
+                end        
+                
+                am = am * Player.getTalent( "communion_with_wind" ).effectN( 2 ).mod
+                
+                -- T33 Windwalker 2PC
+                if Player.getBuff( "tiger_strikes", state ).up() then
+                    am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+                end   
+                
+                return am      
+            end,  
+            
+            secondary_target_multiplier = function( self, state )
+                return ( 1 / self.target_count( self, state ) )
+            end,
     } ),
-
+    
     -- TODO: May need to separate OH hit into a triggered spell at some point, currently not necessary
     -- Just setting triggerSpell as the OH hit, createAction handles the rest
     ["strike_of_the_windlord"] = Player.createAction( 392983, {
-        callbacks = {
-            -- Chi generators
-            "tiger_palm",
-            "expel_harm",
-            "chi_burst",
-            
-            "blackout_kick", -- CDR (Tier 31)        
-        },
-        
-        ap_type = "OFFHAND",
-        triggerSpell = 395521, -- OH hit
-        
-        ww_mastery = true,
-        trigger_etl = true,
-        
-        motc_gain = function()
-            if Player.getTalent( "rushing_jade_wind" ).ok then
-                return 5
-            end
-            
-            return 0
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            if Player.set_pieces[ 31 ] >= 4 then
-                am = am * spell.t31_ww_4pc.effectN( 2 ).mod
-            end
-            
-            am = am * Player.getTalent( "communion_with_wind" ).effectN( 2 ).mod
-
-            -- T33 Windwalker 2PC
-            if Player.getBuff( "tiger_strikes", state ).up() then
-                am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
-            end   
-            
-            return am      
-        end, 
-        
-        secondary_target_multiplier = function( self, state )
-            return ( 1 / self.target_count( self, state ) )
-        end,
-
-        onImpact = function( self, state )
-            if Player.getTalent( "thunderfist" ).ok then
-                Player.getBuff( "thunderfist", state ).increment()
-            end
-        end,
-        
-        onExecute = function( self, state )
-            if Player.getTalent( "thunderfist" ).ok then
-                local tf_stacks = Player.getTalent( "thunderfist" ).effectN( 1 ).base_value
-                Player.getBuff( "thunderfist", state ).increment( tf_stacks )
-            end
-            
-            if Player.set_pieces[ 33 ] >= 4 then
-                Player.getBuff( "tigers_ferocity", state ).increment()
-            end
-            
-            if Player.getTalent( "last_emperors_capacitor" ).ok then
-                Player.getBuff( "the_emperors_capacitor", state ).increment()
-            end
-            
-            if Player.getTalent( "darting_hurricane" ).ok then
-                local dh_stacks =  Player.getTalent( "darting_hurricane" ).effectN( 2 ).base_value
-                Player.getBuff( "darting_hurricane", state ).increment( dh_stacks )
-            end
-            
-            if Player.getBuff( "heart_of_the_jade_serpent", state ).up() then
-                Player.getBuff( "hotjs_cdr", state ).increment()
-            end
-        end,          
-        
-        trigger = {
-            ["strike_of_the_windlord_mh"] = true,
-            ["rushing_jade_wind"] = function( self, state )
-                return Player.getTalent( "rushing_jade_wind" ).ok
-            end,
-        },
-    } ),
-
-    ["rushing_jade_wind"] = Player.createAction( 116847, {
-
-        background = true,
-        
-        triggerSpell = 148187,
-        base_tick_rate = 0.75, -- TODO: Better buff handling
-     
-        ww_mastery = true,
-        trigger_etl = true,
-
-        sqrt_after = spell.rushing_jade_wind.effectN( 1 ).base_value,
-    } ),
-
-    ["jadefire_stomp_ww"] = Player.createAction( 388201, {
-
-        background = true,
-        
-        trigger_etl = true,
-        ignore_armor = true,
-        ww_mastery = true,
-        
-        aoe = 5, -- Missing from spell data
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            if Player.getTalent( "path_of_jade" ).ok then 
-                local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.getTalent( "path_of_jade" ).effectN( 2 ).base_value )
-                am = am * ( 1 + Player.getTalent( "path_of_jade" ).effectN( 1 ).pct * poj_targets )
-            end
-            
-            return am
-        end,
-    } ),    
-
-    ["jadefire_fists"] = Player.createAction( 457974, {
-        background = true,
-        
-        triggerSpell = 388207,
-        trigger_etl = true,
-        ww_mastery = true,
-        
-        aoe = 5, -- Missing from spell data
-        
-        ready = function( self, state )
-            return Player.getTalent( "jadefire_fists" ).ok
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            if Player.getTalent( "path_of_jade" ).ok then 
-                local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.getTalent( "path_of_jade" ).effectN( 2 ).base_value )
-                am = am * ( 1 + Player.getTalent( "path_of_jade" ).effectN( 1 ).pct * poj_targets )
-            end
-            
-            am = am * Player.getTalent( "singularly_focused_jade" ).effectN( 2 ).mod
-            
-            return am
-        end,
-        
-        composite_target_count = function( self, state, count )
-            return count + Player.getTalent( "singularly_focused_jade" ).effectN( 1 ).base_value
-        end,
-        
-        onExecute = function( self, state )
-            if Player.getTalent( "august_dynasty" ).ok then
-                -- todo: cooldown
-                Player.Player.getBuff( "august_dynasty", state ).increment()
-            end
-        end,        
-        
-        trigger = {
-            ["jadefire_stomp_ww"] = true,
-        },
-    }),
-
-    ["jadefire_stomp"] = Player.createAction( 388193, {
-        
-        triggerSpell = 388207, 
-
-        trigger_etl = true,
-        ww_mastery = true,
-        
-        aoe = 5, -- Missing from spell data
-        
-        ready = function( self, state )
-            return Player.getTalent( "jadefire_stomp" ).ok and aura_env.fight_remains > 5 and Player.moving == false
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            if Player.getTalent( "path_of_jade" ).ok then 
-                local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.getTalent( "path_of_jade" ).effectN( 2 ).base_value )
-                am = am * ( 1 + Player.getTalent( "path_of_jade" ).effectN( 1 ).pct * poj_targets )
-            end
-            
-            am = am * Player.getTalent( "singularly_focused_jade" ).effectN( 2 ).mod
-            
-            return am
-        end,
-        
-        composite_target_count = function( self, state, count )
-            return count + Player.getTalent( "singularly_focused_jade" ).effectN( 1 ).base_value
-        end,
-        
-        onExecute = function( self, state )
-            if Player.getTalent( "august_dynasty" ).ok then
-                -- todo: cooldown
-                Player.Player.getBuff( "august_dynasty", state ).increment()
-            end
-        end,
-        
-        trigger = {
-            ["jadefire_stomp_ww"] = true,
-        },
-    } ),
-
-    ["tigers_ferocity"] = Player.createAction( 454508, { 
-        background = true,
-        
-        aoe = -1, -- Missing from data
-        sqrt_after = spell.t33_ww_4pc.effectN( 2 ).base_value,
-        
-        echo_callback = true,
-        echo_pct = spell.t33_ww_4pc.effectN( 1 ).pct,
-        
-        ready = function( self, state )
-            return Player.set_pieces[ 33 ] >= 4
-        end,        
-    } ),
-
-    ["tiger_palm"] = Player.createAction( 100780, {
-        callbacks = {
-            -- T33 4PC Generators
-            "rising_sun_kick",
-            "blackout_kick",
-            "fists_of_fury",
-            "strike_of_the_windlord",
-            "whirling_dragon_punch",
-        },
-
-        chi_gain = function() 
-            return 2
-        end,
-        
-        generate_marks = 1,
-        trigger_etl = true,
-        ww_mastery = true,
-        allow_mastery_break = true,
-        
-        modify_gcd = function( self, state, gcd )
-            local t = gcd
-            
-            if Player.getBuff( "darting_hurricane", state ).up() then
-                t = t * Player.getBuff( "darting_hurricane", state ).effectN( 1 ).mod
-            end
-            
-            return t
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            if Player.getBuff( "combat_wisdom" ).up() then
-                am = am * Player.getBuff( "combat_wisdom" ).effectN( 2 ).mod
-            end
-            
-            am = am * Player.getTalent( "touch_of_the_tiger" ).effectN( 1 ).mod
-            
-            am = am * Player.getTalent( "inner_peace" ).effectN( 2 ).mod
-            
-            am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
-            
-            am = am * Player.getTalent( "xuens_guidance" ).effectN( 1 ).mod
-            
-            am = am * ( 1 + Player.getBuff( "martial_mixture", state ).stacks() * Player.getBuff( "martial_mixture", state ).effectN( 1 ).pct )
-            
-            if Player.set_pieces[ 33 ] >= 4 then
-                am = am * ( 1 + ( Player.getBuff( "tigers_ferocity", state ).stacks() * Player.getBuff( "tigers_ferocity", state ).effectN( 1 ).pct ) )
-            end
-            
-            return am
-        end,
-        
-        onExecute = function( self, state )
-            if Player.getTalent( "teachings_of_the_monastery" ).ok then
-                Player.getBuff( "teachings_of_the_monastery", state ).increment()
-            end
-            
-            if Player.getTalent( "martial_mixture" ).ok then
-                Player.getBuff( "martial_mixture", state ).expire()
-            end
-            
-            -- T33 Windwalker 2PC
-            if Player.set_pieces[ 33 ] >= 2 then
-                Player.getBuff( "tiger_strikes", state ).increment()
-            end   
-            
-            Player.getBuff( "tigers_ferocity", state ).expire()
-            Player.getBuff( "darting_hurricane", state ).decrement()
-        end,
-        
-        trigger = {
-            ["expel_harm"] = true,
-            ["flurry_strikes"] = true,
-            ["tigers_ferocity"] = true,
-        },
-    } ),
-
-    ["chi_burst"] = Player.createAction( 461404, {
-        triggerSpell = 148135,
-        
-        trigger_etl = true,
-        ww_mastery = true,
-        
-        ready = function( self, state )
-            return Player.getBuff( "chi_burst", state ).up()    
-        end,
-    } ),
-
-    ["chi_wave"] = Player.createAction( 450391, {
-        background = true,
-        triggerSpell = 132467,
-        ticks = 4, -- 4 Damage Bounces
-        
-        ww_mastery = true,
-        trigger_etl = true,
-    } ),
-
-    ["expel_harm"] = Player.createAction( 451968, {
-        background = true,
-        
-        action_multiplier = function( self, state )
-            local h = 1
-            
-            h = h * Player.getTalent( "vigorous_expulsion" ).effectN( 1 ).mod
-            
-            if Player.getTalent( "strength_of_spirit" ).ok then
-                local health_deficit = UnitHealthMax( "player" ) - UnitHealth( "player" )
-                local health_percent = health_deficit / UnitHealthMax( "player" )
+            callbacks = {
+                -- Chi generators
+                "tiger_palm",
+                "expel_harm",
+                "chi_burst",
                 
-                h = h * ( 1 + ( health_percent * Player.getTalent( "strength_of_spirit" ).effectN( 1 ).pct ) )
-            end
+                "blackout_kick", -- CDR (Tier 31)        
+            },
             
-            if IsPlayerSpell( spell.reverse_harm.id ) then -- Reverse Harm
-                h = h * spell.reverse_harm.effectN( 1 ).mod
-            end
+            ap_type = "OFFHAND",
+            triggerSpell = 395521, -- OH hit
             
-            return h
-        end,
-        
-        critical_rate = function()
-            local cr = Player.crit_bonus
+            ww_mastery = true,
+            trigger_etl = true,
             
-            cr = cr + Player.getTalent( "vigorous_expulsion" ).effectN( 2 ).mod
+            motc_gain = function()
+                if Player.getTalent( "rushing_jade_wind" ).ok then
+                    return 5
+                end
+                
+                return 0
+            end,
             
-            return min( 1, cr )
-        end,
-        
-        critical_modifier = function()
-            local cm = 1
+            action_multiplier = function( self, state )
+                local am = 1
+                if Player.set_pieces[ 31 ] >= 4 then
+                    am = am * spell.t31_ww_4pc.effectN( 2 ).mod
+                end
+                
+                am = am * Player.getTalent( "communion_with_wind" ).effectN( 2 ).mod
+                
+                -- T33 Windwalker 2PC
+                if Player.getBuff( "tiger_strikes", state ).up() then
+                    am = am * Player.getBuff( "tiger_strikes", state ).effectN( 1 ).mod
+                end   
+                
+                return am      
+            end, 
             
-            cm = cm * Player.getTalent( "profound_rebuttal" ).effectN( 1 ).mod 
+            secondary_target_multiplier = function( self, state )
+                return ( 1 / self.target_count( self, state ) )
+            end,
             
-            return cm
-        end,        
+            onImpact = function( self, state )
+                if Player.getTalent( "thunderfist" ).ok then
+                    Player.getBuff( "thunderfist", state ).increment()
+                end
+            end,
+            
+            onExecute = function( self, state )
+                if Player.getTalent( "thunderfist" ).ok then
+                    local tf_stacks = Player.getTalent( "thunderfist" ).effectN( 1 ).base_value
+                    Player.getBuff( "thunderfist", state ).increment( tf_stacks )
+                end
+                
+                if Player.set_pieces[ 33 ] >= 4 then
+                    Player.getBuff( "tigers_ferocity", state ).increment()
+                end
+                
+                if Player.getTalent( "last_emperors_capacitor" ).ok then
+                    Player.getBuff( "the_emperors_capacitor", state ).increment()
+                end
+                
+                if Player.getTalent( "darting_hurricane" ).ok then
+                    local dh_stacks =  Player.getTalent( "darting_hurricane" ).effectN( 2 ).base_value
+                    Player.getBuff( "darting_hurricane", state ).increment( dh_stacks )
+                end
+                
+                if Player.getBuff( "heart_of_the_jade_serpent", state ).up() then
+                    Player.getBuff( "hotjs_cdr", state ).increment()
+                end
+            end,          
+            
+            trigger = {
+                ["strike_of_the_windlord_mh"] = true,
+                ["rushing_jade_wind"] = function( self, state )
+                    return Player.getTalent( "rushing_jade_wind" ).ok
+                end,
+            },
     } ),
-
+    
+    ["rushing_jade_wind"] = Player.createAction( 116847, {
+            
+            background = true,
+            
+            triggerSpell = 148187,
+            base_tick_rate = 0.75, -- TODO: Better buff handling
+            
+            ww_mastery = true,
+            trigger_etl = true,
+            
+            sqrt_after = spell.rushing_jade_wind.effectN( 1 ).base_value,
+    } ),
+    
+    ["jadefire_stomp_ww"] = Player.createAction( 388201, {
+            
+            background = true,
+            
+            trigger_etl = true,
+            ignore_armor = true,
+            ww_mastery = true,
+            
+            aoe = 5, -- Missing from spell data
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.getTalent( "path_of_jade" ).ok then 
+                    local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.getTalent( "path_of_jade" ).effectN( 2 ).base_value )
+                    am = am * ( 1 + Player.getTalent( "path_of_jade" ).effectN( 1 ).pct * poj_targets )
+                end
+                
+                return am
+            end,
+    } ),    
+    
+    ["jadefire_fists"] = Player.createAction( 457974, {
+            background = true,
+            
+            triggerSpell = 388207,
+            trigger_etl = true,
+            ww_mastery = true,
+            
+            aoe = 5, -- Missing from spell data
+            
+            ready = function( self, state )
+                return Player.getTalent( "jadefire_fists" ).ok
+            end,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.getTalent( "path_of_jade" ).ok then 
+                    local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.getTalent( "path_of_jade" ).effectN( 2 ).base_value )
+                    am = am * ( 1 + Player.getTalent( "path_of_jade" ).effectN( 1 ).pct * poj_targets )
+                end
+                
+                am = am * Player.getTalent( "singularly_focused_jade" ).effectN( 2 ).mod
+                
+                return am
+            end,
+            
+            composite_target_count = function( self, state, count )
+                return count + Player.getTalent( "singularly_focused_jade" ).effectN( 1 ).base_value
+            end,
+            
+            onExecute = function( self, state )
+                if Player.getTalent( "august_dynasty" ).ok then
+                    -- todo: cooldown
+                    Player.Player.getBuff( "august_dynasty", state ).increment()
+                end
+            end,        
+            
+            trigger = {
+                ["jadefire_stomp_ww"] = true,
+            },
+    }),
+    
+    ["jadefire_stomp"] = Player.createAction( 388193, {
+            
+            triggerSpell = 388207, 
+            
+            trigger_etl = true,
+            ww_mastery = true,
+            
+            aoe = 5, -- Missing from spell data
+            
+            ready = function( self, state )
+                return Player.getTalent( "jadefire_stomp" ).ok and aura_env.fight_remains > 5 and Player.moving == false
+            end,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.getTalent( "path_of_jade" ).ok then 
+                    local poj_targets = min( aura_env.learnedFrontalTargets( 388201 ), Player.getTalent( "path_of_jade" ).effectN( 2 ).base_value )
+                    am = am * ( 1 + Player.getTalent( "path_of_jade" ).effectN( 1 ).pct * poj_targets )
+                end
+                
+                am = am * Player.getTalent( "singularly_focused_jade" ).effectN( 2 ).mod
+                
+                return am
+            end,
+            
+            composite_target_count = function( self, state, count )
+                return count + Player.getTalent( "singularly_focused_jade" ).effectN( 1 ).base_value
+            end,
+            
+            onExecute = function( self, state )
+                if Player.getTalent( "august_dynasty" ).ok then
+                    -- todo: cooldown
+                    Player.Player.getBuff( "august_dynasty", state ).increment()
+                end
+            end,
+            
+            trigger = {
+                ["jadefire_stomp_ww"] = true,
+            },
+    } ),
+    
+    ["tigers_ferocity"] = Player.createAction( 454508, { 
+            background = true,
+            
+            aoe = -1, -- Missing from data
+            sqrt_after = spell.t33_ww_4pc.effectN( 2 ).base_value,
+            
+            echo_callback = true,
+            echo_pct = spell.t33_ww_4pc.effectN( 1 ).pct,
+            
+            ready = function( self, state )
+                return Player.set_pieces[ 33 ] >= 4
+            end,        
+    } ),
+    
+    ["tiger_palm"] = Player.createAction( 100780, {
+            callbacks = {
+                -- T33 4PC Generators
+                "rising_sun_kick",
+                "blackout_kick",
+                "fists_of_fury",
+                "strike_of_the_windlord",
+                "whirling_dragon_punch",
+            },
+            
+            chi_gain = function() 
+                return 2
+            end,
+            
+            generate_marks = 1,
+            trigger_etl = true,
+            ww_mastery = true,
+            
+            allow_mastery_break = function( self, state )
+                return Player.primary_resource and Player.primary_resource.current < 3
+            end,
+            
+            modify_gcd = function( self, state, gcd )
+                local t = gcd
+                
+                if Player.getBuff( "darting_hurricane", state ).up() then
+                    t = t * Player.getBuff( "darting_hurricane", state ).effectN( 1 ).mod
+                end
+                
+                return t
+            end,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.getBuff( "combat_wisdom" ).up() then
+                    am = am * Player.getBuff( "combat_wisdom" ).effectN( 2 ).mod
+                end
+                
+                am = am * Player.getTalent( "touch_of_the_tiger" ).effectN( 1 ).mod
+                
+                am = am * Player.getTalent( "inner_peace" ).effectN( 2 ).mod
+                
+                am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
+                
+                am = am * Player.getTalent( "xuens_guidance" ).effectN( 1 ).mod
+                
+                am = am * ( 1 + Player.getBuff( "martial_mixture", state ).stacks() * Player.getBuff( "martial_mixture", state ).effectN( 1 ).pct )
+                
+                if Player.set_pieces[ 33 ] >= 4 then
+                    am = am * ( 1 + ( Player.getBuff( "tigers_ferocity", state ).stacks() * Player.getBuff( "tigers_ferocity", state ).effectN( 1 ).pct ) )
+                end
+                
+                return am
+            end,
+            
+            onExecute = function( self, state )
+                if Player.getTalent( "teachings_of_the_monastery" ).ok then
+                    Player.getBuff( "teachings_of_the_monastery", state ).increment()
+                end
+                
+                if Player.getTalent( "martial_mixture" ).ok then
+                    Player.getBuff( "martial_mixture", state ).expire()
+                end
+                
+                -- T33 Windwalker 2PC
+                if Player.set_pieces[ 33 ] >= 2 then
+                    Player.getBuff( "tiger_strikes", state ).increment()
+                end   
+                
+                Player.getBuff( "tigers_ferocity", state ).expire()
+                Player.getBuff( "darting_hurricane", state ).decrement()
+            end,
+            
+            trigger = {
+                ["expel_harm"] = true,
+                ["flurry_strikes"] = true,
+                ["tigers_ferocity"] = true,
+            },
+    } ),
+    
+    ["chi_burst"] = Player.createAction( 461404, {
+            triggerSpell = 148135,
+            
+            trigger_etl = true,
+            ww_mastery = true,
+            
+            ready = function( self, state )
+                return Player.getBuff( "chi_burst", state ).up()    
+            end,
+    } ),
+    
+    ["chi_wave"] = Player.createAction( 450391, {
+            background = true,
+            triggerSpell = 132467,
+            ticks = 4, -- 4 Damage Bounces
+            
+            ww_mastery = true,
+            trigger_etl = true,
+    } ),
+    
+    ["expel_harm"] = Player.createAction( 451968, {
+            background = true,
+            
+            action_multiplier = function( self, state )
+                local h = 1
+                
+                h = h * Player.getTalent( "vigorous_expulsion" ).effectN( 1 ).mod
+                
+                if Player.getTalent( "strength_of_spirit" ).ok then
+                    local health_deficit = UnitHealthMax( "player" ) - UnitHealth( "player" )
+                    local health_percent = health_deficit / UnitHealthMax( "player" )
+                    
+                    h = h * ( 1 + ( health_percent * Player.getTalent( "strength_of_spirit" ).effectN( 1 ).pct ) )
+                end
+                
+                if IsPlayerSpell( spell.reverse_harm.id ) then -- Reverse Harm
+                    h = h * spell.reverse_harm.effectN( 1 ).mod
+                end
+                
+                return h
+            end,
+            
+            critical_rate = function()
+                local cr = Player.crit_bonus
+                
+                cr = cr + Player.getTalent( "vigorous_expulsion" ).effectN( 2 ).mod
+                
+                return min( 1, cr )
+            end,
+            
+            critical_modifier = function()
+                local cm = 1
+                
+                cm = cm * Player.getTalent( "profound_rebuttal" ).effectN( 1 ).mod 
+                
+                return cm
+            end,        
+    } ),
+    
     -- TODO: Generic Actions
     ["arcane_torrent"] = Player.createAction( 28730, {
-        spellID = 28730,
-        chi_gain = function() return 1 end,
+            spellID = 28730,
+            chi_gain = function() return 1 end,
     } ),
-
+    
     ["chi_explosion"] = Player.createAction( 393056, {
-
-        background = true,
-
-        trigger_etl = true,
-        ww_mastery = false,
-        
-        sqrt_after = function()
-            return Player.getTalent( "jade_ignition" ).effectN( 3 ).base_value
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
             
-            am = am * ( 1 + Player.getBuff( "chi_energy", state ).stacks() * Player.getBuff( "chi_energy", state ).effectN( 1 ).pct )
+            background = true,
             
-            return am
-        end,
-        
-        ready = function( self, state )
-            return Player.getBuff( "chi_energy", state ).up()
-        end,
+            trigger_etl = true,
+            ww_mastery = false,
+            
+            sqrt_after = function()
+                return Player.getTalent( "jade_ignition" ).effectN( 3 ).base_value
+            end,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * ( 1 + Player.getBuff( "chi_energy", state ).stacks() * Player.getBuff( "chi_energy", state ).effectN( 1 ).pct )
+                
+                return am
+            end,
+            
+            ready = function( self, state )
+                return Player.getBuff( "chi_energy", state ).up()
+            end,
     } ),
-
+    
     ["thunderfist"] = Player.createAction( 393566, {
-        background = true,
-        
-        trigger_etl = true,
-        ww_mastery = false,
+            background = true,
+            
+            trigger_etl = true,
+            ww_mastery = false,
     } ),
-
+    
     ["crackling_jade_lightning"] = Player.createAction( 117952, {
-        callbacks = {
-            -- Last Emperor's Capacitor Generators
-            "strike_of_the_windlord",
-            "blackout_kick",
-            "spinning_crane_kick",
-            "rising_sun_kick",
-            "fists_of_fury",
-        },
-
-        ticks = 4,
-  
-        ww_mastery = true,
-        
-        action_multiplier = function( self, state )
-            local am = 1
+            callbacks = {
+                -- Last Emperor's Capacitor Generators
+                "strike_of_the_windlord",
+                "blackout_kick",
+                "spinning_crane_kick",
+                "rising_sun_kick",
+                "fists_of_fury",
+            },
             
-            am = am * ( 1 + Player.getBuff( "the_emperors_capacitor", state ).stacks() * Player.getBuff( "the_emperors_capacitor", state ).effectN( 1 ).pct )
+            ticks = 4,
             
-            am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
+            ww_mastery = true,
             
-            return am
-        end,
-        
-        duration_multiplier = function( self, state )
-            local dm = 1
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * ( 1 + Player.getBuff( "the_emperors_capacitor", state ).stacks() * Player.getBuff( "the_emperors_capacitor", state ).effectN( 1 ).pct )
+                
+                am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
+                
+                return am
+            end,
             
-            dm = dm + Player.getTalent( "power_of_the_thunder_king" ).effectN( 2 ).pct
+            duration_multiplier = function( self, state )
+                local dm = 1
+                
+                dm = dm + Player.getTalent( "power_of_the_thunder_king" ).effectN( 2 ).pct
+                
+                return dm
+            end,
             
-            return dm
-        end,
-        
-        composite_target_count = function( self, state, count )
-            return count + Player.getTalent( "power_of_the_thunder_king" ).effectN( 1 ).base_value
-        end,
-        
-        onExecute = function( self, state )
-            Player.getBuff( "the_emperors_capacitor", state ).expire()
-        end,
-        
-        trigger = {
-            ["flurry_strikes"] = true,
-        },
+            composite_target_count = function( self, state, count )
+                return count + Player.getTalent( "power_of_the_thunder_king" ).effectN( 1 ).base_value
+            end,
+            
+            onExecute = function( self, state )
+                Player.getBuff( "the_emperors_capacitor", state ).expire()
+            end,
+            
+            trigger = {
+                ["flurry_strikes"] = true,
+            },
     } ),
-
+    
     ["paralysis"] = Player.createAction( 115078, {
-        skip_calcs = true,     
-        
-        ready = function( self, state )
-            return Player.getTalent( "pressure_points" ).ok and Player.react.spellsteal
-        end,
+            skip_calcs = true,     
+            
+            ready = function( self, state )
+                return Player.getTalent( "pressure_points" ).ok and Player.react.spellsteal
+            end,
     } ),
-
+    
     -- TODO: Refactor this to debuff at some point?
     ["touch_of_karma"] = Player.createAction( 122470, {
-
-        triggerSpell = 124280,
-
-        trigger_etl = false,
-        
-        bonus_da = function()
-            local tick_time = min( aura_env.target_ttd, 10 )
-            local health_mod = Player.getTalent( "touch_of_karma" ).effectN( 3 ).pct
-            return min( UnitHealthMax( "player" ) * health_mod, Player.recent_dtps * tick_time ) * Player.getTalent( "touch_of_karma" ).effectN( 4 ).pct
-        end,
-        
-        ready = function( self, state )
-            local tick_time = min( aura_env.target_ttd, 10 )
-            local health_mod = Player.getTalent( "touch_of_karma" ).effectN( 3 ).pct
             
-            -- Hold for next tank buster if applicable
-            if aura_env.danger_next and ( aura_env.danger_next < 90 and aura_env.danger_next > 10 )
-            -- and we're not already taking enough damage to cap the shield
-            and ( UnitHealthMax( "player" ) * health_mod ) > ( Player.recent_dtps * tick_time ) then
-                return false
-            end
+            triggerSpell = 124280,
             
-            return InCombatLockdown() and aura_env.fight_remains >= 6 and aura_env.config.use_karma == 1
-        end,
+            trigger_etl = false,
+            
+            bonus_da = function()
+                local tick_time = min( aura_env.target_ttd, 10 )
+                local health_mod = Player.getTalent( "touch_of_karma" ).effectN( 3 ).pct
+                return min( UnitHealthMax( "player" ) * health_mod, Player.recent_dtps * tick_time ) * Player.getTalent( "touch_of_karma" ).effectN( 4 ).pct
+            end,
+            
+            ready = function( self, state )
+                local tick_time = min( aura_env.target_ttd, 10 )
+                local health_mod = Player.getTalent( "touch_of_karma" ).effectN( 3 ).pct
+                
+                -- Hold for next tank buster if applicable
+                if aura_env.danger_next and ( aura_env.danger_next < 90 and aura_env.danger_next > 10 )
+                -- and we're not already taking enough damage to cap the shield
+                and ( UnitHealthMax( "player" ) * health_mod ) > ( Player.recent_dtps * tick_time ) then
+                    return false
+                end
+                
+                return InCombatLockdown() and aura_env.fight_remains >= 6 and aura_env.config.use_karma == 1
+            end,
     } ),
-
+    
     ["diffuse_magic"] = Player.createAction( 122783, {
-        skip_calcs = true,     
-        
-        ready = function( self, state )
+            skip_calcs = true,     
             
-            local option = aura_env.config.diffuse_option
-            
-            if not InCombatLockdown() or option < 2 then
+            ready = function( self, state )
+                
+                local option = aura_env.config.diffuse_option
+                
+                if not InCombatLockdown() or option < 2 then
+                    return false
+                end
+                
+                if next( Player.diffuse_auras ) and ( option < 3 or next( Player.diffuse_reflects ) ) then
+                    return true
+                end
+                
                 return false
-            end
-            
-            if next( Player.diffuse_auras ) and ( option < 3 or next( Player.diffuse_reflects ) ) then
-                return true
-            end
-            
-            return false
-        end,
+            end,
     } ),
-
+    
     ["touch_of_death"] = Player.createAction( 322109, {
-
-        may_miss = false, -- Datamine parses this as physical effect that can miss but cannot miss in game
-        
-        trigger_etl = true,
-        ww_mastery = true,
-        
-        bonus_da = function()
-            local da_mod = 1
-
-            local damage_pct = spell.touch_of_death.effectN( 3 ).pct
             
-            da_mod = da_mod * Player.getTalent( "meridian_strikes" ).effectN( 1 ).mod
+            may_miss = false, -- Datamine parses this as physical effect that can miss but cannot miss in game
             
-            local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" ) 
+            trigger_etl = true,
+            ww_mastery = true,
             
-            if is_execute then
-                return UnitHealth("player") 
-            else
-                return da_mod * UnitHealthMax("player") * damage_pct
-            end
+            bonus_da = function()
+                local da_mod = 1
+                
+                local damage_pct = spell.touch_of_death.effectN( 3 ).pct
+                
+                da_mod = da_mod * Player.getTalent( "meridian_strikes" ).effectN( 1 ).mod
+                
+                local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" ) 
+                
+                if is_execute then
+                    return UnitHealth("player") 
+                else
+                    return da_mod * UnitHealthMax("player") * damage_pct
+                end
+                
+            end,
             
-        end,
-        
-        ready = function( self, state )
-            return IsUsableSpell( 322109 )
-        end,
+            ready = function( self, state )
+                return IsUsableSpell( 322109 )
+            end,
     } ),
-
+    
     ["storm_earth_and_fire_fixate"] = Player.createAction( 221771, {
-        skip_calcs = true,
-        
-        ready = function( self, state )
-            return InCombatLockdown() and Player.buffs.storm_earth_and_fire.remains() >= 1
-            and 
-            (
-                (   -- We haven't fixated yet, we have full marks, and our target (tiger palm) is taking increased damage
-                    not aura_env.sef_fixate and aura_env.unmarked_targets() == 0 and aura_env.forwardModifier() < aura_env.forwardModifier( aura_env.spells["tiger_palm"], 1 ) 
-                ) 
-                or 
-                ( 
-                    -- We have already fixated and our current target is taking a larger damage increase than our previous
-                    aura_env.sef_fixate 
-                    and aura_env.sef_fixate ~= UnitGUID( "target" )
-                    and aura_env.last_fixate_bonus < aura_env.forwardModifier( aura_env.spells["tiger_palm"], 1 ) 
-                ) 
-            )
-        end,        
+            skip_calcs = true,
+            
+            ready = function( self, state )
+                return InCombatLockdown() and Player.buffs.storm_earth_and_fire.remains() >= 1
+                and 
+                (
+                    (   -- We haven't fixated yet, we have full marks, and our target (tiger palm) is taking increased damage
+                        not aura_env.sef_fixate and aura_env.unmarked_targets() == 0 and aura_env.forwardModifier() < aura_env.forwardModifier( aura_env.spells["tiger_palm"], 1 ) 
+                    ) 
+                    or 
+                    ( 
+                        -- We have already fixated and our current target is taking a larger damage increase than our previous
+                        aura_env.sef_fixate 
+                        and aura_env.sef_fixate ~= UnitGUID( "target" )
+                        and aura_env.last_fixate_bonus < aura_env.forwardModifier( aura_env.spells["tiger_palm"], 1 ) 
+                    ) 
+                )
+            end,        
     } ),
 }
 
@@ -4173,1066 +4178,1094 @@ local mw_spells = {
 -- ---------- --
 
 local brm_spells = {
-
-    ["mainhand_attack"] = Player.createAction( AUTO_ATTACK, {
-        background = true,
-        school = 0x1,
-        may_miss = true,
-        may_crit = true,
-        ap_type = "NONE",
-
-        trigger_rate = function( state )
-            local duration = 0
-            local swing_timer = select( 1, UnitAttackSpeed( "player" ) ) or 2.6 
-            local _, stack = ipairs( state.callback_stack )
-            for cb_idx = 1, #stack do
-                if cb_idx == #stack then
-                    break
-                end   
-                local callback = stack[ cb_idx ] 
-                if callback.result then
-                    if not callback.delay_aa and callback.result.execute_time then
-                        duration = duration + callback.result.execute_time + callback.result.delay
-                    end
-                end
-            end
-            
-            return duration / swing_timer
-        end,
-        
-        bonus_da = function()
-            return Player.main_hand.swing_damage
-        end,
-        
-        trigger = {
-            ["press_the_advantage"] = true,
-        },
-    } ),
-
-    ["offhand_attack"] = Player.createAction( AUTO_ATTACK, {
-        background = true,
-        school = 0x1,
-        may_miss = true,
-        may_crit = true,
-        ap_type = "NONE",
-        
-        trigger_rate = function( state )
-            local duration = 0
-            local swing_timer = select( 2, UnitAttackSpeed( "player" ) ) or 2.6 
-            local _, stack = ipairs( state.callback_stack )
-            for cb_idx = 1, #stack do
-                if cb_idx == #stack then
-                    break
-                end   
-                local callback = stack[ cb_idx ] 
-                if callback.result then
-                    if not callback.delay_aa and callback.result.execute_time then
-                        duration = duration + callback.result.execute_time + callback.result.delay
-                    end
-                end
-            end
-            
-            return duration / swing_timer
-        end,
-        
-        bonus_da = function()
-            return Player.off_hand.swing_damage
-        end,
-        
-        trigger = {
-            ["press_the_advantage"] = true,
-        },     
-    } ),
-
-    ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
-        skip_calcs = true, -- This is just the script that triggers the individual hits
-        
-        ready = function( self, state )
-            return aura_env.unitRange( "target" ) < 8 
-        end,
-        
-        trigger = {
-            ["mainhand_attack"] = function( self, state )
-                return Player.main_hand.equipped 
-            end,
-            ["offhand_attack"] = function( self, state )
-                return Player.off_hand.equipped
-            end,            
-        },
-    } ),
-
-    ["high_impact"] = Player.createAction( 451039 , {
-        background = true,
-
-        ready = function( self, state )
-            return Player.getTalent( "high_impact" ).ok 
-        end,        
-    } ),
-
-    ["flurry_strike_wisdom"] = Player.createAction( 451250, {
-        background = true,
-        
-        ready = function( self, state )
-            return Player.getTalent( "wisdom_of_the_wall" ).ok
-        end,
-    } ),
-
-    ["flurry_strike"] = Player.createAction( 450617, {
-        background = true,
-        
-        critical_rate = function()
-            local cr = Player.crit_bonus
-            
-            cr = cr + Player.getTalent( "pride_of_pandaria" ).effectN( 1 ).roll
-            
-            return min( 1, cr )
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            if Player.getBuff( "vigilant_watch", state ).up() then
-                am = am * Player.getBuff( "vigilant_watch", state ).effectN( 1 ).mod
-            end
-            
-            return am
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "flurry_strikes" ).ok
-        end,
-    } ),
-
-    ["flurry_strikes"] = Player.createAction( 450615, {
-        background = true,
-        skip_calcs = true,
-        
-        ticks = function()
-            return Player.getBuff( "flurry_charge" ).stacks()
-        end,
-        
-        trigger_rate = function( state )
-            local result = state.result
-            
-            if not result then
-                return 0
-            end
-            
-            local energy = ( Player.primary_resource.type == 3 and state.result.cost ) or state.result.secondary_cost
-            
-            if energy == 0 then
-                return 0
-            end
-            
-            local partial = energy / Player.getTalent( "flurry_strikes" ).effectN( 2 ).base_value
-            
-            return partial
-        end,
-
-        onExecute = function( self, state )
-            Player.getBuff( "vigilant_watch", state ).expire()        
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "flurry_strikes" ).ok
-        end,
-        
-        tick_trigger = {
-            ["flurry_strike"] = function( self, state )
-                return Player.getBuff( "flurry_charge", state ).up()
-            end,
-            ["flurry_strike_wisdom"] = function( self, state )
-                return Player.getBuff( "wisdom_of_the_wall_flurry", state ).up()
-            end,
-        },
     
-        trigger = {
-            ["high_impact"] = function()
-                return aura_env.target_ttd < 10    
-            end,
-        },
-    } ),
-
-    ["healing_sphere"] = Player.createAction( 224863, {
-        background = true,
-        triggerSpell = 124507,
-        
-        action_multiplier = function( self, state )
-            local spheres = GetSpellCount( 322101 )
-            return spheres
-        end,
-        
-        reduce_stagger = function()
-            if Player.getTalent( "tranquil_spirit" ).ok then
-                return Player.stagger * Player.getTalent( "tranquil_spirit" ).effectN( 1 ).pct
-            end
+    ["mainhand_attack"] = Player.createAction( AUTO_ATTACK, {
+            background = true,
+            school = 0x1,
+            may_miss = true,
+            may_crit = true,
+            ap_type = "NONE",
             
-            return 0
-        end,        
+            trigger_rate = function( state )
+                local duration = 0
+                local swing_timer = select( 1, UnitAttackSpeed( "player" ) ) or 2.6 
+                local _, stack = ipairs( state.callback_stack )
+                for cb_idx = 1, #stack do
+                    if cb_idx == #stack then
+                        break
+                    end   
+                    local callback = stack[ cb_idx ] 
+                    if callback.result then
+                        if not callback.delay_aa and callback.result.execute_time then
+                            duration = duration + callback.result.execute_time + callback.result.delay
+                        end
+                    end
+                end
+                
+                return duration / swing_timer
+            end,
+            
+            bonus_da = function()
+                return Player.main_hand.swing_damage
+            end,
+            
+            trigger = {
+                ["press_the_advantage"] = true,
+            },
     } ),
-
+    
+    ["offhand_attack"] = Player.createAction( AUTO_ATTACK, {
+            background = true,
+            school = 0x1,
+            may_miss = true,
+            may_crit = true,
+            ap_type = "NONE",
+            
+            trigger_rate = function( state )
+                local duration = 0
+                local swing_timer = select( 2, UnitAttackSpeed( "player" ) ) or 2.6 
+                local _, stack = ipairs( state.callback_stack )
+                for cb_idx = 1, #stack do
+                    if cb_idx == #stack then
+                        break
+                    end   
+                    local callback = stack[ cb_idx ] 
+                    if callback.result then
+                        if not callback.delay_aa and callback.result.execute_time then
+                            duration = duration + callback.result.execute_time + callback.result.delay
+                        end
+                    end
+                end
+                
+                return duration / swing_timer
+            end,
+            
+            bonus_da = function()
+                return Player.off_hand.swing_damage
+            end,
+            
+            trigger = {
+                ["press_the_advantage"] = true,
+            },     
+    } ),
+    
+    ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
+            skip_calcs = true, -- This is just the script that triggers the individual hits
+            
+            ready = function( self, state )
+                return aura_env.unitRange( "target" ) < 8 
+            end,
+            
+            trigger = {
+                ["mainhand_attack"] = function( self, state )
+                    return Player.main_hand.equipped 
+                end,
+                ["offhand_attack"] = function( self, state )
+                    return Player.off_hand.equipped
+                end,            
+            },
+    } ),
+    
+    ["high_impact"] = Player.createAction( 451039 , {
+            background = true,
+            
+            ready = function( self, state )
+                return Player.getTalent( "high_impact" ).ok 
+            end,        
+    } ),
+    
+    ["flurry_strike_wisdom"] = Player.createAction( 451250, {
+            background = true,
+            
+            ready = function( self, state )
+                return Player.getTalent( "wisdom_of_the_wall" ).ok
+            end,
+    } ),
+    
+    ["flurry_strike"] = Player.createAction( 450617, {
+            background = true,
+            
+            critical_rate = function()
+                local cr = Player.crit_bonus
+                
+                cr = cr + Player.getTalent( "pride_of_pandaria" ).effectN( 1 ).roll
+                
+                return min( 1, cr )
+            end,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.getBuff( "vigilant_watch", state ).up() then
+                    am = am * Player.getBuff( "vigilant_watch", state ).effectN( 1 ).mod
+                end
+                
+                return am
+            end,
+            
+            ready = function( self, state )
+                return Player.getTalent( "flurry_strikes" ).ok
+            end,
+    } ),
+    
+    ["flurry_strikes"] = Player.createAction( 450615, {
+            background = true,
+            skip_calcs = true,
+            
+            ticks = function()
+                return Player.getBuff( "flurry_charge" ).stacks()
+            end,
+            
+            trigger_rate = function( state )
+                local result = state.result
+                
+                if not result then
+                    return 0
+                end
+                
+                local energy = ( Player.primary_resource.type == 3 and state.result.cost ) or state.result.secondary_cost
+                
+                if energy == 0 then
+                    return 0
+                end
+                
+                local partial = energy / Player.getTalent( "flurry_strikes" ).effectN( 2 ).base_value
+                
+                return partial
+            end,
+            
+            onExecute = function( self, state )
+                Player.getBuff( "vigilant_watch", state ).expire()        
+            end,
+            
+            ready = function( self, state )
+                return Player.getTalent( "flurry_strikes" ).ok
+            end,
+            
+            tick_trigger = {
+                ["flurry_strike"] = function( self, state )
+                    return Player.getBuff( "flurry_charge", state ).up()
+                end,
+                ["flurry_strike_wisdom"] = function( self, state )
+                    return Player.getBuff( "wisdom_of_the_wall_flurry", state ).up()
+                end,
+            },
+            
+            trigger = {
+                ["high_impact"] = function()
+                    return aura_env.target_ttd < 10    
+                end,
+            },
+    } ),
+    
+    ["healing_sphere"] = Player.createAction( 224863, {
+            background = true,
+            triggerSpell = 124507,
+            
+            action_multiplier = function( self, state )
+                local spheres = GetSpellCount( 322101 )
+                return spheres
+            end,
+            
+            reduce_stagger = function()
+                if Player.getTalent( "tranquil_spirit" ).ok then
+                    return Player.stagger * Player.getTalent( "tranquil_spirit" ).effectN( 1 ).pct
+                end
+                
+                return 0
+            end,        
+    } ),
+    
     -- TODO: Maybe figure out a better solution for the healing sphere mess
     ["expel_harm"] = Player.createAction( 322101, {
-        
-        ap = 0, sp = 0, -- Because healing spheres are added before modifiers I'm overwriting these and using bonus_heal instead
-        type = "self_heal", -- because ap and sp are set to zero the heal effect isn't parsed
-        
-        usable_during_sck = true,
-        
-        -- Using bonus_heal() method here because of how spheres are added before modifiers
-        bonus_heal = function()
-            local h = spell.expel_harm.effectN( 1 ).sp_coefficient * aura_env.spell_power * Player.vers_bonus
             
-            -- Healing Spheres
-            -- These are pulled in and added to the base amount before modifiers
-            local spheres = GetSpellCount( 322101 )
-            h = h + ( 3 * Player.attack_power * spheres )
+            ap = 0, sp = 0, -- Because healing spheres are added before modifiers I'm overwriting these and using bonus_heal instead
+            type = "self_heal", -- because ap and sp are set to zero the heal effect isn't parsed
             
-            h = h * Player.getTalent( "vigorous_expulsion" ).effectN( 1 ).mod
+            usable_during_sck = true,
             
-            if Player.getTalent( "strength_of_spirit" ).ok then
-                local health_deficit = UnitHealthMax( "player" ) - UnitHealth( "player" )
-                local health_percent = health_deficit / UnitHealthMax( "player" )
+            -- Using bonus_heal() method here because of how spheres are added before modifiers
+            bonus_heal = function()
+                local h = spell.expel_harm.effectN( 1 ).sp_coefficient * aura_env.spell_power * Player.vers_bonus
                 
-                h = h * ( 1 + ( health_percent * Player.getTalent( "strength_of_spirit" ).effectN( 1 ).pct ) )
-            end
+                -- Healing Spheres
+                -- These are pulled in and added to the base amount before modifiers
+                local spheres = GetSpellCount( 322101 )
+                h = h + ( 3 * Player.attack_power * spheres )
+                
+                h = h * Player.getTalent( "vigorous_expulsion" ).effectN( 1 ).mod
+                
+                if Player.getTalent( "strength_of_spirit" ).ok then
+                    local health_deficit = UnitHealthMax( "player" ) - UnitHealth( "player" )
+                    local health_percent = health_deficit / UnitHealthMax( "player" )
+                    
+                    h = h * ( 1 + ( health_percent * Player.getTalent( "strength_of_spirit" ).effectN( 1 ).pct ) )
+                end
+                
+                return h
+            end,
             
-            return h
-        end,
-        
-        critical_rate = function()
-            local cr = Player.crit_bonus
+            critical_rate = function()
+                local cr = Player.crit_bonus
+                
+                cr = cr + Player.getTalent( "vigorous_expulsion" ).effectN( 2 ).mod
+                
+                return min( 1, cr )
+            end,
             
-            cr = cr + Player.getTalent( "vigorous_expulsion" ).effectN( 2 ).mod
+            critical_modifier = function()
+                local cm = 1
+                
+                cm = cm * Player.getTalent( "profound_rebuttal" ).effectN( 1 ).mod 
+                
+                return cm
+            end,
             
-            return min( 1, cr )
-        end,
-        
-        critical_modifier = function()
-            local cm = 1
+            trigger = {
+                ["healing_sphere"] = false, -- These are added to the base amount instead
+                ["flurry_strikes"] = true,
+            },
             
-            cm = cm * Player.getTalent( "profound_rebuttal" ).effectN( 1 ).mod 
-            
-            return cm
-        end,
-        
-        trigger = {
-            ["healing_sphere"] = false, -- These are added to the base amount instead
-            ["flurry_strikes"] = true,
-        },
-    
-        reduce_stagger = function()
-            if Player.getTalent( "tranquil_spirit" ).ok then
-                return Player.stagger * Player.getTalent( "tranquil_spirit" ).effectN( 1 ).pct
-            end
-            
-            return 0
-        end,            
+            reduce_stagger = function()
+                if Player.getTalent( "tranquil_spirit" ).ok then
+                    return Player.stagger * Player.getTalent( "tranquil_spirit" ).effectN( 1 ).pct
+                end
+                
+                return 0
+            end,            
     } ),
-
+    
     ["pta_rising_sun_kick"] = Player.createAction( 185099, {
-        
-        background = true,
-
-        action_multiplier = function( self, state )
-            local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
             
-            am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
+            background = true,
             
-            -- TP Modifiers
-            if Player.getBuff( "blackout_combo", state ).up() then
-                am = am * ( 1 + ( Player.getBuff( "blackout_combo", state ).effectN( 5 ).pct * press_the_advantage_boc_mod ) )
-            end           
+            action_multiplier = function( self, state )
+                local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
+                
+                am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
+                
+                -- TP Modifiers
+                if Player.getBuff( "blackout_combo", state ).up() then
+                    am = am * ( 1 + ( Player.getBuff( "blackout_combo", state ).effectN( 5 ).pct * press_the_advantage_boc_mod ) )
+                end           
+                
+                am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct * press_the_advantage_fp_mod ) )
+                
+                if Player.getBuff( "counterstrike", state ).up() then
+                    am = am * ( 1 + ( Player.getBuff( "counterstrike", state ).effectN( 1 ).pct * press_the_advantage_cs_mod ) )
+                end        
+                
+                return am
+            end,
             
-            am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct * press_the_advantage_fp_mod ) )
+            brew_cdr = function()
+                return Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds 
+            end,
             
-            if Player.getBuff( "counterstrike", state ).up() then
-                am = am * ( 1 + ( Player.getBuff( "counterstrike", state ).effectN( 1 ).pct * press_the_advantage_cs_mod ) )
-            end        
+            onExecute = function( self, state )
+                Player.getBuff( "blackout_combo", state ).expire()
+                Player.getBuff( "press_the_advantage", state ).expire()
+                Player.getBuff( "counterstrike", state ).expire()
+            end,           
             
-            return am
-        end,
-        
-        brew_cdr = function()
-            return Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds 
-        end,
-
-        onExecute = function( self, state )
-            Player.getBuff( "blackout_combo", state ).expire()
-            Player.getBuff( "press_the_advantage", state ).expire()
-            Player.getBuff( "counterstrike", state ).expire()
-        end,           
-        
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,
-        },
-    
-        trigger = {
-            ["chi_surge"] = true,
-        },
-    
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,
+            },
+            
+            trigger = {
+                ["chi_surge"] = true,
+            },
+            
     } ),
-
+    
     ["rising_sun_kick"] = Player.createAction( 107428, {
-
-        triggerSpell = 185099, -- This spell is weird and triggers a secondary damage event
-        hasted_cooldown = true,
-        
-        usable_during_sck = true,
-        
-        action_multiplier = function( self, state )
-            local am = 1
             
-            am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
+            triggerSpell = 185099, -- This spell is weird and triggers a secondary damage event
+            hasted_cooldown = true,
             
-            return am
-        end,
-        
-        mitigate = function()
-            local m = 0
+            usable_during_sck = true,
             
-            if Player.getTalent( "strike_at_dawn" ).ok then
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * Player.getTalent( "fast_feet" ).effectN( 1 ).mod
+                
+                return am
+            end,
+            
+            mitigate = function()
+                local m = 0
+                
+                if Player.getTalent( "strike_at_dawn" ).ok then
+                    local eb_stacks = 1
+                    
+                    -- physical damage mitigated from one second of Elusive Brawler
+                    m = dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
+                end
+                
+                return m
+            end,        
+            
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,
+            },
+            
+            trigger = {
+                ["pta_rising_sun_kick"] = function( self, state )
+                    if Player.getBuff( "press_the_advantage", state ).stacks() >= 10 then
+                        return true
+                    end
+                    
+                    return false
+                end,
+                ["chi_wave"] = function( self, state )
+                    return Player.getBuff( "chi_wave", state ).up()
+                end,
+            },
+            
+    } ),
+    
+    ["charred_passions"] = Player.createAction( 386959, {
+            background = true,
+            
+            echo_callback = true,
+            echo_pct = function()
+                return Player.getTalent( "charred_passions" ).effectN( 1 ).pct
+            end,
+            
+            ready = function( self, state )
+                return Player.getTalent( "charred_passions" ).ok
+            end,
+            
+            tick_trigger = {
+                ["charred_dreams_heal"] = true,        
+                ["breath_of_fire_periodic"] = function( self, state )
+                    return Player.bof_targets > 0
+                end,
+            },
+    } ),
+    
+    ["blackout_kick"] = Player.createAction( 205523, {
+            callbacks = {
+                "breath_of_fire", -- Charred Passions        
+            },
+            
+            replaces = 100784, -- Missing in Spell Data
+            
+            usable_during_sck = true, 
+            
+            critical_modifier = function()
+                local cm = 1
+                
+                cm = cm * Player.getTalent( "vigilant_watch" ).effectN( 1 ).mod
+                
+                return cm
+            end,  
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
+                
+                am = am * Player.getTalent( "fluidity_of_motion" ).effectN( 2 ).mod
+                
+                am = am * Player.getTalent( "elusive_footwork" ).effectN( 2 ).mod
+                
+                am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
+                
+                if Player.set_pieces[ 33 ] >= 2 then
+                    am = am * spell.t33_brm_2pc.effectN( 1 ).mod
+                end
+                
+                return am
+            end,
+            
+            composite_target_count = function( self, state, count )
+                return count + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value
+            end,
+            
+            reduce_stagger = function()
+                local amount = 0
+                
+                if Player.getTalent( "staggering_strikes" ).ok then
+                    amount = Player.attack_power or 0
+                    amount = amount * min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
+                    amount = amount * Player.getTalent( "staggering_strikes" ).effectN( 2 ).pct
+                end
+                
+                return amount
+            end,
+            
+            mitigate = function()
                 local eb_stacks = 1
                 
+                -- elusive footwork crit bonus
+                eb_stacks = eb_stacks + ( Player.getTalent( "elusive_footwork" ).effectN( 1 ).base_value * min( 1, Player.crit_bonus ) )
+                
                 -- physical damage mitigated from one second of Elusive Brawler
-                m = dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
-            end
+                return dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
+            end,
             
-            return m
-        end,        
-        
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,
-        },
+            onExecute = function( self, state )
+                if Player.getTalent( "blackout_combo" ).ok then
+                    Player.getBuff( "blackout_combo", state ).increment()
+                end
+                
+                if Player.getTalent( "hit_scheme" ).ok then
+                    Player.getBuff( "hit_scheme", state ).increment()
+                end
+                
+                if Player.getTalent( "vigilant_watch" ).ok then
+                    Player.getBuff( "vigilant_watch", state ).increment()
+                end            
+            end,
+            
+            trigger = {
+                ["shuffle"] = true,
+            },
+            
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,
+                ["charred_passions"] = function( self, state )
+                    return Player.getBuff( "charred_passions", state ).up() 
+                end,     
+            },
+    } ),
     
-        trigger = {
-            ["pta_rising_sun_kick"] = function( self, state )
-                if Player.getBuff( "press_the_advantage", state ).stacks() >= 10 then
+    ["spinning_crane_kick"] = Player.createAction( 322729, {
+            callbacks = {
+                "breath_of_fire", -- Charred Passions        
+            },
+            
+            triggerSpell = 107270,
+            ticks = 4,
+            delay_aa = true, -- Missing from spell data
+            
+            sqrt_after = spell.spinning_crane_kick.effectN( 1 ).base_value,
+            
+            critical_rate = function()
+                local cr = Player.crit_bonus
+                
+                return min( 1, cr )
+            end,    
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
+                
+                if Player.getBuff( "counterstrike", state ).up() then
+                    am = am * Player.getBuff( "counterstrike", state ).effectN( 1 ).mod
+                end
+                
+                am = am * Player.getTalent( "efficient_training" ).effectN( 5 ).mod
+                
+                return am
+            end,
+            
+            onExecute = function( self, state )
+                Player.getBuff( "counterstrike", state ).expire()    
+            end,
+            
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,
+                ["charred_passions"] = function( self, state )
+                    return Player.getBuff( "charred_passions", state ).up() 
+                end, 
+            },        
+            
+            trigger = {
+                ["healing_spheres"] = true,   
+                ["shuffle"] = true,
+                ["flurry_strikes"] = true,            
+            },
+    } ),
+    
+    ["rushing_jade_wind"] = Player.createAction( 116847, {
+            
+            triggerSpell = 148187,
+            base_tick_rate = 0.75, -- TODO: Better buff handling
+            hasted_cooldown = true,
+            
+            usable_during_sck = true,     
+            
+            sqrt_after = spell.rushing_jade_wind.effectN( 1 ).base_value,
+            
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,
+            },      
+    } ),
+    
+    ["tiger_palm"] = Player.createAction( 100780, {
+            callbacks = {
+                "blackout_kick", -- Blackout Combo
+            },    
+            
+            usable_during_sck = true,  
+            
+            ready = function( self, state )
+                return ( not Player.getTalent( "press_the_advantage" ).ok )
+            end,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.getBuff( "blackout_combo", state ).up() then
+                    am = am * Player.getTalent( "blackout_combo" ).effectN( 1 ).mod
+                end
+                
+                am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct  ) )
+                
+                if Player.getBuff( "counterstrike", state ).up() then
+                    am = am * Player.getBuff( "counterstrike", state ).effectN( 1 ).mod
+                end
+                
+                am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
+                
+                return am
+            end,
+            
+            brew_cdr = function()
+                return 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds ) 
+            end,
+            
+            onExecute = function( self, state )
+                Player.getBuff( "blackout_combo", state ).expire()
+                Player.getBuff( "counterstrike", state ).expire()
+            end,           
+            
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,
+            },
+            
+            trigger = {
+                ["flurry_strikes"] = true,            
+            },
+    } ),
+    
+    ["chi_burst"] = Player.createAction( 461404, {
+            
+            triggerSpell = 148135,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * Player.getTalent( "manifestation" ).effectN( 1 ).mod
+                
+                return am
+            end,
+            
+            ready = function( self, state )
+                return Player.getBuff( "chi_burst", state ).up()    
+            end,
+            
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,   
+            },
+    } ),
+    
+    ["chi_wave"] = Player.createAction( 450391, {
+            
+            background = true,
+            triggerSpell = 132467,
+            ticks = 4, -- 4 Damage Bounces
+            usable_during_sck = true,   
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * Player.getTalent( "manifestation" ).effectN( 1 ).mod
+                
+                return am
+            end,
+            
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,  
+            },
+    } ),
+    
+    ["touch_of_death"] = Player.createAction( 322109, {
+            
+            may_miss = false,
+            
+            usable_during_sck = true,
+            
+            bonus_da = function()
+                local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" )
+                local damage_pct = spell.touch_of_death.effectN( 3 ).pct
+                
+                if is_execute then
+                    return UnitHealth("player")
+                else
+                    return UnitHealthMax("player") * damage_pct
+                end
+            end,
+            
+            ready = function( self, state )
+                return IsUsableSpell( 322109 )
+            end,
+            
+            reduce_stagger = function()
+                local tod = aura_env.spells["touch_of_death"]
+                if tod then
+                    local damage = tod.bonus_da()
+                    return damage * 2
+                end
+                return 0
+            end,
+    } ),
+    
+    ["paralysis"] = Player.createAction( 115078, {
+            skip_calcs = true,     
+            
+            ready = function( self, state )
+                return Player.getTalent( "pressure_points" ).ok and Player.react.spellsteal
+            end,
+    } ),
+    
+    ["diffuse_magic"] = Player.createAction( 122783, {
+            skip_calcs = true,     
+            
+            ready = function( self, state )
+                
+                local option = aura_env.config.diffuse_option
+                
+                if not InCombatLockdown() or option < 2 then
+                    return false
+                end
+                
+                if next( Player.diffuse_auras ) and ( option < 3 or next( Player.diffuse_reflects ) ) then
                     return true
                 end
                 
                 return false
             end,
-            ["chi_wave"] = function( self, state )
-                return Player.getBuff( "chi_wave", state ).up()
-            end,
-        },
+    } ),
     
-    } ),
-
-    ["charred_passions"] = Player.createAction( 386959, {
-        background = true,
-        
-        echo_callback = true,
-        echo_pct = function()
-            return Player.getTalent( "charred_passions" ).effectN( 1 ).pct
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "charred_passions" ).ok
-        end,
-        
-        tick_trigger = {
-            ["charred_dreams_heal"] = true,        
-            ["breath_of_fire_periodic"] = function( self, state )
-                return Player.bof_targets > 0
-            end,
-        },
-    } ),
-
-    ["blackout_kick"] = Player.createAction( 205523, {
-        callbacks = {
-            "breath_of_fire", -- Charred Passions        
-        },
-        
-        replaces = 100784, -- Missing in Spell Data
-
-        usable_during_sck = true, 
-
-        critical_modifier = function()
-            local cm = 1
-            
-            cm = cm * Player.getTalent( "vigilant_watch" ).effectN( 1 ).mod
-            
-            return cm
-        end,  
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            am = am * Player.getTalent( "shadowboxing_treads" ).effectN( 2 ).mod
-            
-            am = am * Player.getTalent( "fluidity_of_motion" ).effectN( 2 ).mod
-            
-            am = am * Player.getTalent( "elusive_footwork" ).effectN( 2 ).mod
-            
-            am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
-            
-            if Player.set_pieces[ 33 ] >= 2 then
-                am = am * spell.t33_brm_2pc.effectN( 1 ).mod
-            end
-            
-            return am
-        end,
-        
-        composite_target_count = function( self, state, count )
-            return count + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value
-        end,
-    
-        reduce_stagger = function()
-            local amount = 0
-            
-            if Player.getTalent( "staggering_strikes" ).ok then
-                amount = Player.attack_power or 0
-                amount = amount * min( aura_env.target_count, 1 + Player.getTalent( "shadowboxing_treads" ).effectN( 1 ).base_value )
-                amount = amount * Player.getTalent( "staggering_strikes" ).effectN( 2 ).pct
-            end
-            
-            return amount
-        end,
-        
-        mitigate = function()
-            local eb_stacks = 1
-            
-            -- elusive footwork crit bonus
-            eb_stacks = eb_stacks + ( Player.getTalent( "elusive_footwork" ).effectN( 1 ).base_value * min( 1, Player.crit_bonus ) )
-            
-            -- physical damage mitigated from one second of Elusive Brawler
-            return dodgeMitigation( eb_stacks * ( GetMasteryEffect() / 100 ) )
-        end,
-        
-        onExecute = function( self, state )
-            if Player.getTalent( "blackout_combo" ).ok then
-                Player.getBuff( "blackout_combo", state ).increment()
-            end
-            
-            if Player.getTalent( "hit_scheme" ).ok then
-                Player.getBuff( "hit_scheme", state ).increment()
-            end
-
-            if Player.getTalent( "vigilant_watch" ).ok then
-                Player.getBuff( "vigilant_watch", state ).increment()
-            end            
-        end,
-        
-        trigger = {
-            ["shuffle"] = true,
-        },
-    
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,
-            ["charred_passions"] = function( self, state )
-                return Player.getBuff( "charred_passions", state ).up() 
-            end,     
-        },
-    } ),
-
-    ["spinning_crane_kick"] = Player.createAction( 322729, {
-        callbacks = {
-            "breath_of_fire", -- Charred Passions        
-        },
-        
-        triggerSpell = 107270,
-        ticks = 4,
-        delay_aa = true, -- Missing from spell data
-        
-        sqrt_after = spell.spinning_crane_kick.effectN( 1 ).base_value,
-        
-        critical_rate = function()
-            local cr = Player.crit_bonus
-            
-            return min( 1, cr )
-        end,    
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            am = am * Player.getTalent( "fast_feet" ).effectN( 2 ).mod
-            
-            if Player.getBuff( "counterstrike", state ).up() then
-                am = am * Player.getBuff( "counterstrike", state ).effectN( 1 ).mod
-            end
-            
-            am = am * Player.getTalent( "efficient_training" ).effectN( 5 ).mod
-            
-            return am
-        end,
-    
-        onExecute = function( self, state )
-            Player.getBuff( "counterstrike", state ).expire()    
-        end,
-        
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,
-            ["charred_passions"] = function( self, state )
-                return Player.getBuff( "charred_passions", state ).up() 
-            end, 
-        },        
-    
-        trigger = {
-            ["healing_spheres"] = true,   
-            ["shuffle"] = true,
-            ["flurry_strikes"] = true,            
-        },
-    } ),
-
-    ["rushing_jade_wind"] = Player.createAction( 116847, {
-
-        triggerSpell = 148187,
-        base_tick_rate = 0.75, -- TODO: Better buff handling
-        hasted_cooldown = true,
-        
-        usable_during_sck = true,     
-
-        sqrt_after = spell.rushing_jade_wind.effectN( 1 ).base_value,
-        
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,
-        },      
-    } ),
-
-    ["tiger_palm"] = Player.createAction( 100780, {
-        callbacks = {
-            "blackout_kick", -- Blackout Combo
-        },    
-        
-        usable_during_sck = true,  
-        
-        ready = function( self, state )
-            return ( not Player.getTalent( "press_the_advantage" ).ok )
-        end,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            if Player.getBuff( "blackout_combo", state ).up() then
-                am = am * Player.getTalent( "blackout_combo" ).effectN( 1 ).mod
-            end
-            
-            am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct  ) )
-            
-            if Player.getBuff( "counterstrike", state ).up() then
-                am = am * Player.getBuff( "counterstrike", state ).effectN( 1 ).mod
-            end
-            
-            am = am * Player.getTalent( "efficient_training" ).effectN( 1 ).mod
-            
-            return am
-        end,
-        
-        brew_cdr = function()
-            return 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds ) 
-        end,
-        
-        onExecute = function( self, state )
-            Player.getBuff( "blackout_combo", state ).expire()
-            Player.getBuff( "counterstrike", state ).expire()
-        end,           
-        
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,
-        },
-    
-        trigger = {
-            ["flurry_strikes"] = true,            
-        },
-    } ),
-
-    ["chi_burst"] = Player.createAction( 461404, {
-
-        triggerSpell = 148135,
-
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            am = am * Player.getTalent( "manifestation" ).effectN( 1 ).mod
-        
-            return am
-        end,
-
-        ready = function( self, state )
-            return Player.getBuff( "chi_burst", state ).up()    
-        end,
-        
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,   
-        },
-    } ),
-
-    ["chi_wave"] = Player.createAction( 450391, {
-        
-        background = true,
-        triggerSpell = 132467,
-        ticks = 4, -- 4 Damage Bounces
-        usable_during_sck = true,   
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            am = am * Player.getTalent( "manifestation" ).effectN( 1 ).mod
-        
-            return am
-        end,
-        
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,  
-        },
-    } ),
-
-    ["touch_of_death"] = Player.createAction( 322109, {
-        
-        may_miss = false,
-        
-        usable_during_sck = true,
-        
-        bonus_da = function()
-            local is_execute =  UnitHealth( "target" ) < UnitHealthMax( "player" )
-            local damage_pct = spell.touch_of_death.effectN( 3 ).pct
-            
-            if is_execute then
-                return UnitHealth("player")
-            else
-                return UnitHealthMax("player") * damage_pct
-            end
-        end,
-        
-        ready = function( self, state )
-             return IsUsableSpell( 322109 )
-        end,
-        
-        reduce_stagger = function()
-            local tod = aura_env.spells["touch_of_death"]
-            if tod then
-                local damage = tod.bonus_da()
-                return damage * 2
-            end
-            return 0
-        end,
-    } ),
-
-    ["paralysis"] = Player.createAction( 115078, {
-        skip_calcs = true,     
-        
-        ready = function( self, state )
-            return Player.getTalent( "pressure_points" ).ok and Player.react.spellsteal
-        end,
-    } ),
-
-    ["diffuse_magic"] = Player.createAction( 122783, {
-        skip_calcs = true,     
-        
-        ready = function( self, state )
-            
-            local option = aura_env.config.diffuse_option
-            
-            if not InCombatLockdown() or option < 2 then
-                return false
-            end
-            
-            if next( Player.diffuse_auras ) and ( option < 3 or next( Player.diffuse_reflects ) ) then
-                return true
-            end
-            
-            return false
-        end,
-    } ),
-
     ["chi_surge"] = Player.createAction( 393786, {
-        background = true,
-        base_tick_rate = 2,
-        
-        action_multiplier = function( self, state )
-            return Player.getTalent( "press_the_advantage" ).effectN( 4 ).mod
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "chi_surge" ).ok
-        end,
-        
-        tick_trigger = {
-        },
+            background = true,
+            base_tick_rate = 2,
+            
+            action_multiplier = function( self, state )
+                return Player.getTalent( "press_the_advantage" ).effectN( 4 ).mod
+            end,
+            
+            ready = function( self, state )
+                return Player.getTalent( "chi_surge" ).ok
+            end,
+            
+            tick_trigger = {
+            },
     } ),
-
+    
     ["pta_keg_smash"] = Player.createAction( 121253, {
-        background = true,
-        
-        sqrt_after = spell.keg_smash.effectN( 7 ).base_value,
-        
-        action_multiplier = function( self, state )
-            local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
+            background = true,
             
-            am = am * Player.getTalent( "stormstouts_last_keg" ).effectN( 1 ).mod
+            sqrt_after = spell.keg_smash.effectN( 7 ).base_value,
             
-            if Player.bof_targets > 0 and Player.getTalent( "scalding_brew" ).ok then
-                local ratio = Player.bof_targets / min( 20, aura_env.target_count ) 
-                am = am * ( 1 + ( ratio * Player.getTalent( "scalding_brew" ).effectN( 1 ).pct ) )
-            end
-            
-            --[[
+            action_multiplier = function( self, state )
+                local am = Player.buffs.press_the_advantage.effectN( 2 ).mod
+                
+                am = am * Player.getTalent( "stormstouts_last_keg" ).effectN( 1 ).mod
+                
+                if Player.bof_targets > 0 and Player.getTalent( "scalding_brew" ).ok then
+                    local ratio = Player.bof_targets / min( 20, aura_env.target_count ) 
+                    am = am * ( 1 + ( ratio * Player.getTalent( "scalding_brew" ).effectN( 1 ).pct ) )
+                end
+                
+                --[[
             
             This might work, but needs to be tested
             
             if Player.buffs.double_barrel.up() then
                 am = am * ( 1 + double_barrel_amp )
             end]]
-            
-            -- TP Modifiers
-            if Player.getBuff( "blackout_combo", state ).up() then
-                am = am * ( 1 + ( Player.getBuff( "blackout_combo", state ).effectN( 5 ).pct * press_the_advantage_boc_mod ) )
-            end     
-            
-            am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct * press_the_advantage_fp_mod ) )
-            
-            if Player.getBuff( "counterstrike", state ).up() then
-                am = am * ( 1 + ( Player.getBuff( "counterstrike", state ).effectN( 1 ).pct * press_the_advantage_cs_mod ) )
-            end   
-            
-            am = am * Player.getTalent( "one_versus_many" ).effectN( 3 ).mod
-            
-            if Player.set_pieces[ 33 ] >= 2 then
-                am = am * spell.t33_brm_2pc.effectN( 1 ).mod
-            end
-            
-            return am
-        end,
-        
-        brew_cdr = function()
-            local cdr = 3
-            
-            cdr = cdr + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds )
-            
-            return cdr
-        end,
-        
-        onExecute = function( self, state )
-            Player.getBuff( "press_the_advantage", state ).expire()    
-            Player.getBuff( "counterstrike", state ).expire()
-        end,
-        
-        reduces_cd = {
-            ["breath_of_fire"] = function( self, state )
-                if Player.getTalent( "salsalabims_strength" ).ok then
-                    return Player.getCooldown( "breath_of_fire", state )
-                end
-                return 0 
-            end,
-        },
-    
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,
-        },   
-    
-        trigger = {
-            ["chi_surge"] = true,
-            ["shuffle"] = true,
-        },
-    } ),
-
-    ["keg_smash"] = Player.createAction( 121253, {
-        callbacks = {
-            "breath_of_fire", -- Scalding Brew / Sal'Salabim's
-            "blackout_kick", -- Blackout Combo / Hit Scheme
-        },
-    
-        hasted_cooldown = true,
-        
-        usable_during_sck = true,
-
-        sqrt_after = spell.keg_smash.effectN( 7 ).base_value,
-
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            am = am * Player.getTalent( "stormstouts_last_keg" ).effectN( 1 ).mod
-            
-            am = am * ( 1 + Player.getBuff( "hit_scheme", state ).stacks() * Player.buffs.hit_scheme.effectN( 1 ).pct )
-
-            if Player.bof_targets > 0 and Player.getTalent( "scalding_brew" ).ok then
-                local ratio = Player.bof_targets / min( 20, aura_env.target_count ) 
-                am = am * ( 1 + ( ratio * Player.getTalent( "scalding_brew" ).effectN( 1 ).pct ) )
-            end
-            
-            if Player.buffs.double_barrel.up() then
-                am = am * ( 1 + double_barrel_amp )
-            end
-            
-            am = am * Player.getTalent( "one_versus_many" ).effectN( 3 ).mod
-
-            if Player.set_pieces[ 33 ] >= 2 then
-                am = am * spell.t33_brm_2pc.effectN( 1 ).mod
-            end            
-            
-            return am
-        end,
-        
-        brew_cdr = function()
-            local cdr = 3
-            
-            if Player.getBuff( "blackout_combo", state ).up() then -- TODO: State passed to brew_cdr
-                cdr = cdr + Player.getTalent( "blackout_combo" ).effectN( 3 ).base_value
-            end
-            
-            return cdr
-        end,
-        
-        onExecute = function( self, state )
-            Player.getBuff( "blackout_combo", state ).expire()
-            Player.getBuff( "hit_scheme", state ).expire()
-        end,        
-        
-        reduces_cd = {
-            ["breath_of_fire"] = function ( self, state )
-                if Player.getTalent( "salsalabims_strength" ).ok then
-                    return Player.getCooldown( "breath_of_fire", state )
-                end
-                return 0 
-            end,
-        },
-    
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,
-        },    
-    
-        trigger = {
-            ["pta_keg_smash"] = function( self, state )
-                if Player.getBuff( "press_the_advantage", state ).stacks() >= 10 then
-                    return true
-                end
-                return false
-            end,
-            ["shuffle"] = true,
-            ["flurry_strikes"] = true,            
-        },
-    } ),
-
-    ["exploding_keg"] = Player.createAction( 325153, {
-        callbacks = {
-            "rushing_jade_wind", --  EK ticks from buff
-        },
-    
-        usable_during_sck = true,        
-
-        mitigate = function()
-            -- same as 100% dodge
-            return dodgeMitigation( 1.0, exploding_keg_duration )
-        end,   
-        
-        tick_trigger = {
-            ["charred_dreams_heal"] = true,   
-            ["exploding_keg_proc"] = true, -- to pass the buff to the state function
-        },
-    } ),
-
-    ["exploding_keg_proc"] = Player.createAction( 325153, {
-        
-        background = true,
-        
-        ap = function()
-            return Player.getTalent( "exploding_keg" ).effectN( 4 ).ap_coefficient
-        end,
-        
-        trigger_rate = function( state )
-            -- State function to determine the residual ticks from DoTs applied prior to Exploding Keg in the call stack
-            -- e.g, Rushing Jade Wind -> Exploding Keg -> Exploding Keg Proc
-            
-            if Player.buffs.exploding_keg.up() then
-                return 1
-            end
-            
-            if state then
-                local dot_time = 0
-                local dot_rate = 0
                 
-                for cb_idx, callback in ipairs( state.callback_stack ) do
-                    if cb_idx == #state.callback_stack then
-                        break
-                    end         
+                -- TP Modifiers
+                if Player.getBuff( "blackout_combo", state ).up() then
+                    am = am * ( 1 + ( Player.getBuff( "blackout_combo", state ).effectN( 5 ).pct * press_the_advantage_boc_mod ) )
+                end     
+                
+                am = am * ( 1 + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 2 ).pct * press_the_advantage_fp_mod ) )
+                
+                if Player.getBuff( "counterstrike", state ).up() then
+                    am = am * ( 1 + ( Player.getBuff( "counterstrike", state ).effectN( 1 ).pct * press_the_advantage_cs_mod ) )
+                end   
+                
+                am = am * Player.getTalent( "one_versus_many" ).effectN( 3 ).mod
+                
+                if Player.set_pieces[ 33 ] >= 2 then
+                    am = am * spell.t33_brm_2pc.effectN( 1 ).mod
+                end
+                
+                return am
+            end,
+            
+            brew_cdr = function()
+                local cdr = 3
+                
+                cdr = cdr + ( Player.getTalent( "face_palm" ).effectN( 1 ).roll * Player.getTalent( "face_palm" ).effectN( 3 ).seconds )
+                
+                return cdr
+            end,
+            
+            onExecute = function( self, state )
+                Player.getBuff( "press_the_advantage", state ).expire()    
+                Player.getBuff( "counterstrike", state ).expire()
+            end,
+            
+            reduces_cd = {
+                ["breath_of_fire"] = function( self, state )
+                    if Player.getTalent( "salsalabims_strength" ).ok then
+                        return Player.getCooldown( "breath_of_fire", state )
+                    end
+                    return 0 
+                end,
+            },
+            
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,
+            },   
+            
+            trigger = {
+                ["chi_surge"] = true,
+                ["shuffle"] = true,
+            },
+    } ),
+    
+    ["keg_smash"] = Player.createAction( 121253, {
+            callbacks = {
+                "breath_of_fire", -- Scalding Brew / Sal'Salabim's
+                "blackout_kick", -- Blackout Combo / Hit Scheme
+            },
+            
+            hasted_cooldown = true,
+            
+            usable_during_sck = true,
+            
+            sqrt_after = spell.keg_smash.effectN( 7 ).base_value,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                am = am * Player.getTalent( "stormstouts_last_keg" ).effectN( 1 ).mod
+                
+                am = am * ( 1 + Player.getBuff( "hit_scheme", state ).stacks() * Player.buffs.hit_scheme.effectN( 1 ).pct )
+                
+                if Player.bof_targets > 0 and Player.getTalent( "scalding_brew" ).ok then
+                    local ratio = Player.bof_targets / min( 20, aura_env.target_count ) 
+                    am = am * ( 1 + ( ratio * Player.getTalent( "scalding_brew" ).effectN( 1 ).pct ) )
+                end
+                
+                if Player.buffs.double_barrel.up() then
+                    am = am * ( 1 + double_barrel_amp )
+                end
+                
+                am = am * Player.getTalent( "one_versus_many" ).effectN( 3 ).mod
+                
+                if Player.set_pieces[ 33 ] >= 2 then
+                    am = am * spell.t33_brm_2pc.effectN( 1 ).mod
+                end            
+                
+                return am
+            end,
+            
+            brew_cdr = function()
+                local cdr = 3
+                
+                if Player.getBuff( "blackout_combo", state ).up() then -- TODO: State passed to brew_cdr
+                    cdr = cdr + Player.getTalent( "blackout_combo" ).effectN( 3 ).base_value
+                end
+                
+                return cdr
+            end,
+            
+            onExecute = function( self, state )
+                Player.getBuff( "blackout_combo", state ).expire()
+                Player.getBuff( "hit_scheme", state ).expire()
+            end,        
+            
+            reduces_cd = {
+                ["breath_of_fire"] = function ( self, state )
+                    if Player.getTalent( "salsalabims_strength" ).ok then
+                        return Player.getCooldown( "breath_of_fire", state )
+                    end
+                    return 0 
+                end,
+            },
+            
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,
+            },    
+            
+            trigger = {
+                ["pta_keg_smash"] = function( self, state )
+                    if Player.getBuff( "press_the_advantage", state ).stacks() >= 10 then
+                        return true
+                    end
+                    return false
+                end,
+                ["shuffle"] = true,
+                ["flurry_strikes"] = true,            
+            },
+    } ),
+    
+    ["exploding_keg"] = Player.createAction( 325153, {
+            callbacks = {
+                "rushing_jade_wind", --  EK ticks from buff
+            },
+            
+            usable_during_sck = true,        
+            
+            mitigate = function()
+                -- same as 100% dodge
+                return dodgeMitigation( 1.0, exploding_keg_duration )
+            end,   
+            
+            tick_trigger = {
+                ["charred_dreams_heal"] = true,   
+                ["exploding_keg_proc"] = true, -- to pass the buff to the state function
+            },
+    } ),
+    
+    ["exploding_keg_proc"] = Player.createAction( 325153, {
+            
+            background = true,
+            
+            ap = function()
+                return Player.getTalent( "exploding_keg" ).effectN( 4 ).ap_coefficient
+            end,
+            
+            trigger_rate = function( state )
+                -- State function to determine the residual ticks from DoTs applied prior to Exploding Keg in the call stack
+                -- e.g, Rushing Jade Wind -> Exploding Keg -> Exploding Keg Proc
+                
+                if Player.buffs.exploding_keg.up() then
+                    return 1
+                end
+                
+                if state then
+                    local dot_time = 0
+                    local dot_rate = 0
                     
-                    if callback.result then
-                        local execute_time = callback.result.execute_time
-                        local delay = callback.result.delay
+                    for cb_idx, callback in ipairs( state.callback_stack ) do
+                        if cb_idx == #state.callback_stack then
+                            break
+                        end         
                         
-                        dot_time = max( 0, dot_time - execute_time - delay )
-                    
-                        if callback.name == "exploding_keg" then
-                            if dot_time > 0 then
-                                local ek_ticks = min( Player.getTalent( "exploding_keg" ).duration, dot_time ) / dot_rate
-                                return ek_ticks
-                            end
-                            return 1
-                        else
-                            if callback.is_periodic and callback.duration then
-                                local ticks = callback.ticks
-                                local duration = callback.duration
-                                
-                                if callback.duration_hasted then
-                                    duration = duration / Player.haste
+                        if callback.result then
+                            local execute_time = callback.result.execute_time
+                            local delay = callback.result.delay
+                            
+                            dot_time = max( 0, dot_time - execute_time - delay )
+                            
+                            if callback.name == "exploding_keg" then
+                                if dot_time > 0 then
+                                    local ek_ticks = min( Player.getTalent( "exploding_keg" ).duration, dot_time ) / dot_rate
+                                    return ek_ticks
                                 end
-                                
-                                if duration > execute_time then
-                                    dot_time = duration - execute_time
-                                    dot_rate = duration / ticks
+                                return 1
+                            else
+                                if callback.is_periodic and callback.duration then
+                                    local ticks = callback.ticks
+                                    local duration = callback.duration
+                                    
+                                    if callback.duration_hasted then
+                                        duration = duration / Player.haste
+                                    end
+                                    
+                                    if duration > execute_time then
+                                        dot_time = duration - execute_time
+                                        dot_rate = duration / ticks
+                                    end
                                 end
                             end
                         end
                     end
                 end
-            end
-            
-            return 0
-        end,
-        
-        tick_trigger = {
-            ["charred_dreams_heal"] = true, 
-        },
-    } ),
-
-    ["breath_of_fire"] = Player.createAction( 115181, {
-        callbacks = {
-            "blackout_kick", -- Blackout Combo
-            "keg_smash", -- Periodic Fire
-        },
-        
-        usable_during_sck = true, 
-        
-        sqrt_after = 5,
-        primary_aoe_targets = 1,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            if Player.getBuff( "blackout_combo", state ).up() then
-                am = am * Player.getBuff( "blackout_combo", state ).effectN( 5 ).mod
-            end            
-            
-            if Player.stagger > 0 and Player.getTalent( "dragonfire_brew" ).ok then
-                local ratio = 1
                 
-                if Player.buffs.light_stagger.up() then
-                    ratio = 1 / 3
-                elseif Player.buffs.moderate_stagger.up() then
-                    ratio = 2 / 3
+                return 0
+            end,
+            
+            tick_trigger = {
+                ["charred_dreams_heal"] = true, 
+            },
+    } ),
+    
+    ["breath_of_fire"] = Player.createAction( 115181, {
+            callbacks = {
+                "blackout_kick", -- Blackout Combo
+                "keg_smash", -- Periodic Fire
+            },
+            
+            usable_during_sck = true, 
+            
+            sqrt_after = 5,
+            primary_aoe_targets = 1,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.getBuff( "blackout_combo", state ).up() then
+                    am = am * Player.getBuff( "blackout_combo", state ).effectN( 5 ).mod
+                end            
+                
+                if Player.stagger > 0 and Player.getTalent( "dragonfire_brew" ).ok then
+                    local ratio = 1
+                    
+                    if Player.buffs.light_stagger.up() then
+                        ratio = 1 / 3
+                    elseif Player.buffs.moderate_stagger.up() then
+                        ratio = 2 / 3
+                    end
+                    
+                    am = am * ( 1 + ( ratio * Player.getTalent( "dragonfire_brew" ).effectN( 2 ).pct ) )
                 end
                 
-                am = am * ( 1 + ( ratio * Player.getTalent( "dragonfire_brew" ).effectN( 2 ).pct ) )
-            end
+                -- Incendiary Breath
+                if IsPlayerSpell( 202272 ) then
+                    am = am * ( 1 + incendiary_breath_amp )
+                end
+                
+                return am
+            end,
             
-            -- Incendiary Breath
-            if IsPlayerSpell( 202272 ) then
-                am = am * ( 1 + incendiary_breath_amp )
-            end
+            onExecute = function( self, state )
+                Player.getBuff( "blackout_combo", state ).expire()
+            end,           
             
-            return am
-        end,
-        
-        onExecute = function( self, state )
-            Player.getBuff( "blackout_combo", state ).expire()
-        end,           
-        
-        tick_trigger = {
-            ["exploding_keg_proc"] = true,    
-            ["charred_dreams_heal"] = true,
-            ["charred_dreams_damage"] = true,       
-        }, 
-
-        trigger = {
-            ["breath_of_fire_periodic"] = function( self, state ) 
-                return state.callback_name == "keg_smash" or Player.ks_targets > 0 
-            end,  
-            ["dragonfire"] = true,  
-        },
+            tick_trigger = {
+                ["exploding_keg_proc"] = true,    
+                ["charred_dreams_heal"] = true,
+                ["charred_dreams_damage"] = true,       
+            }, 
+            
+            trigger = {
+                ["breath_of_fire_periodic"] = function( self, state ) 
+                    return state.callback_name == "keg_smash" or Player.ks_targets > 0 
+                end,  
+                ["dragonfire"] = true,  
+            },
     } ),
-
-    ["dragonfire"] = Player.createAction( 387621, {
-        
-        background = true,
-
-        sqrt_after = 5,
-        primary_aoe_targets = 1,
-        
-        ticks = function()
-            return Player.getTalent( "dragonfire_brew" ).effectN( 1 ).base_value
-        end,
-        
-        ready = function( self, state )
-            return Player.getTalent( "dragonfire_brew" ).ok
-        end,
-        
-        tick_trigger = {
-            ["charred_dreams_heal"] = true,  
-            ["charred_dreams_damage"] = true,      
-        },
-    } ),
-
-    ["breath_of_fire_periodic"] = Player.createAction( 123725, {
-        background = true,
-        base_tick_rate = 2,
-        
-        action_multiplier = function( self, state )
-            local am = 1
-            
-            if Player.getBuff( "blackout_combo", state ) then
-                am = am * Player.getBuff( "blackout_combo", state ).effectN( 5 ).mod
-            end         
-            
-            return am
-        end,
-        
-        composite_target_count = function( self, state, count )
-            if Player.bof_targets > 0 then
-                return Player.bof_targets
-            else
-                return min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets )
-            end
-        end,
     
-        mitigate = function( state )
-            local ratio = min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets ) / aura_env.target_count 
-            local dr = spell.breath_of_fire_dot.effectN( 2 ).pct
+    ["dragonfire"] = Player.createAction( 387621, {
             
-            if Player.buffs.celestial_flames.up() then
-                dr = dr + Player.getTalent( "celestial_flames" ).effectN( 2 ).pct
-            end
+            background = true,
             
-            if Player.getBuff( "blackout_combo", state ).up() then
-                dr = dr + Player.getBuff( "blackout_combo", state ).effectN( 2 ).pct
-            end
+            sqrt_after = 5,
+            primary_aoe_targets = 1,
             
-            return dr * bof_duration * ratio * Player.recent_dtps
-        end,
-        
-        tick_trigger = {
-            ["charred_dreams_heal"] = true,  
-            ["charred_dreams_damage"] = true,      
-        },        
+            ticks = function()
+                return Player.getTalent( "dragonfire_brew" ).effectN( 1 ).base_value
+            end,
+            
+            ready = function( self, state )
+                return Player.getTalent( "dragonfire_brew" ).ok
+            end,
+            
+            tick_trigger = {
+                ["charred_dreams_heal"] = true,  
+                ["charred_dreams_damage"] = true,      
+            },
     } ),
-
+    
+    ["breath_of_fire_periodic"] = Player.createAction( 123725, {
+            background = true,
+            base_tick_rate = 2,
+            
+            action_multiplier = function( self, state )
+                local am = 1
+                
+                if Player.getBuff( "blackout_combo", state ) then
+                    am = am * Player.getBuff( "blackout_combo", state ).effectN( 5 ).mod
+                end         
+                
+                return am
+            end,
+            
+            composite_target_count = function( self, state, count )
+                if Player.bof_targets > 0 then
+                    return Player.bof_targets
+                else
+                    return min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets )
+                end
+            end,
+            
+            mitigate = function( state )
+                local ratio = min( aura_env.learnedFrontalTargets( 115181 ), Player.ks_targets ) / aura_env.target_count 
+                local dr = spell.breath_of_fire_dot.effectN( 2 ).pct
+                
+                if Player.buffs.celestial_flames.up() then
+                    dr = dr + Player.getTalent( "celestial_flames" ).effectN( 2 ).pct
+                end
+                
+                if Player.getBuff( "blackout_combo", state ).up() then
+                    dr = dr + Player.getBuff( "blackout_combo", state ).effectN( 2 ).pct
+                end
+                
+                return dr * bof_duration * ratio * Player.recent_dtps
+            end,
+            
+            tick_trigger = {
+                ["charred_dreams_heal"] = true,  
+                ["charred_dreams_damage"] = true,      
+            },        
+    } ),
+    
     ["gai_plins_imperial_brew"] = Player.createAction( 383701, {
-        background = true,
-        
-        bonus_heal = function()
-            return Player.stagger * 0.5 * ( Player.getTalent( "gai_plins_imperial_brew" ).effectN( 1 ).pct )
-        end,        
+            background = true,
+            
+            bonus_heal = function()
+                return Player.stagger * 0.5 * ( Player.getTalent( "gai_plins_imperial_brew" ).effectN( 1 ).pct )
+            end,        
     } ),
-
+    
     ["shuffle"] = Player.createAction( 215479, {
-        background = true,
-        skip_calcs = true,
-        
-        ready = function( self, state )
-            return Player.getTalent( "shuffle" ).ok
-        end,
-        
-        reduce_stagger = function( state )
-            if not state then
-                return 0
-            end
+            background = true,
+            skip_calcs = true,
             
-            if Player.stagger == 0 then
-                return 0
-            end
+            ready = function( self, state )
+                return Player.getTalent( "shuffle" ).ok
+            end,
             
-            if Player.getTalent( "quick_sip" ).ok then
+            reduce_stagger = function( state )
+                if not state then
+                    return 0
+                end
+                
+                if Player.stagger == 0 then
+                    return 0
+                end
+                
+                if Player.getTalent( "quick_sip" ).ok then
+                    local driver = state.callback
+                    local shuffle_granted = 0
+                    
+                    -- TODO: Use DBC
+                    if driver.spellID == 205523 then
+                        shuffle_granted = 3 -- Blackout Kick
+                    elseif driver.spellID == 322729 then
+                        shuffle_granted = 1 -- Spinning Crane Kick
+                    elseif driver.spellID == 121253 then
+                        shuffle_granted = 5 -- Keg Smash
+                    end
+                    
+                    if shuffle_granted == 0 then
+                        return 0
+                    end            
+                    
+                    return ( Player.getTalent( "quick_sip" ).effectN( 1 ).pct / Player.getTalent( "quick_sip" ).effectN( 2 ).base_value ) * Player.stagger * shuffle_granted
+                end
+                
+                return 0
+            end,
+            
+            mitigate = function( state )
+                
+                if not state then
+                    return 0
+                end
+                
                 local driver = state.callback
                 local shuffle_granted = 0
                 
@@ -5247,263 +5280,235 @@ local brm_spells = {
                 
                 if shuffle_granted == 0 then
                     return 0
-                end            
-            
-                return ( Player.getTalent( "quick_sip" ).effectN( 1 ).pct / Player.getTalent( "quick_sip" ).effectN( 2 ).base_value ) * Player.stagger * shuffle_granted
-            end
-            
-            return 0
-        end,
-        
-        mitigate = function( state )
-
-            if not state then
-                return 0
-            end
-
-            local driver = state.callback
-            local shuffle_granted = 0
-            
-            -- TODO: Use DBC
-            if driver.spellID == 205523 then
-                shuffle_granted = 3 -- Blackout Kick
-            elseif driver.spellID == 322729 then
-                shuffle_granted = 1 -- Spinning Crane Kick
-            elseif driver.spellID == 121253 then
-                shuffle_granted = 5 -- Keg Smash
-            end
-            
-            if shuffle_granted == 0 then
-                return 0
-            end
-            
-            local m = 0
-            
-            local shuffle = Player.findAura( 215479 )
-            local shuffle_remaining = shuffle and ( shuffle.remaining - Player.gcd_remains ) or 0
-            
-            if shuffle_remaining <= 1 then
-
-                local dtps = Player.recent_dtps
-                
-                -- Add fake damage out of combat so that Brewmasters start pulls correctly
-                if not InCombatLockdown() then
-                    dtps = UnitHealthMax( "player" ) * 0.1
                 end
                 
-                local stagger_pct, stagger_target_pct = GetStaggerPercentage( "player" )
-                local shuffle_pct = ( stagger_target_pct or stagger_pct ) / 100 
+                local m = 0
                 
-                m = dtps * shuffle_granted * shuffle_pct
+                local shuffle = Player.findAura( 215479 )
+                local shuffle_remaining = shuffle and ( shuffle.remaining - Player.gcd_remains ) or 0
                 
-                if Player.set_pieces[ 33 ] >= 2 then
-                    m = m + ( dtps * ( -1 * spell.t33_brm_2pc.effectN( 2 ).pct ) )
-                end
-            end
-            
-            return m
-        end,
-    } ),
-
-    ["purifying_brew"] = Player.createAction( 119582, {
-
-        hasted_cooldown = true,
-        
-        usable_during_sck = true,
-
-        trigger = {
-            ["special_delivery"] = true,
-            ["gai_plins_imperial_brew"] = function( self, state )
-                return Player.getTalent( "gai_plins_imperial_brew" ).ok
-            end,
-        },
-    
-        bonus_da = function()
-            local d = 0
-            
-            -- Hot Trub
-            if IsPlayerSpell( 202126 ) and aura_env.spells["purifying_brew"] then
-                
-                local stagger_amount = aura_env.spells["purifying_brew"].reduce_stagger()
-                
-                -- Currently not an issue
-                stagger_amount = min( stagger_amount, Player.stagger )
-                
-                d = stagger_amount * hot_trub_amount 
-            end
-            
-            return d
-        end,
-        
-        reduce_stagger = function()
-            return Player.stagger * 0.5
-        end,
-        
-        mitigate = function( state )
-            local m = 0
-            
-            if Player.getTalent( "pretense_of_instability" ).ok then
-                local pretenseGain = pretense_duration - Player.getBuff( "pretense_of_instability", state ).remains()
-                m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
-            end
-            
-            return m
-        end,
-        
-        ready = function( self, state )
-            local pb_cur, pb_max = GetSpellCharges( 119582 )
-            
-            if pb_cur < pb_max then
-                local charge_cd = Player.getCooldown( "purifying_brew", state )
-                if charge_cd > 6 then
-                    if not Player.buffs.heavy_stagger.up() then
-                        return false
+                if shuffle_remaining <= 1 then
+                    
+                    local dtps = Player.recent_dtps
+                    
+                    -- Add fake damage out of combat so that Brewmasters start pulls correctly
+                    if not InCombatLockdown() then
+                        dtps = UnitHealthMax( "player" ) * 0.1
+                    end
+                    
+                    local stagger_pct, stagger_target_pct = GetStaggerPercentage( "player" )
+                    local shuffle_pct = ( stagger_target_pct or stagger_pct ) / 100 
+                    
+                    m = dtps * shuffle_granted * shuffle_pct
+                    
+                    if Player.set_pieces[ 33 ] >= 2 then
+                        m = m + ( dtps * ( -1 * spell.t33_brm_2pc.effectN( 2 ).pct ) )
                     end
                 end
-            end
-            
-            return Player.stagger > 0 
-        end,
-        
-        onExecute = function( self, state )
-            
-            -- Purified Chi
-            local purified_chi_count = 1
-            if Player.buffs.moderate_stagger.up() then
-                purified_chi_count = 3
-            elseif Player.buffs.heavy_stagger.up() then
-                purified_chi_count = 5
-            end                
-            
-            Player.getBuff( "purified_chi", state ).increment( purified_chi_count )
-            
-            Player.getBuff( "blackout_combo", state ).expire()
-            
-        end,           
+                
+                return m
+            end,
     } ),
-
-    ["celestial_brew"] = Player.createAction( 322507, {
-        callbacks = {
-            "purifying_brew", -- Purified Chi
-            "blackout_kick", -- Blackout Combo
-        },
     
-        usable_during_sck = true,
-        
-        ready = function( self, state )
-            -- Hold for next tank buster if applicable
-            if aura_env.danger_next and ( aura_env.danger_next < 40 and aura_env.danger_next > 8 ) then
-                return false
-            end
+    ["purifying_brew"] = Player.createAction( 119582, {
             
-            return not Player.findAura( 322507 ) -- never overwrite current CB
-        end,
-        
-        mitigate = function( state )
+            hasted_cooldown = true,
             
-            -- We can use the tooltip to parse for healing reduction effects
-            -- since not all healing reduction auras apply to CB
-            local tooltip_array = aura_env.parseTooltip( 322507 )
+            usable_during_sck = true,
             
-            local m = tooltip_array[ 1 ] 
-                -- Fallback to AP formula if tooltip is unavailable
-                or ( Player.attack_power * cb_apmod * Player.vers_bonus )
+            trigger = {
+                ["special_delivery"] = true,
+                ["gai_plins_imperial_brew"] = function( self, state )
+                    return Player.getTalent( "gai_plins_imperial_brew" ).ok
+                end,
+            },
             
-            if m > 0 then
-            
-                m = m * ( 1 + Player.getBuff( "purified_chi", state ).stacks() * Player.buffs.purified_chi.effectN( 1 ).pct )
-
-                -- --------------------------
-            
-                -- Celestial Brew can benefit from Celestial Fortune
-                m = m * aura_env.celestialFortune()
+            bonus_da = function()
+                local d = 0
                 
-                -- Celestial Brew expires after 8 seconds
-                -- TODO: Duration from DBC
-                local dtps = Player.recent_dtps
-                local maximum = max( 0, ( dtps * 8 ) - UnitGetTotalAbsorbs( "player" ) )
-                
-                m = min( maximum, m )
-            end
-            
-            -- Pretense of Instability
-            if Player.getTalent( "pretense_of_instability" ).ok then
-                local pretenseGain = pretense_duration - Player.getBuff( "pretense_of_instability", state ).remains()
-                m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
-            end
-            
-            -- return
-            return m
-        end,
-        
-        onExecute = function( self, state )
-            Player.getBuff( "blackout_combo", state ).expire()
-            Player.getBuff( "purified_chi", state ).expire()
-        end,           
-        
-        trigger = {
-            ["special_delivery"] = true,
-        },        
-    } ),
-
-    ["black_ox_brew"] = Player.createAction( 115399, {
-        
-        usable_during_sck = true,
-        
-        ready = function( self, state )
-            -- Require Celestial Brew on CD
-            return Player.getCooldown( "celestial_brew", state ) > 0
-        end,
-        
-        reduces_cd = {
-            ["celestial_brew"] = function( self, state ) 
-                return Player.getCooldown( "celestial_brew", state )
-            end,          
-            ["purifying_brew"] = function( self, state ) 
-                local cdr = Player.getCooldown( "purifying_brew", state )
-                local currentCharges, maxCharges, _, cooldownDuration = GetSpellCharges( 119582 )
-                
-                local fullCharges = maxCharges - currentCharges - 1
-                if fullCharges > 0 then
-                    cdr = cdr + ( cooldownDuration * fullCharges )
+                -- Hot Trub
+                if IsPlayerSpell( 202126 ) and aura_env.spells["purifying_brew"] then
+                    
+                    local stagger_amount = aura_env.spells["purifying_brew"].reduce_stagger()
+                    
+                    -- Currently not an issue
+                    stagger_amount = min( stagger_amount, Player.stagger )
+                    
+                    d = stagger_amount * hot_trub_amount 
                 end
                 
-                return cdr
-            end,     
-        },
+                return d
+            end,
+            
+            reduce_stagger = function()
+                return Player.stagger * 0.5
+            end,
+            
+            mitigate = function( state )
+                local m = 0
+                
+                if Player.getTalent( "pretense_of_instability" ).ok then
+                    local pretenseGain = pretense_duration - Player.getBuff( "pretense_of_instability", state ).remains()
+                    m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
+                end
+                
+                return m
+            end,
+            
+            ready = function( self, state )
+                local pb_cur, pb_max = GetSpellCharges( 119582 )
+                
+                if pb_cur < pb_max then
+                    local charge_cd = Player.getCooldown( "purifying_brew", state )
+                    if charge_cd > 6 then
+                        if not Player.buffs.heavy_stagger.up() then
+                            return false
+                        end
+                    end
+                end
+                
+                return Player.stagger > 0 
+            end,
+            
+            onExecute = function( self, state )
+                
+                -- Purified Chi
+                local purified_chi_count = 1
+                if Player.buffs.moderate_stagger.up() then
+                    purified_chi_count = 3
+                elseif Player.buffs.heavy_stagger.up() then
+                    purified_chi_count = 5
+                end                
+                
+                Player.getBuff( "purified_chi", state ).increment( purified_chi_count )
+                
+                Player.getBuff( "blackout_combo", state ).expire()
+                
+            end,           
+    } ),
     
-        trigger = {
-            ["special_delivery"] = true,
-        },    
+    ["celestial_brew"] = Player.createAction( 322507, {
+            callbacks = {
+                "purifying_brew", -- Purified Chi
+                "blackout_kick", -- Blackout Combo
+            },
+            
+            usable_during_sck = true,
+            
+            ready = function( self, state )
+                -- Hold for next tank buster if applicable
+                if aura_env.danger_next and ( aura_env.danger_next < 40 and aura_env.danger_next > 8 ) then
+                    return false
+                end
+                
+                return not Player.findAura( 322507 ) -- never overwrite current CB
+            end,
+            
+            mitigate = function( state )
+                
+                -- We can use the tooltip to parse for healing reduction effects
+                -- since not all healing reduction auras apply to CB
+                local tooltip_array = aura_env.parseTooltip( 322507 )
+                
+                local m = tooltip_array[ 1 ] 
+                -- Fallback to AP formula if tooltip is unavailable
+                or ( Player.attack_power * cb_apmod * Player.vers_bonus )
+                
+                if m > 0 then
+                    
+                    m = m * ( 1 + Player.getBuff( "purified_chi", state ).stacks() * Player.buffs.purified_chi.effectN( 1 ).pct )
+                    
+                    -- --------------------------
+                    
+                    -- Celestial Brew can benefit from Celestial Fortune
+                    m = m * aura_env.celestialFortune()
+                    
+                    -- Celestial Brew expires after 8 seconds
+                    -- TODO: Duration from DBC
+                    local dtps = Player.recent_dtps
+                    local maximum = max( 0, ( dtps * 8 ) - UnitGetTotalAbsorbs( "player" ) )
+                    
+                    m = min( maximum, m )
+                end
+                
+                -- Pretense of Instability
+                if Player.getTalent( "pretense_of_instability" ).ok then
+                    local pretenseGain = pretense_duration - Player.getBuff( "pretense_of_instability", state ).remains()
+                    m = m + dodgeMitigation( spell.pretense.effectN( 1 ).pct, pretenseGain )
+                end
+                
+                -- return
+                return m
+            end,
+            
+            onExecute = function( self, state )
+                Player.getBuff( "blackout_combo", state ).expire()
+                Player.getBuff( "purified_chi", state ).expire()
+            end,           
+            
+            trigger = {
+                ["special_delivery"] = true,
+            },        
     } ),
-
+    
+    ["black_ox_brew"] = Player.createAction( 115399, {
+            
+            usable_during_sck = true,
+            
+            ready = function( self, state )
+                -- Require Celestial Brew on CD
+                return Player.getCooldown( "celestial_brew", state ) > 0
+            end,
+            
+            reduces_cd = {
+                ["celestial_brew"] = function( self, state ) 
+                    return Player.getCooldown( "celestial_brew", state )
+                end,          
+                ["purifying_brew"] = function( self, state ) 
+                    local cdr = Player.getCooldown( "purifying_brew", state )
+                    local currentCharges, maxCharges, _, cooldownDuration = GetSpellCharges( 119582 )
+                    
+                    local fullCharges = maxCharges - currentCharges - 1
+                    if fullCharges > 0 then
+                        cdr = cdr + ( cooldownDuration * fullCharges )
+                    end
+                    
+                    return cdr
+                end,     
+            },
+            
+            trigger = {
+                ["special_delivery"] = true,
+            },    
+    } ),
+    
     ["special_delivery"] = Player.createAction( 196733, {
-        background = true,
-        
-        ready = function( self, state )
-            return Player.getTalent( "special_delivery" ).ok
-        end,
+            background = true,
+            
+            ready = function( self, state )
+                return Player.getTalent( "special_delivery" ).ok
+            end,
     } ),
-
+    
     ["press_the_advantage"] = Player.createAction( 418360, {
-        -- Melee swing damage event that replaces TP
-        background = true,
-        
-        ready = function( self, state )
-            return Player.getTalent( "press_the_advantage" ).ok
-        end,
-        
-        brew_cdr = function()
-            return Player.getTalent( "press_the_advantage" ).effectN( 1 ).seconds
-        end,
-        
-        onExecute = function( self, state )
-            Player.getBuff( "press_the_advantage", state ).increment()    
-        end,
-        
-        tick_trigger = {
-
-        },
+            -- Melee swing damage event that replaces TP
+            background = true,
+            
+            ready = function( self, state )
+                return Player.getTalent( "press_the_advantage" ).ok
+            end,
+            
+            brew_cdr = function()
+                return Player.getTalent( "press_the_advantage" ).effectN( 1 ).seconds
+            end,
+            
+            onExecute = function( self, state )
+                Player.getBuff( "press_the_advantage", state ).increment()    
+            end,
+            
+            tick_trigger = {
+                
+            },
     } ),
 }
 
@@ -5562,7 +5567,7 @@ aura_env.initSpecialization = function()
 end
 
 aura_env.initGear = function()
-
+    
     -- ----------------------------
     -- Set Items
     -- ----------------------------
@@ -5626,11 +5631,11 @@ aura_env.initGear = function()
     -- ----------------------------
     -- Attack Power and Spell Power
     -- ----------------------------
- 
+    
     Player.attack_power = UnitAttackPower( "player" )
     
-     -- TODO:
-     -- Automate these auras
+    -- TODO:
+    -- Automate these auras
     if GetSpecialization() == 2 then  -- Mistweaver
         aura_env.spell_power = UnitStat( "player", 4 ) -- Equal to Intellect
     else   
@@ -5653,19 +5658,19 @@ aura_env.initGear = function()
     local offhand_stats = GetItemStats( GetInventoryItemLink( "player", 17 ) or "" )
     local mh_wdps = ( mainhand_stats and mainhand_stats[ "ITEM_MOD_DAMAGE_PER_SECOND_SHORT" ] ) or 0.5 -- From SimC: Unequipped counts as 0.5 WDPS
     local oh_wdps = ( offhand_stats and offhand_stats[ "ITEM_MOD_DAMAGE_PER_SECOND_SHORT" ]  ) or 0.5 -- From SimC: Unequipped counts as 0.5 WDPS
-
+    
     Player.main_hand = {
         wdps = mh_wdps,
         swing_damage = ( mh_wdps * normalized_speed ) + ( normalized_speed * weapon_power_mod * Player.attack_power ),
         equipped = mainhand_stats and true or false,
     }
-
+    
     Player.off_hand = {
         wdps = mh_wdps,
         swing_damage = ( oh_wdps * normalized_speed ) + ( normalized_speed * weapon_power_mod * Player.attack_power ),
         equipped = mainhand_stats and true or false,
     }    
-
+    
     Player.weapon_power = {
         main_hand   = mh_wdps * WEAPON_POWER_COEFFICIENT,
         off_hand    = oh_wdps * WEAPON_POWER_COEFFICIENT,
@@ -5694,17 +5699,33 @@ SetCVar( "showNPETutorials", 0 )
 SetCVar( "UberTooltips", 1 )
 SetCVar( "threatWarning", 3 )
 SetCVar( "ActionButtonUseKeyDown", 1 )
-SetCVar( "cameraDistanceMaxZoomFactor", 2.6 )
-SetCVar( "cameraIndirectVisibility", 1 ) 
-SetCVar( "cameraIndirectOffset", 10 ) 
-SetCVar( "occludedSilhouettePlayer", 1 )
-SetCVar( "floatingCombatTextCombatDamage", 1 )
-SetCVar( "floatingCombatTextCombatHealing", 1 )
-SetCVar( "WorldTextScale", 0.5 )
 SetCVar( "projectedTextures", 1 )
 SetCVar( "graphicsProjectedTextures", 1 )
 SetCVar( "RAIDprojectedTextures", 1 )
 SetCVar( "raidGraphicsProjectedTextures", 1 )
+
+-- aura_env.config.
+-- Camera
+if aura_env.config.hidden_camera > 0 then
+    SetCVar( "cameraDistanceMaxZoomFactor", 2.6 )
+    SetCVar( "cameraIndirectVisibility", 1 ) 
+    SetCVar( "cameraIndirectOffset", 10 ) 
+    SetCVar( "occludedSilhouettePlayer", 1 )
+else
+    SetCVar( "cameraDistanceMaxZoomFactor", 1.9 )
+    SetCVar( "cameraIndirectVisibility", 0 )
+end
+    
+-- Combat Text
+if aura_env.config.combat_text > 0 then
+    SetCVar( "floatingCombatTextCombatDamage", 1 )
+    SetCVar( "floatingCombatTextCombatHealing", 1 )
+    SetCVar( "WorldTextScale", 0.25 + ( 0.25 * aura_env.config.combat_text ) )
+else
+    SetCVar( "floatingCombatTextCombatDamage", 0 )
+    SetCVar( "floatingCombatTextCombatHealing", 0 )
+end
+
 
 BNToastFrame:SetPoint ( "Left", 0, 0 ) 
 
