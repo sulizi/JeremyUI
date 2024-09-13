@@ -403,6 +403,62 @@ if BigWigs then
                 ScanEvents( "JEREMY_STARTBAR", nameplate_settings, guid, key, length )
             end
     end )
+    
+    local nameplates = BigWigs:GetPlugin( "Nameplates", true )
+    if nameplates then
+        -- Set Jeremy Profile for Nameplate Icons
+        local profile = nameplates.db.profile
+        
+        profile.iconGrowDirectionStart = "LEFT"
+        profile.iconGrowDirection = "LEFT"
+        profile.iconAspectRatio = true
+        profile.nameplateIconZoom = 0.1
+        profile.nameplateIconOffsetX = 10
+        profile.nameplateIconOffsetY = 0
+        profile.iconWidth = 20
+        profile.iconHeight = 20
+        profile.iconSpacing = 1
+    	profile.iconAutoScale = true
+    	profile.iconCooldownNumbers = true
+    	profile.iconFontName = "Roboto Medium"
+    	profile.iconFontSize = 7
+    	profile.iconFontColor = { 1, 1, 1, 1 }
+    	profile.iconFontOutline = "OUTLINE"
+    	profile.iconFontMonochrome = false
+    	profile.iconCooldownEdge = true
+    	profile.iconCooldownSwipe = true
+    	profile.iconCooldownInverse = false
+    	profile.iconExpireGlow = true
+    	profile.iconExpireGlowType = "pixel"
+    	profile.iconZoom = 0
+    	profile.iconAspectRatio = true
+    	profile.iconDesaturate = false
+    	profile.iconColor = { 1, 1, 1, 1 }
+    	profile.iconGlowColor = { 0.95, 0.95, 0.32, 1 }
+    	profile.iconGlowFrequency = 0.25
+    	profile.iconGlowPixelLines = 8
+    	profile.iconGlowPixelLength = 4
+    	profile.iconGlowPixelThickness = 1
+    	profile.iconGlowAutoCastParticles = 8
+    	profile.iconGlowAutoCastScale = 1
+    	profile.iconGlowProcStartAnim = true
+    	profile.iconGlowProcAnimDuration = 1
+    	profile.iconBorder = true
+    	profile.iconBorderSize = 1
+    	profile.iconBorderColor = { 0, 0, 0, 1 }     
+    	
+    	profile.textGrowDirection = "UP"
+    	profile.textGrowDirectionStart = "TOP"
+    	profile.textSpacing = 0
+    	profile.textOffsetX = 0
+    	profile.textOffsetY = 0
+    	profile.textFontName = "Roboto Medium"
+    	profile.textFontSize = 18
+    	profile.textFontColor = { 1, 1, 1, 1 }
+    	profile.textOutline = "THICKOUTLINE"
+    	profile.textMonochrome = false
+    	profile.textUppercase = true 	
+    end
 end
 
 aura_env.earlyDeath = {}
@@ -5704,7 +5760,6 @@ SetCVar( "graphicsProjectedTextures", 1 )
 SetCVar( "RAIDprojectedTextures", 1 )
 SetCVar( "raidGraphicsProjectedTextures", 1 )
 
--- aura_env.config.
 -- Camera
 if aura_env.config.hidden_camera > 0 then
     SetCVar( "cameraDistanceMaxZoomFactor", 2.6 )
