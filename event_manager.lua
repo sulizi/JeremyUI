@@ -437,7 +437,7 @@ function(event, ...)
                             if copies > 0 then
                                 aura_env.targetAuras[ unitID ][ id ] = { 
                                     amp = aura_env.targetAuras[ unitID ][ id ].amp * aura_amp.modifier, 
-                                    expire = min( aura_env.targetAuras[ unitID ][ id ].expires, expires ) 
+                                    expire = min( aura_env.targetAuras[ unitID ][ id ].expire, expires ) 
                                 }
                             else
                                 aura_env.targetAuras[ unitID ][ id ] = { 
@@ -962,7 +962,7 @@ function(event, ...)
                             
                             -- Action Multiplier
                             tooltip = tooltip * Player.action_multiplier( action )
-
+                            
                             -- Cache spec auras
                             -- these sometimes change in PvP so we will cache both
                             if not action.aura_modifier_pve and not Player.is_pvp
@@ -977,7 +977,7 @@ function(event, ...)
                             end
                             
                             tooltip = tooltip * ( Player.is_pvp and action.aura_modifier_pvp or action.aura_modifier_pve )
-                        
+                            
                             -- Bonus damage and healing not related to ap or sp modifier
                             local bonus_damage = action.bonus_da and action.bonus_da() or 0
                             local bonus_healing = action.bonus_heal and action.bonus_heal() or 0
@@ -1399,7 +1399,7 @@ function(event, ...)
                                         mitigate_out   = mitigate_out + ( trigger_mitigate * tick_count * state.success_rate )
                                         
                                     end
-
+                                    
                                     -- Update cooldown information for chained abilities
                                     if action.combo and not spell.background then 
                                         action_cooldown   = max( action_cooldown, trigger_cd )
@@ -1416,7 +1416,7 @@ function(event, ...)
                                     state.secondary = state.secondary - ( spell.base_secondary_cost or 0 )
                                     --state.secondary = state.secondary + TODO Secondary Gain function
                                     state.secondary = min( state.secondary, Player.secondary_resource.max )                                    
-
+                                    
                                     -- Update Trigger results
                                     trigger_cost            = trigger_cost + ( basePrimary - state.primary )
                                     trigger_secondary_cost  = trigger_secondary_cost + ( baseSecondary - state.secondary )
@@ -1499,7 +1499,7 @@ function(event, ...)
                                     healing = base_healing * temporary_amplifiers
                                     group_healing = base_ghealing * target_multiplier * temporary_amplifiers
                                     
-                                  
+                                    
                                     -- Expel Harm
                                     -- TODO: Move to post processor
                                     if name == "expel_harm" then
@@ -1610,7 +1610,7 @@ function(event, ...)
                             execute_time            = result.execute_time
                             action_delay            = result.delay                           
                             temporary_amplifiers    = result.amplifier
-                    
+                            
                             action.result = result.result_base
                             
                             for s, v in pairs( result.reduce_cd ) do
@@ -1657,7 +1657,7 @@ function(event, ...)
                                 for spell, value in pairs( action.reduces_cd ) do
                                     
                                     local useResult = find( spell, "-010" )
-                                
+                                    
                                     spell = gsub( spell, "%-.*", "" )
                                     
                                     local cdr = value  
@@ -1678,7 +1678,7 @@ function(event, ...)
                                                 local timeLeft = Player.getCooldown( spell )
                                                 
                                                 if timeLeft > 0 then
-                                                
+                                                    
                                                     total_cdr = min( cdr, timeLeft - execute_time )
                                                     
                                                     local mod_rate = aura_env.actionModRate( spell_action )
@@ -1689,7 +1689,7 @@ function(event, ...)
                                                 end
                                             end
                                         end
-    
+                                        
                                         if total_cdr > 0 then
                                             local spell_raw = spellRaw( spell )
                                             local spell_time = spell_action.time_total or spell_action.execute_time()
@@ -2026,7 +2026,7 @@ function(event, ...)
         end
         
         key = tostring( key )
-
+        
         local config = aura_env.bw_config[ key ] 
         
         if config and config.enabled then
@@ -2471,7 +2471,8 @@ function(event, ...)
         
         return false
     end
-    
+   
+    --UNIT_DIED:UNIT_DESTROYED:UNIT_DISSIPATES:SPELL_DAMAGE:SPELL_PERIODIC_DAMAGE 
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
         
         local LogDamage = function (_, eventtype, _, srcGUID, srcName, srcFlags, _, dstGUID, ...)
@@ -2547,7 +2548,7 @@ function(event, ...)
                 end
             end
         end
-        
+
         local LogDeath = function (_, eventtype, _, srcGUID, _, _, _, dstGUID, ...)
             if eventtype == "UNIT_DIED" or eventtype == "UNIT_DESTROYED" or eventtype == "UNIT_DISSIPATES" then
                 aura_env.ResetEnemy( dstGUID, true )

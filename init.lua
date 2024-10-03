@@ -131,7 +131,7 @@ local ScanEvents = WeakAuras.ScanEvents
 -- Initialize DBC Spells
 -- ------------------------------------------------------------------------------
 
-local DBC_Version = 3.3
+local DBC_Version = 3.4
 local DBC_Critical = 3.2
 local LibDBCache = LibStub( "LibDBCache-1.0", true )
 
@@ -418,46 +418,46 @@ if BigWigs then
         profile.iconWidth = 20
         profile.iconHeight = 20
         profile.iconSpacing = 1
-    	profile.iconAutoScale = true
-    	profile.iconCooldownNumbers = true
-    	profile.iconFontName = "Roboto Medium"
-    	profile.iconFontSize = 7
-    	profile.iconFontColor = { 1, 1, 1, 1 }
-    	profile.iconFontOutline = "OUTLINE"
-    	profile.iconFontMonochrome = false
-    	profile.iconCooldownEdge = true
-    	profile.iconCooldownSwipe = true
-    	profile.iconCooldownInverse = false
-    	profile.iconExpireGlow = true
-    	profile.iconExpireGlowType = "pixel"
-    	profile.iconZoom = 0
-    	profile.iconAspectRatio = true
-    	profile.iconDesaturate = false
-    	profile.iconColor = { 1, 1, 1, 1 }
-    	profile.iconGlowColor = { 0.95, 0.95, 0.32, 1 }
-    	profile.iconGlowFrequency = 0.25
-    	profile.iconGlowPixelLines = 8
-    	profile.iconGlowPixelLength = 4
-    	profile.iconGlowPixelThickness = 1
-    	profile.iconGlowAutoCastParticles = 8
-    	profile.iconGlowAutoCastScale = 1
-    	profile.iconGlowProcStartAnim = true
-    	profile.iconGlowProcAnimDuration = 1
-    	profile.iconBorder = true
-    	profile.iconBorderSize = 1
-    	profile.iconBorderColor = { 0, 0, 0, 1 }     
-    	
-    	profile.textGrowDirection = "UP"
-    	profile.textGrowDirectionStart = "TOP"
-    	profile.textSpacing = 0
-    	profile.textOffsetX = 0
-    	profile.textOffsetY = 0
-    	profile.textFontName = "Roboto Medium"
-    	profile.textFontSize = 18
-    	profile.textFontColor = { 1, 1, 1, 1 }
-    	profile.textOutline = "THICKOUTLINE"
-    	profile.textMonochrome = false
-    	profile.textUppercase = true 	
+        profile.iconAutoScale = true
+        profile.iconCooldownNumbers = true
+        profile.iconFontName = "Roboto Medium"
+        profile.iconFontSize = 7
+        profile.iconFontColor = { 1, 1, 1, 1 }
+        profile.iconFontOutline = "OUTLINE"
+        profile.iconFontMonochrome = false
+        profile.iconCooldownEdge = true
+        profile.iconCooldownSwipe = true
+        profile.iconCooldownInverse = false
+        profile.iconExpireGlow = true
+        profile.iconExpireGlowType = "pixel"
+        profile.iconZoom = 0
+        profile.iconAspectRatio = true
+        profile.iconDesaturate = false
+        profile.iconColor = { 1, 1, 1, 1 }
+        profile.iconGlowColor = { 0.95, 0.95, 0.32, 1 }
+        profile.iconGlowFrequency = 0.25
+        profile.iconGlowPixelLines = 8
+        profile.iconGlowPixelLength = 4
+        profile.iconGlowPixelThickness = 1
+        profile.iconGlowAutoCastParticles = 8
+        profile.iconGlowAutoCastScale = 1
+        profile.iconGlowProcStartAnim = true
+        profile.iconGlowProcAnimDuration = 1
+        profile.iconBorder = true
+        profile.iconBorderSize = 1
+        profile.iconBorderColor = { 0, 0, 0, 1 }     
+        
+        profile.textGrowDirection = "UP"
+        profile.textGrowDirectionStart = "TOP"
+        profile.textSpacing = 0
+        profile.textOffsetX = 0
+        profile.textOffsetY = 0
+        profile.textFontName = "Roboto Medium"
+        profile.textFontSize = 18
+        profile.textFontColor = { 1, 1, 1, 1 }
+        profile.textOutline = "THICKOUTLINE"
+        profile.textMonochrome = false
+        profile.textUppercase = true     
     end
 end
 
@@ -765,19 +765,21 @@ aura_env.CPlayer = {
                     echo = echo()
                 end
                 
-                local result = state.result
-                if result then
-                    local tick_value = 0
-                    
-                    if self.type == "damage" then
-                        tick_value = result.damage / state.count
-                    elseif self.type == "self_heal" then
-                        tick_value = result.self_healing / state.count
-                    else
-                        tick_value = result.group_healing / state.count
+                if state then
+                    local result = state.result
+                    if result then
+                        local tick_value = 0
+                        
+                        if self.type == "damage" then
+                            tick_value = result.damage / state.count
+                        elseif self.type == "self_heal" then
+                            tick_value = result.self_healing / state.count
+                        else
+                            tick_value = result.group_healing / state.count
+                        end
+                        
+                        echo = echo * tick_value
                     end
-                    
-                    echo = echo * tick_value
                 end
                 
                 return echo
@@ -2989,27 +2991,29 @@ local ww_spells = {
                     am = am * ( 1 + ( Player.haste * Player.getTalent( "momentum_boost" ).effectN( 1 ).pct ) )
                     
                     -- Second effect, increase damage by n% per stack
-                    if state then
+                    --[[if state then
                         -- if state is available we can use the buff state
                         am = am * ( 1 + Player.getBuff( "momentum_boost", state ).stacks() * Player.getBuff( "momentum_boost", state ).effectN( 1 ).pct  )
-                    else
-                        -- otherwise this can be solved using an algebraic series formula
-                        local ticks = floor( self.ticks() )
+                    else]]
+                    -- otherwise this can be solved using an algebraic series formula
+                    
+                    -- let's just always do this for consistency 
+                    local ticks = floor( self.ticks() )
+                    
+                    if ticks > 1 then
+                        local targets = self.target_count( self )
+                        local max_stacks = Player.buffs.momentum_boost.max_stacks()
                         
-                        if ticks > 1 then
-                            local targets = self.target_count( self )
-                            local max_stacks = Player.buffs.momentum_boost.max_stacks()
-                            
-                            -- The first tick will be unbuffed 
-                            local uncapped = ( ticks - 1 ) * targets <= max_stacks and ( ticks - 1 ) or floor( max_stacks / targets )
-                            local capped = ticks - 1 - uncapped
-                            
-                            local m = Player.buffs.momentum_boost.effectN( 1 ).pct / ticks -- Effect value divided by *TOTAL* ticks for this action
-                            local momentum = ( uncapped / 2 ) * ( 2 * ( targets * m ) + ( uncapped - 1 ) * ( targets * m ) ) + ( max_stacks * m ) * capped
-                            
-                            am = am * ( 1 + momentum )
-                        end
+                        -- The first tick will be unbuffed 
+                        local uncapped = ( ticks - 1 ) * targets <= max_stacks and ( ticks - 1 ) or floor( max_stacks / targets )
+                        local capped = ticks - 1 - uncapped
+                        
+                        local m = Player.buffs.momentum_boost.effectN( 1 ).pct / ticks -- Effect value divided by *TOTAL* ticks for this action
+                        local momentum = ( uncapped / 2 ) * ( 2 * ( targets * m ) + ( uncapped - 1 ) * ( targets * m ) ) + ( max_stacks * m ) * capped
+                        
+                        am = am * ( 1 + momentum )
                     end
+                    --end
                 end
                 
                 -- T33 Windwalker 2PC
@@ -3348,6 +3352,11 @@ local ww_spells = {
                 
                 am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
                 
+                if Player.getBuff( "bok_proc", state ).stacks() > 1 then
+                    -- BUG: Courageous Impulse affects TotM only at 2 stacks
+                    am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
+                end
+                
                 return am
             end,
             
@@ -3355,7 +3364,15 @@ local ww_spells = {
                 if Player.getTalent( "martial_mixture" ).ok then
                     Player.getBuff( "martial_mixture", state ).increment()
                 end    
-            end,        
+                
+                if Player.getTalent( "transfer_the_power" ).ok then
+                    Player.getBuff( "transfer_the_power", state ).increment()
+                end                     
+            end,  
+            
+            onExecute = function( self, state )
+                
+            end,            
     } ),
     
     ["energy_burst"] = Player.createAction( 451498, {
@@ -3427,7 +3444,9 @@ local ww_spells = {
                 am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
                 
                 if Player.getBuff( "bok_proc", state ).up() then
-                    am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
+                    --am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
+                    -- BUG: Courageous Impulse stacks
+                    am = am * ( Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod * Player.getBuff( "bok_proc", state ).stacks() )
                 end
                 
                 -- T33 Windwalker 2PC
@@ -3446,6 +3465,7 @@ local ww_spells = {
                 if Player.getTalent( "martial_mixture" ).ok then
                     Player.getBuff( "martial_mixture", state ).increment()
                 end    
+                
             end,
             
             onExecute = function( self, state )
@@ -3453,21 +3473,21 @@ local ww_spells = {
                 Player.getBuff( "bok_proc", state ).decrement()
                 Player.getBuff( "teachings_of_the_monastery", state ).expire()
                 
+                if Player.getTalent( "last_emperors_capacitor" ).ok then
+                    Player.getBuff( "the_emperors_capacitor", state ).increment()
+                end     
+                
                 if Player.set_pieces[ 33 ] >= 4 then
                     Player.getBuff( "tigers_ferocity", state ).increment()
                 end
                 
                 if Player.getTalent( "transfer_the_power" ).ok then
                     Player.getBuff( "transfer_the_power", state ).increment()
-                end
-                
-                if Player.getTalent( "last_emperors_capacitor" ).ok then
-                    Player.getBuff( "the_emperors_capacitor", state ).increment()
-                end     
+                end        
                 
                 if Player.getTalent( "vigilant_watch" ).ok then
                     Player.getBuff( "vigilant_watch", state ).increment()
-                end
+                end                           
                 
                 if Player.getBuff( "strength_of_the_black_ox", state ).up() then
                     local sotbo_stacks = Player.getTalent( "strength_of_the_black_ox" ).effectN( 3 ).base_value
@@ -3526,6 +3546,17 @@ local ww_spells = {
                     return cdr
                 end,            
             },
+            
+            ready = function( self, state )
+                -- Force bug abuse
+                if Player.getTalent( "courageous_impulse" ).ok and Player.getBuff( "bok_proc", state ).remains() > 1 then
+                    if Player.getBuff( "bok_proc", state ).stacks() < 2 then
+                        return false
+                    end
+                end
+                
+                return true
+            end,
             
             trigger = {
                 ["energy_burst"] = true,
@@ -4673,7 +4704,7 @@ local brm_spells = {
                 
                 if Player.getTalent( "vigilant_watch" ).ok then
                     Player.getBuff( "vigilant_watch", state ).increment()
-                end            
+                end                     
             end,
             
             trigger = {
@@ -5761,7 +5792,7 @@ SetCVar( "RAIDprojectedTextures", 1 )
 SetCVar( "raidGraphicsProjectedTextures", 1 )
 
 -- Camera
-if aura_env.config.hidden_camera > 0 then
+if aura_env.config.hidden_camera > 1 then
     SetCVar( "cameraDistanceMaxZoomFactor", 2.6 )
     SetCVar( "cameraIndirectVisibility", 1 ) 
     SetCVar( "cameraIndirectOffset", 10 ) 
@@ -5770,12 +5801,12 @@ else
     SetCVar( "cameraDistanceMaxZoomFactor", 1.9 )
     SetCVar( "cameraIndirectVisibility", 0 )
 end
-    
+
 -- Combat Text
-if aura_env.config.combat_text > 0 then
+if aura_env.config.combat_text > 1 then
     SetCVar( "floatingCombatTextCombatDamage", 1 )
     SetCVar( "floatingCombatTextCombatHealing", 1 )
-    SetCVar( "WorldTextScale", 0.25 + ( 0.25 * aura_env.config.combat_text ) )
+    SetCVar( "WorldTextScale", 0.25 * aura_env.config.combat_text )
 else
     SetCVar( "floatingCombatTextCombatDamage", 0 )
     SetCVar( "floatingCombatTextCombatHealing", 0 )
