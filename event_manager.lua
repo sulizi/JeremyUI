@@ -68,7 +68,6 @@ function(event, ...)
         local info = C_Spell.GetSpellCooldown( spellID )
         return info.startTime, info.duration, info.isEnabled
     end
-    local GetSpellPowerCost = GetSpellPowerCost or C_Spell.GetSpellPowerCost
     local GetUnitSpeed = GetUnitSpeed
     local global_modifier = aura_env.global_modifier
     local InCombatLockdown = InCombatLockdown
@@ -140,7 +139,7 @@ function(event, ...)
         end
     end     
     
-    local profiler_enabled = false
+    local profiler_enabled = true
     aura_env.profiler_out = ( profiler_enabled and aura_env.profiler_out ) or {}
     local profilerStart = function() if profiler_enabled then debugprofilestart() end end
     local profilerEnd = function( desc )
@@ -239,9 +238,6 @@ function(event, ...)
         local actionlist = {}
         local actionhash = {}
         local default_action = aura_env.spells[ Player.default_action ]
-        local rate_time = function()
-            return ( aura_env.base_gm and Player.action_modifier / aura_env.base_gm ) or 1
-        end
         aura_env.action_cache = aura_env.action_cache or {}
         local action_set = function( tbl )
             if not tbl.name then return end
@@ -253,16 +249,14 @@ function(event, ...)
             tbl.healing        = tbl.healing or 0
             tbl.group_healing  = tbl.group_healing or 0 
             tbl.cooldown       = tbl.cooldown or 0
-            tbl.cd_remains     = tbl.cooldown_remains or 0
             tbl.start_cd       = tbl.starts_cooldown or {}
             tbl.execute_time   = max( 0, tbl.execute_time or 0 )
             tbl.cost           = tbl.cost or 0
             tbl.secondary_cost = tbl.secondary_cost or 0
-            tbl.t_amp          = tbl.t_amp or 1.0
             tbl.delay          = max( 0, tbl.delay or 0 )
             
             -- Snapshot Channel Information
-            if tbl.cb and tbl.raw > 0 and Player.channel.spellID and Player.channel.spellID == tbl.cb.spellID then
+            if tbl.cb and not tbl.cb.canceled and tbl.raw > 0 and Player.channel.spellID and Player.channel.spellID == tbl.cb.spellID then
                 Player.channel.action = tbl.cb
                 Player.channel.raw = tbl.raw
                 Player.channel.ticks = tbl.ticks
@@ -274,7 +268,7 @@ function(event, ...)
                 local deficit           = ( Player.primary_resource and Player.primary_resource.deficit ) or 0
                 local secondary_deficit = ( Player.secondary_resource and Player.secondary_resource.deficit ) or 0
                 
-                local dpet = tbl.raw / max( 1, 1 + ( tbl.execute_time + tbl.delay )  * rate_time() ) 
+                local dpet = tbl.raw / max( 1, 1 + ( tbl.execute_time ) ) 
                 
                 tbl.d_time = dpet - tbl.cost
                 tbl.d_cost = dpet / max( 1, 1 + deficit + tbl.cost ) / max( 1, 1 + secondary_deficit + tbl.secondary_cost )
@@ -614,7 +608,9 @@ function(event, ...)
                     return validTargets
                 end
                 
-                for _, enemy in pairs( TargetFilter() ) do
+                Player.targets = TargetFilter()
+                
+                for _, enemy in pairs( Player.targets ) do
                     
                     if not aura_env.boss_lockdown then 
                         
@@ -713,10 +709,12 @@ function(event, ...)
         
         local t_spells = {}
         for name, action in pairs( spells ) do
-            t_spells[ #t_spells + 1 ] = {
-                name = name,
-                action = action,
-            }
+            if not action.background then
+                t_spells[ #t_spells + 1 ] = {
+                    name = name,
+                    action = action,
+                }
+            end
         end      
         local n_spells = #t_spells
         
@@ -773,407 +771,151 @@ function(event, ...)
                     
                     if spellID ~= nil then
                         
-                        -- Cache AP/SP values
-                        -- these sometimes change in PvP combat so we'll cache that as well
-                        if not action.pve_ap_value and not Player.is_pvp then
-                            action.pve_ap_value = ( type( action.ap ) == "function" and action.ap() or action.ap ) or 0
-                        elseif not action.pvp_ap_value and Player.is_pvp then
-                            action.pvp_ap_value = ( type( action.ap ) == "function" and action.ap() or action.ap ) or 0
-                        end
-                        
-                        if not action.pve_sp_value and not Player.is_pvp then
-                            action.pve_sp_value = ( type( action.sp ) == "function" and action.sp() or action.sp ) or 0
-                        elseif not action.pvp_sp_value and Player.is_pvp then
-                            action.pvp_sp_value = ( type( action.sp ) == "function" and action.sp() or action.sp ) or 0
-                        end
-                        
-                        local tooltip = 0
-                        local ticks   = ( type( action.ticks ) == "function" and action.ticks() or action.ticks ) or 1
-                        
-                        local sp_mod  = Player.is_pvp and action.pvp_sp_value or action.pve_sp_value
-                        
-                        if sp_mod > 0 then
-                            tooltip = ticks * ( sp_mod * aura_env.spell_power )
+                        if action.skip_calcs then
+                            action_set( {
+                                    type = action_type,
+                                    name = name,
+                                    raw = Player.ready( action ) and 1 or 0,
+                                    cost = 0,
+                                    execute_time = 0,
+                            } )
                         else
-                            local composite_attack_power = function( ap_type )
-                                
-                                local base_power_mod = 1
-                                local weapon_power = Player.weapon_power.main_hand
-                                
-                                if IsEquippedItemType( "Two-Hand" ) then
-                                    if ap_type == "BOTH" then
-                                        base_power_mod = 0.98
-                                    end
-                                elseif ap_type == "BOTH" then
-                                    weapon_power = Player.weapon_power.both
-                                elseif ap_type == "OFFHAND" then
-                                    weapon_power = Player.weapon_power.off_hand
-                                elseif ap_type == "NONE" then
-                                    weapon_power = Player.weapon_power.none
-                                end
-                                
-                                return floor( Player.attack_power + weapon_power + 0.5 ) * base_power_mod
-                            end
-                            
-                            local ap_mod  = Player.is_pvp and action.pvp_ap_value or action.pve_ap_value
-                            local attack_power = composite_attack_power( action.ap_type )
-                            
-                            tooltip = ticks * ( attack_power * ap_mod )
-                        end
+                            local combo_base        = action.combo_base
+                            local start_cooldown    = action.start_cooldown or {}
                         
-                        local action_targets    = action.target_count( action )
-                        local action_delay      = 0
-                        local start_cooldown    = action.start_cooldown or {}
-                        local combo_base        = action.combo_base
-                        local true_name         = gsub( combo_base or name, "_cancel", "" )
-                        local action_cooldown   = Player.getBaseCooldown( true_name )
-                        local action_cd_remains = Player.getCooldown( true_name )
-                        
-                        if combo_base and not start_cooldown[ combo_base ] then
-                            start_cooldown[ #start_cooldown + 1 ] = combo_base
-                        end
-                        
-                        local ready = Player.ready( action )
-                        local execute_time = action.execute_time()
-                        
-                        local cost = nil
-                        local secondary_cost = nil
-                        
-                        if Player.primary_resource then
+                            -- ----------
+
+                            action.base_cost = action.cost( action )
                             
-                            if not Player.secondary_resource then
-                                secondary_cost = 0
-                            end
+                            -- ------------
                             
-                            local costTable = GetSpellPowerCost( action.replaces or spellID )
-                            if costTable then 
-                                for _, costInfo in pairs( costTable ) do
-                                    if cost and secondary_cost then
-                                        break
-                                    end
-                                    
-                                    if not cost and costInfo.type == Player.primary_resource.type then
-                                        cost = costInfo.cost
-                                    elseif not secondary_cost and costInfo.type == Player.secondary_resource.type then
-                                        secondary_cost = costInfo.cost
-                                    end
-                                end
-                            end
-                            cost = cost or 0
-                            secondary_cost = secondary_cost or 0
-                        end
-                        
-                        local gain = action.chi_gain and action.chi_gain() or 0 -- TODO: Need to rewrite this as generic resource gain somehow
-                        local secondary_gain = 0
-                        
-                        action.base_gain            = gain
-                        action.base_cost            = cost
-                        action.base_secondary_cost  = secondary_cost
-                        action.base_execute_time    = execute_time
-                        
-                        if not ready then
-                            action_set( {
-                                    type = action_type,
-                                    name = name,
-                                    raw = 0,
-                                    cost = cost,
-                                    execute_time = execute_time,
-                            } )
-                            action.result = nil
-                        end
-                        
-                        if ready and action.skip_calcs then
-                            action_set( {
-                                    type = action_type,
-                                    name = name,
-                                    raw = 1,
-                                    cost = cost,
-                                    execute_time = execute_time,
-                            } )
-                            
-                            action.result = {
-                                damage = 1,
-                                healing = 1,
-                            }
-                        elseif ready then 
-                            
-                            -- Action is not ready but is also not a background action
-                            if not action.background then --and not IsUsableSpell( spellID ) then
+                            local generateActionState = function( future )
                                 
-                                local usable_in = 0
+                                local future = future or 0
+                                local max_window = 5
                                 
-                                -- Add resource regeneration to action delay if low on resources
-                                if Player.primary_resource and Player.primary_resource.regen > 0 then
-                                    if action.base_cost > 0 and Player.primary_resource.current < action.base_cost then
-                                        local resource_delta = action.base_cost - Player.primary_resource.current
-                                        usable_in = ( resource_delta / Player.primary_resource.regen )
-                                    end
-                                elseif Player.secondary_resource and Player.secondary_resource.regen > 0 then
-                                    if secondary_cost > 0 and Player.secondary_resource.current < secondary_cost then
-                                        local resource_delta = secondary_cost - Player.secondary_resource.current
-                                        usable_in = ( resource_delta / Player.secondary_resource.regen )
-                                    end
-                                end
-                                
-                                -- Add cooldown time to action delay if cooldown is shorter than GCD
-                                local cd_after_gcd = action_cd_remains - Player.gcd_remains
-                                local charges = GetSpellCharges( spellID )
-                                if cd_after_gcd > 0 and ( not charges or charges == 0 ) then
-                                    usable_in = max( usable_in, cd_after_gcd )
-                                end
-                                
-                                action_delay = max( action_delay, usable_in )
-                                
-                                -- Check if we're channeling and add channel latency
-                                if Player.channel.remaining and action_delay > Player.channel.remaining then
-                                    local latency = Player.channel.latency or 0
-                                    -- TODO: Generic usable during channel? Is this achievable via the API or spell labels?
-                                    if Player.channel.spellID == 101546 and action.usable_during_sck then
-                                        latency = 0
-                                    end                            
-                                    action_delay = max( action_delay, latency )
-                                end
-                                
-                            end
-                            
-                            -- Calculate total mitigation from action
-                            local actionMitigation = function( action, state )
-                                
-                                local state = state or nil
-                                
-                                -- Stagger
-                                local stagger_reduction = 0
-                                if action.reduce_stagger and type( action.reduce_stagger ) == "function" then
-                                    stagger_reduction = action.reduce_stagger( state )
-                                    stagger_reduction = min( stagger_reduction, Player.stagger ) -- Limited to current stagger
-                                end
-                                
-                                -- Mitigation
-                                local mitigation = stagger_reduction
-                                if action.mitigate and type( action.mitigate ) == "function" then
-                                    mitigation = mitigation + ( action.mitigate( state ) or 0 )
-                                end
-                                
-                                return mitigation
-                            end
-                            -- --------------
-                            local mitigation = actionMitigation( action, nil )
-                            -- --------------
-                            
-                            -- Action Multiplier
-                            tooltip = tooltip * Player.action_multiplier( action )
-                            
-                            -- Cache spec auras
-                            -- these sometimes change in PvP so we will cache both
-                            if not action.aura_modifier_pve and not Player.is_pvp
-                            or not action.aura_modifier_pvp and Player.is_pvp then
-                                local total_aura_effect = aura_env.auraEffectForSpell( action.triggerSpell or spellID )
-                                
-                                if Player.is_pvp then
-                                    action.aura_modifier_pvp = total_aura_effect
-                                else
-                                    action.aura_modifier_pve = total_aura_effect
-                                end
-                            end
-                            
-                            tooltip = tooltip * ( Player.is_pvp and action.aura_modifier_pvp or action.aura_modifier_pve )
-                            
-                            -- Bonus damage and healing not related to ap or sp modifier
-                            local bonus_damage = action.bonus_da and action.bonus_da() or 0
-                            local bonus_healing = action.bonus_heal and action.bonus_heal() or 0
-                            
-                            -- Damage value
-                            local damage = action_type == "damage" and tooltip or 0
-                            damage = damage + bonus_damage
-                            
-                            -- Self-healing value
-                            local healing = action_type == "self_heal" and tooltip or 0
-                            healing = healing + bonus_healing
-                            
-                            -- Targeted healing value
-                            local group_healing = action_type == "smart_heal" and tooltip or 0
-                            group_healing = group_healing + bonus_healing
-                            
-                            -- Versatility
-                            damage          = damage * Player.vers_bonus
-                            healing         = healing * Player.vers_bonus
-                            group_healing   = group_healing * Player.vers_bonus
-                            
-                            -- Success Chance
-                            local success_rate = action.success( action )
-                            damage          = damage * success_rate
-                            healing         = healing * success_rate
-                            group_healing   = group_healing * success_rate
-                            
-                            -- Critical modifiers
-                            local crit_damage        = 0
-                            local crit_healing       = 0
-                            local crit_group_healing = 0
-                            local crit_rate          = 0
-                            local crit_mod           = 0
-                            
-                            if action.may_crit then
-                                crit_rate = action.critical_rate and action.critical_rate() or Player.crit_bonus
-                                crit_mod = action.critical_modifier and action.critical_modifier() or 1
-                                
-                                if Player.is_pvp then
-                                    local pvp_crit_modifier = Player.spell.pvp_enabled.effectN( 3 ).mod
-                                    crit_mod = crit_mod * pvp_crit_modifier
-                                end
-                                
-                                local crit_effect   = crit_rate * crit_mod
-                                crit_damage         = damage * crit_effect
-                                crit_healing        = healing * crit_effect
-                                crit_group_healing  = group_healing * crit_effect
-                                
-                                damage          = damage + crit_damage
-                                healing         = healing + crit_healing
-                                group_healing   = group_healing + crit_group_healing
-                            end
-                            
-                            -- Target Effects
-                            local temporary_amplifiers = 1
-                            local temporaryAmplifiers = function( action )
-                                return global_modifier( action, action_delay ) * targetAuraEffect( action, action_delay )                                
-                            end
-                            
-                            local target_multiplier = 1
-                            local targetMultiplier = function( action )
-                                local mul = 1
-                                
-                                if action_type == "smart_heal" then
-                                    mul = 0
-                                    for t_it = 1, action_targets do
-                                        local target = aura_env.healer_targets[ t_it ]
-                                        mul = mul + action.target_multiplier( action, nil, target )
-                                    end
-                                else
-                                    mul = action.target_multiplier( action, nil, action_targets )
-                                end
-                                return mul
-                            end
-                            
-                            -- Ability triggers ( GotD, Resonant Fists, etc., also used for combos )
-                            local applyTriggerSpells = function( )
                                 local damage_out, healing_out, group_heal_out, mitigate_out = 0, 0, 0, 0
-                                local trigger_gain, trigger_cost, trigger_secondary_cost = 0, 0, 0
+                                local gain_out, cost_out, secondary_cost_out = 0, 0, 0
                                 local trigger_time, trigger_delay = 0, 0
-                                local trigger_cdr = {}
-                                local driver = action
-                                local driverName = combo_base or name
-                                
-                                driver.trigger = driver.trigger or {}
-                                driver.tick_trigger = driver.tick_trigger or {}
-                                
+
+                                local final_state    = {}
                                 local state_table    = {}
                                 local trigger_spells = {}
                                 local trigger_exists = {}
                                 
+                                local target_list = {}
+                                local fight_remains = 0
+                                local funnel_enabled = aura_env.config.funnel_option == 2 or ( aura_env.config.funnel_option == 3 and IsInInstance() and not IsInRaid() )
+                                
+                                for _, target in pairs( Player.targets ) do
+                                    target_list[ #target_list + 1 ] = {
+                                        unitID  = target.unitID,
+                                        health  = target.healthActual,
+                                        dtps    = target.dtps,
+                                    }
+                                    fight_remains = max( target.ttd or 0, fight_remains )
+                                end
+                                
                                 local trigger_pushback = function( spell, enabled, periodic, recursive_callback, stack )
                                     
-                                    local _driver = recursive_callback and spells[ recursive_callback ] or driver
-                                    local _driverName = recursive_callback or driverName
+                                    local _driver = recursive_callback and spells[ recursive_callback ] or nil
+                                    local _driverName = recursive_callback or "state_generator"
                                     local _stack = ( stack or _driverName ) .. " -> " .. spell
                                     
                                     trigger_exists[ spell.."-".._driverName ] = true
                                     
-                                    if _driver.result then
+                                    -- Allow multiple identical triggers
+                                    spell = gsub( spell, "%-.*", "" )    
+
+                                    if spell and spells[ spell ] then
                                         
-                                        -- Allow multiple identical triggers
-                                        spell = gsub( spell, "%-.*", "" )    
+                                        local _this = {}
+                                        local callback_stack = {}
+                                        local stack_driver = nil
                                         
-                                        if spell 
-                                        and spells[ spell ] 
-                                        and spells[ spell ].result
-                                        and spellRaw( spell ) > 0 then
-                                            
-                                            local _this = {}
-                                            local callback_stack = {}
-                                            local stack_driver = nil
-                                            
-                                            local triggerReady = function( self, state )
-                                                if type( enabled ) == "function" then
-                                                    return enabled( self, state )
-                                                end
-                                                return enabled
+                                        local triggerReady = function( self, state )
+                                            if type( enabled ) == "function" then
+                                                return enabled( self, state )
                                             end
-                                            
-                                            local h = 5381
-                                            local l = nil
-                                            for cb in gsub( _stack .. "->", "%s+", "" ):gmatch( "(.-)->" ) do
-                                                l = ( stack_driver and h ) or nil
-                                                for c in cb:gmatch( "." ) do
-                                                    h = ( bit.lshift( h, 5 ) + h ) + string.byte( c )
-                                                end    
-                                                insert( callback_stack, {
-                                                        name = cb,
-                                                        spell = spells[ cb ] or nil,
-                                                        driverName = stack_driver,
-                                                        result = spells[ cb ] and spells[ cb ].result or nil,
-                                                } )
-                                                stack_driver = cb
-                                            end
-                                            
-                                            _this.ready = triggerReady
-                                            _this.stack = _stack
-                                            _this.spell = spell
-                                            _this.onTick = periodic
-                                            _this.icd = spells[ spell ].icd or 0
-                                            
-                                            _this.state = {
-                                                -- Pass driver callbacks to trigger
-                                                callback_state = state_table[ l ] or 
-                                                {
-                                                    time         = execute_time + action_delay,
-                                                    success_rate = success_rate,
-                                                    primary      = min( Player.primary_resource.max, ( Player.primary_resource.current + gain ) ) - cost,
-                                                    secondary    = min( Player.secondary_resource.max, ( Player.secondary_resource.current + secondary_gain ) ) - secondary_cost,
-                                                    buffs        = {},
-                                                    cooldown     = { [ true_name ] = max( 0, Player.getBaseCooldown( true_name ) - execute_time ) },
-                                                    invalid      = false,
-                                                },
-                                                callback_stack = callback_stack,
-                                                callback_name = _driverName,
-                                                callback = _driver,
-                                                result = _driver.result,
-                                                ticks = ( _driver.result.ticks or 1 ) * ( _driver.result.target_count or 1 ),
-                                                pos = #callback_stack,
-                                                time = 0,
-                                                primary = 0,
-                                                secondary = 0,
-                                                buffs = {},
-                                                cooldown = {},
-                                                invalid = false,
-                                            }
-                                            state_table[ h ] = _this.state
-                                            
-                                            _this.rate = spells[ spell ].trigger_rate or 1
-                                            
-                                            if type( _this.rate ) == "function" then
-                                                _this.rate = _this.rate( _this.state )
-                                            end
-                                            
-                                            if _this.rate > 0 then
-                                                if not periodic then
-                                                    _this.state.count = _this.rate
-                                                else
-                                                    if _this.icd > 0 then
-                                                        _this.state.count = min( _this.state.ticks, _this.rate * floor( _this.state.result.execute_time / _this.icd ) )
-                                                    else
-                                                        _this.state.count = _this.rate * _this.state.ticks
-                                                    end
-                                                end
+                                            return enabled
+                                        end
+                                        
+                                        local h = 5381
+                                        local l = nil
+                                        for cb in gsub( _stack .. "->", "%s+", "" ):gmatch( "(.-)->" ) do
+                                            l = ( stack_driver and h ) or nil
+                                            for c in cb:gmatch( "." ) do
+                                                h = ( bit.lshift( h, 5 ) + h ) + string.byte( c )
+                                            end    
+                                            insert( callback_stack, {
+                                                    name = cb,
+                                                    spell = spells[ cb ] or nil,
+                                                    driverName = stack_driver,
+                                            } )
+                                            stack_driver = cb
+                                        end
+                                        
+                                        _this.ready = triggerReady
+                                        _this.stack = _stack
+                                        _this.spell = spell
+                                        _this.onTick = periodic
+                                        _this.icd = spells[ spell ].icd or 0
+                                        
+                                        _this.state = {
+                                            -- Pass driver callbacks to trigger
+                                            callback_state = state_table[ l ] or 
+                                            {
+                                                time          = future,
+                                                result        = nil,
+                                                success_rate  = 1,
+                                                primary       = Player.primary_resource.current,
+                                                secondary     = Player.secondary_resource.current,
+                                                buffs         = {},
+                                                cooldown      = {},
+                                                invalid       = false,
+                                                targets       = target_list,
+                                                fight_remains = fight_remains,
+                                                health        = Player.health_current,
                                                 
-                                                if Player.ready( spells[ _this.spell ], _this.state ) then
-                                                    trigger_spells[ #trigger_spells + 1 ] =  _this
+                                            },
+                                            callback_stack = callback_stack,
+                                            callback_name = _driverName,
+                                            callback = _driver,
+                                            result = nil,
+                                            ticks = ( _driver and ( _driver.ticks() * _driver.target_count( _driver, state_table[ l ] ) ) ) or 1,
+                                            pos = #callback_stack,
+                                            time = 0,
+                                            primary = 0,
+                                            secondary = 0,
+                                            buffs = {},
+                                            cooldown = {},
+                                            invalid = false,
+                                        }
+                                        state_table[ h ] = _this.state
+                                        
+                                        _this.rate = spells[ spell ].trigger_rate or 1
+                                        
+                                        if type( _this.rate ) == "function" then
+                                            _this.rate = _this.rate( _this.state )
+                                        end
+                                        
+                                        if _this.rate > 0 then
+                                            if not periodic then
+                                                _this.state.count = _this.rate
+                                            else
+                                                if _this.icd > 0 then
+                                                    _this.state.count = min( _this.state.ticks, _this.rate * floor( _driver.execute_time( state_table[ l ] ) / _this.icd ) )
+                                                else
+                                                    _this.state.count = _this.rate * _this.state.ticks
                                                 end
                                             end
+                                            
+                                            trigger_spells[ #trigger_spells + 1 ] =  _this
                                         end
                                     end
                                 end
                                 
-                                for spell, enabled in pairs( driver.trigger ) do trigger_pushback( spell, enabled, false ) end
-                                for spell, enabled in pairs( driver.tick_trigger ) do trigger_pushback( spell, enabled, true ) end
+                                trigger_pushback( name, true, false )
                                 
                                 -- Recursive triggers
                                 local do_recursion = true
@@ -1223,37 +965,51 @@ function(event, ...)
                                             state[ e ] = driverState[ e ]
                                         end    
                                         
+                                        copyState( "result" )
                                         copyState( "primary" )
                                         copyState( "secondary" )
                                         copyState( "time" )
                                         copyState( "buffs" )
                                         copyState( "cooldown" )
                                         copyState( "success_rate" )
+                                        copyState( "invalid" )
+                                        copyState( "targets" )
+                                        copyState( "health" )
                                     end
                                     
-                                    local result = state.result
-                                    
                                     local spell = spells[ trigger.spell ]
-                                    local spell_result = spell.result
                                     
                                     local tick_count = state.count
-                                    local duration = result.execute_time 
-                                    
-                                    local tick_damage = 0
-                                    local tick_healing = 0
-                                    local tick_group_heal = 0
                                     
                                     local trigger_mitigate = 0
                                     local trigger_damage = 0
                                     local trigger_healing = 0
                                     local trigger_group_heal = 0
-                                    local trigger_cdr = {}
                                     
                                     local basePrimary = state.primary
                                     local baseSecondary = state.secondary
                                     local baseTime = state.time
+                                    local baseHealth = state.health
                                     
-                                    if not state.invalid then
+                                    local delay = function( t )
+                                        
+                                        if delay == 0 then
+                                            return
+                                        end
+                                        
+                                        state.time = state.time + t
+                                        
+                                        if Player.primary_resource and Player.primary_resource.regen > 0 then
+                                            state.primary = state.primary + ( Player.primary_resource.regen * t )
+                                        end
+                                        
+                                        if Player.secondary_resource and Player.secondary_resource.regen > 0 then
+                                            state.secondary = state.secondary + ( Player.secondary_resource.regen * t )
+                                        end
+                                    end
+
+                                    if not state.invalid and driver then
+                                        
                                         -- Driver is a channeled ability and trigger is not background action
                                         if driver.channeled and not spell.background then
                                             local latency = Player.channel.latency or 0
@@ -1261,15 +1017,10 @@ function(event, ...)
                                             local use_during_channel = driver.spellID == 101546 and spell.usable_during_sck 
                                             if use_during_channel then
                                                 latency = 0
-                                                
-                                                local gcd     = driver.gcd( driver, state )
-                                                local base_et = driver.execute_time( state )
-                                                state.time = state.time - ( base_et - gcd )
+                                                delay( -1 * driver.duration )
                                             end                            
-                                            trigger_delay = max( action_delay, latency ) - action_delay
+                                            delay( latency )
                                         end
-                                        
-                                        state.time = max( state.time, trigger_delay + trigger_time )
                                         
                                         local _, stack = ipairs( state.callback_stack )
                                         if #stack > 1 then
@@ -1283,10 +1034,31 @@ function(event, ...)
                                             end
                                         end
                                     end
+
+                                    local trigger_cost, trigger_secondary_cost = spell.cost( spell, state )
                                     
+                                    -- Add resource regeneration to action delay if low on resources
+                                    if not state.invalid and trigger_cost > state.primary then
+                                        if Player.primary_resource and Player.primary_resource.regen > 0 then
+                                            local resource_delta = trigger_cost - Player.primary_resource.current
+                                            delay( resource_delta / Player.primary_resource.regen )
+                                        else
+                                            state.invalid = true
+                                        end
+                                    end
+
+                                    if not state.invalid and trigger_secondary_cost > state.secondary then
+                                        if Player.secondary_resource and Player.secondary_resource.regen > 0 then
+                                            local resource_delta = trigger_secondary_cost - Player.secondary_resource.current
+                                            delay( resource_delta / Player.secondary_resource.regen )
+                                        else
+                                            state.invalid = true
+                                        end
+                                    end  
+
                                     -- Check ready state
                                     state.invalid = state.invalid or not trigger.ready( spell, state )
-                                    
+ 
                                     -- Check ready state
                                     state.invalid = state.invalid or not Player.ready( spell, state )
                                     
@@ -1294,19 +1066,36 @@ function(event, ...)
                                     local trigger_cd_remains = Player.getCooldown( trigger.spell, state )
                                     local trigger_cd         = Player.getBaseCooldown( trigger.spell )
                                     
+                                    delay( trigger_cd_remains )
+                                    
+                                    if trigger_cd > 0 then
+                                        start_cooldown[ #start_cooldown + 1 ] = trigger.spell
+                                    end
+ 
                                     if not state.invalid then
                                         
                                         -- Start Cooldown
                                         state.cooldown[ trigger.spell ] = trigger_cd
-                                        
-                                        local ticks = spell_result.ticks or 1
-                                        
-                                        trigger_mitigate = actionMitigation( spell, state )
+                                    
+                                        -- Stagger
+                                        local stagger_reduction = 0
+                                        if spell.reduce_stagger and type( spell.reduce_stagger ) == "function" then
+                                            stagger_reduction = spell.reduce_stagger( state )
+                                            stagger_reduction = min( stagger_reduction, Player.stagger ) -- Limited to current stagger
+                                        end
+                                          
+                                        -- Mitigation
+                                        trigger_mitigate = stagger_reduction
+                                        if spell.mitigate and type( spell.mitigate ) == "function" then
+                                            trigger_mitigate = trigger_mitigate + ( spell.mitigate( state ) or 0 )
+                                        end
                                         
                                         -- Tick Function
+                                        local ticks             = spell.ticks()
                                         local ticks_remaining   = ticks
                                         local tick_time         = spell.execute_time( state ) / ticks
-                                        
+                                        local tick_value        = spell.tick_value( spell, state )
+                                    
                                         while ticks_remaining > 0 do
                                             local tick_partition = ticks_remaining < 2 and ticks_remaining or 1
                                             
@@ -1315,45 +1104,93 @@ function(event, ...)
                                                 state.time = state.time + ( tick_time * tick_partition )
                                             end
                                             
-                                            tick_damage     = ( spell_result.damage or 0 ) / ticks
-                                            tick_healing    = ( spell_result.healing or 0 ) / ticks
-                                            tick_group_heal = ( spell_result.group_healing or 0 ) / ticks                                       
+                                            local tick_damage        = tick_value.damage
+                                            local tick_healing       = tick_value.healing
+                                            local tick_group_healing = tick_value.group_healing
                                             
-                                            if tick_damage > 0 then
-                                                local spell_am = Player.action_multiplier( spell )
-                                                local am_delta = Player.action_multiplier( spell, state )
-                                                if spell_am > 0 then
-                                                    am_delta = am_delta / spell_am
-                                                end
+                                            local target_count = spell.target_count( spell, state )
+                                            
+                                            local temporary_amplifiers  = global_modifier( spell, state.time ) * targetAuraEffect( spell, state.time )  
+                                            
+                                             -- Action Multiplier
+                                            tick_damage = tick_damage * Player.action_multiplier( spell, state )
+                                            tick_damage = tick_damage * temporary_amplifiers
+
+                                            tick_damage         = tick_damage * tick_partition
+                                            tick_healing        = tick_healing * tick_partition
+                                            tick_group_healing  = tick_group_healing * tick_partition
+                                            
+                                            if tick_damage > 0 or spell.type ~= "damage" then
                                                 
-                                                tick_damage = tick_damage * am_delta
-                                            end
-                                            
-                                            trigger_damage      = trigger_damage + ( tick_damage * tick_partition )
-                                            trigger_healing     = trigger_healing + ( tick_healing * tick_partition )
-                                            trigger_group_heal  = trigger_group_heal + ( tick_group_heal * tick_partition )
-                                            
-                                            if spell.onImpact then
-                                                for t_idx = 1, ( spell_result.target_count or 1 ) do
-                                                    spell.onImpact( spell, state )
+                                                local sqrt_targets      = spell.sqrt_after or 0
+                                                local primary_targets   = spell.aoe and spell.primary_aoe_targets or 0
+                                                
+                                                if type( sqrt_targets ) == "function" then
+                                                    sqrt_targets = sqrt_targets()
+                                                end
+    
+                                                local primary_target_multiplier     = ( spell.aoe and spell.primary_target_multiplier( self, state ) ) or 1
+                                                local secondary_target_multiplier   = ( spell.aoe and spell.secondary_target_multiplier( self, state ) ) or 1                   
+                                                
+                                                local t_idx = 1
+                                                
+                                                for _, target in pairs( state.targets ) do
+                                                    
+                                                    local target_multiplier = 1
+                                                    
+                                                    if t_idx <= primary_targets then
+                                                        target_multiplier = primary_target_multiplier
+                                                    else
+                                                        if sqrt_targets > 0 and t_idx > sqrt_targets then
+                                                            target_multiplier = sqrt( sqrt_targets / target_count )
+                                                        end
+                                                        target_multiplier = target_multiplier * secondary_target_multiplier
+                                                    end
+                                                    
+                                                    local target_partition = 1
+                                                    local target_demise = math.max( 1, math.min( 300, target.health / ( target.dtps or 1 ) ) )
+                                                    
+                                                    if not aura_env.pvp_mode and funnel_enabled and target_demise < state.fight_remains then
+                                                        -- Priority damage or funnel ( when applicable ), if an enemy lives significantly longer than
+                                                        -- others it is placed higher in priority, i.e., if there is 30 seconds left in combat,
+                                                        -- an enemy that lives for 5 seconds is less priority than an enemy that lives for 28 seconds.                
+                                                        local delta_ttd = state.fight_remains - target_demise
+                                                        -- Ignore this effect if the time delta is insubstantial 
+                                                        if delta_ttd > 3 then 
+                                                            target_partition = target_partition * ( target_demise / state.fight_remains )
+                                                        end
+                                                    end
+                                                    
+                                                    local log_damage = math.min( target.health, tick_damage * target_multiplier )
+                                                    local log_healing = math.min( Player.health_max - state.health, tick_healing * target_multiplier )
+                                                    
+                                                    trigger_damage      = trigger_damage + ( log_damage * target_partition )
+                                                    trigger_healing     = trigger_healing + log_healing
+                                                    trigger_group_heal  = trigger_group_heal + ( tick_group_healing * target_multiplier )
+                                                    
+                                                    if spell.onImpact then
+                                                        spell.onImpact( spell, state )
+                                                    end
+                                                    
+                                                    target.health = target.health - log_damage
+                                                    state.health = state.health + log_healing
+                                                
+                                                    if target.health == 0 then 
+                                                        target = nil
+                                                    end
+                                                    
+                                                    t_idx = t_idx + 1
+                                                    if t_idx > target_count then
+                                                        break
+                                                    end
                                                 end
                                             end
                                             
                                             ticks_remaining = ticks_remaining - tick_partition
                                         end
                                         
-                                        -- Background spell multipliers
-                                        if spell.background then
-                                            local spell_target_multiplier = targetMultiplier( spell )
-                                            local spell_temporary_amplifiers = temporaryAmplifiers( spell )
-                                            trigger_damage = trigger_damage * spell_target_multiplier * spell_temporary_amplifiers
-                                            trigger_healing = trigger_healing * spell_temporary_amplifiers
-                                            trigger_group_heal = trigger_group_heal * spell_target_multiplier * spell_temporary_amplifiers
-                                        end                                    
-                                        
                                         -- Trigger reduces cooldown of spell
                                         if spell.reduces_cd then
-                                            
                                             for cdr_spell, cdr_value in pairs( spell.reduces_cd ) do
                                                 
                                                 cdr_spell = gsub( cdr_spell, "%-.*", "" )
@@ -1367,31 +1204,23 @@ function(event, ...)
                                                 if state.cooldown[ cdr_spell ] then
                                                     state.cooldown[ cdr_spell ] = max( 0, state.cooldown[ cdr_spell ] - cdr )
                                                 end
-                                                
-                                                local remaining, total = Player.getCooldown( cdr_spell, state )
-                                                
-                                                if cdr > 0 and remaining > 0 and total > 0 then
-                                                    
-                                                    state.cooldown[ trigger.spell ] = max( 0, state.cooldown[ trigger.spell ] - cdr )
-                                                    
-                                                    local spell_action = aura_env.spells[ cdr_spell ]
-                                                    
-                                                    if spell_action and not spell_action.background then
-                                                        local mod_rate = aura_env.actionModRate( spell_action )
-                                                        
-                                                        if mod_rate < 1 then
-                                                            cdr = cdr * ( 1 - mod_rate )
-                                                        end
-                                                        
-                                                        local id = cdr_spell .. "-010" .. state.pos
-                                                        trigger_cdr[ id ] = ( trigger_cdr[ id ] or 0 ) + cdr
-                                                    end
-                                                end
                                             end
                                         end      
                                         
                                         -- Compounded Success Rate
                                         state.success_rate = state.success_rate * spell.success( spell, state )
+                                        state.invalid = state.invalid or state.success_rate <= 0
+                                        
+                                        -- Update result table
+                                        state.result = {
+                                            ticks           = ticks,
+                                            damage          = trigger_damage,
+                                            healing         = trigger_healing,
+                                            group_healing   = trigger_group_heal,
+                                            cost            = trigger_cost,
+                                            secondary_cost  = trigger_secondary_cost,
+                                            delay           = 0,
+                                        }
                                         
                                         damage_out     = damage_out + ( trigger_damage * tick_count * state.success_rate )
                                         healing_out    = healing_out + ( trigger_healing * tick_count * state.success_rate )
@@ -1399,125 +1228,126 @@ function(event, ...)
                                         mitigate_out   = mitigate_out + ( trigger_mitigate * tick_count * state.success_rate )
                                         
                                     end
-                                    
-                                    -- Update cooldown information for chained abilities
-                                    if action.combo and not spell.background then 
-                                        action_cooldown   = max( action_cooldown, trigger_cd )
-                                        action_cd_remains = max ( action_cd_remains, trigger_cd_remains )
-                                        trigger_delay     = max( action_delay, action_cd_remains ) - action_delay
-                                        start_cooldown[ #start_cooldown + 1] = trigger.spell
-                                    end
-                                    
+
                                     -- Update Resources
-                                    state.primary = state.primary - ( spell.base_cost or 0 )
+                                    state.primary = state.primary - trigger_cost
                                     state.primary = state.primary + ( tick_count * ( spell.chi_gain and spell.chi_gain( state ) or 0 ) )
                                     state.primary = min( state.primary, Player.primary_resource.max )
                                     
-                                    state.secondary = state.secondary - ( spell.base_secondary_cost or 0 )
+                                    state.secondary = state.secondary - trigger_secondary_cost
                                     --state.secondary = state.secondary + TODO Secondary Gain function
                                     state.secondary = min( state.secondary, Player.secondary_resource.max )                                    
                                     
                                     -- Update Trigger results
-                                    trigger_cost            = trigger_cost + ( basePrimary - state.primary )
-                                    trigger_secondary_cost  = trigger_secondary_cost + ( baseSecondary - state.secondary )
-                                    trigger_time            = trigger_time + ( state.time - baseTime )
+                                    cost_out            = cost_out + ( basePrimary - state.primary )
+                                    secondary_cost_out  = secondary_cost_out + ( baseSecondary - state.secondary )
+                                    trigger_time        = trigger_time + ( state.time - baseTime )
+                                    
+                                    if driverName == "state_generator" then
+                                        trigger_delay = trigger_time + future
+                                    end
+                                    
+                                    if trigger.spell == "fists_of_fury" and state.targets then
+                                        --DevTools_Dump( state.targets )
+                                    end
+                                    
+                                    for _, target in pairs( state.targets ) do
+                                        target.health = max( 0, target.health - target.dtps * ( state.time - baseTime ) )
+                                        target.ttd = target.health / target.dtps
+                                        state.fight_remains = max( target.ttd or 0, state.fight_remains )
+                                    end
+                                    
+                                    if not spell.background and state.time + trigger_delay > max_window then
+                                        state.invalid = true
+                                    end
+                                    
+                                    final_state = state
+                                    
+                                    if state.invalid and not spell.background then
+                                        damage_out = 0
+                                        healing_out = 0
+                                        group_healing = 0
+                                        break
+                                    end
                                 end
                                 
                                 return {
-                                    cost = trigger_cost,
-                                    secondary_cost = trigger_secondary_cost,
+                                    cost = cost_out,
+                                    secondary_cost = secondary_cost_out,
                                     damage = damage_out,
                                     self_healing = healing_out,
                                     mitigation = mitigate_out,
                                     group_healing = group_heal_out,
                                     execute_time = trigger_time,
                                     delay = trigger_delay,
-                                    cdr = trigger_cdr,
+                                    state = final_state,
                                 }
                             end
                             
+                            --[[
+                            local damage, healing, group_healing = 0, 0, 0
+                                
                             local resultMatrix = {}
                             local timeMatrix = { action_delay }
                             local targetMatrix = { [ action_delay ] = action_targets }
                             local triggerResults = {}
                             local cacheResults = function( t )
                                 resultMatrix[ t ] = {
-                                    amplifier               = temporary_amplifiers,
                                     callback                = action,
-                                    ticks                   = ticks,
-                                    target_count            = action_targets,
-                                    damage                  = damage,
-                                    self_healing            = healing,
+                                    damage                  = 0,
+                                    self_healing            = 0,
                                     group_healing           = group_healing,
-                                    mitigation              = mitigation,
-                                    crit_rate               = crit_rate,
-                                    crit_mod                = crit_mod,
-                                    critical_damage         = crit_damage,
-                                    critical_healing        = crit_healing,
-                                    critical_group_healing  = crit_group_healing,
-                                    execute_time            = execute_time,
+                                    mitigation              = 0, --mitigation,
+                                    crit_rate               = 0, --crit_rate,
+                                    crit_mod                = 0, --crit_mod,
+                                    critical_damage         = 0, --crit_damage,
+                                    critical_healing        = 0, --crit_healing,
+                                    critical_group_healing  = 0, --crit_group_healing,
+                                    execute_time            = 0, --execute_time,
                                     delay                   = action_delay,
                                     trigger_results         = triggerResults,
-                                    cost                    = cost,
-                                    secondary_cost          = secondary_cost,
+                                    cost                    = 0, --cost,
+                                    secondary_cost          = 0, --secondary_cost,
                                     reduce_cd               = {},
                                 }
                             end
                             
-                            if not action.background then
-                                -- Raid Events
-                                if  action_type == "damage" and name ~= "touch_of_death"
-                                and action_cooldown > 0
-                                and action.target_multiplier 
-                                and ( not Player.channel.spellID or Player.channel.spellID ~= spellID ) then
-                                    for _, raid_event in pairs( aura_env.raid_events ) do
-                                        local count = raid_event.count
-                                        local t = floor( raid_event.adds_in )
-                                        if count > action_targets and action_cooldown > t and t > action_delay then
-                                            timeMatrix[ #timeMatrix + 1 ] = t
-                                            targetMatrix[ t ] = count
-                                        end
+                            -- Raid Events
+                            if  action_type == "damage" and name ~= "touch_of_death"
+                            and action_cooldown > 0
+                            and action.target_multiplier 
+                            and ( not Player.channel.spellID or Player.channel.spellID ~= spellID ) then
+                                for _, raid_event in pairs( aura_env.raid_events ) do
+                                    local count = raid_event.count
+                                    local t = floor( raid_event.adds_in )
+                                    if count > action_targets and action_cooldown > t and t > action_delay then
+                                        timeMatrix[ #timeMatrix + 1 ] = t
+                                        targetMatrix[ t ] = count
                                     end
                                 end
-                                
-                                local base_damage = damage
-                                local base_healing = healing
-                                local base_ghealing = group_healing
-                                
-                                for _, delay in pairs( timeMatrix ) do
-                                    
-                                    action_delay = delay
-                                    action_targets = targetMatrix[ delay ]
-                                    
-                                    -- Target Multiplier
-                                    target_multiplier = targetMultiplier( action )
-                                    
-                                    -- Target Auras
-                                    temporary_amplifiers = temporaryAmplifiers( action )
-                                    
-                                    damage = base_damage * target_multiplier * temporary_amplifiers
-                                    healing = base_healing * temporary_amplifiers
-                                    group_healing = base_ghealing * target_multiplier * temporary_amplifiers
-                                    
-                                    
-                                    -- Expel Harm
-                                    -- TODO: Move to post processor
-                                    if name == "expel_harm" then
-                                        -- Only Healing config option for Brewmaster
-                                        if spec ~= 1 or aura_env.config.eh_mode ~= 2 then
-                                            local eh_damage = max( 1, 0.1 * healing )
-                                            damage = damage + eh_damage
-                                        end
-                                    end            
-                                    
-                                    triggerResults = applyTriggerSpells( )
-                                    
-                                    cacheResults( action_delay )
-                                end
-                            else
-                                cacheResults( action_delay )
                             end
                             
+                            for _, delay in pairs( timeMatrix ) do
+
+                                triggerResults = generateActionState( delay )
+                                
+                                cacheResults( action_delay )
+                            end
+                            ]]
+                        
+                            local resultMatrix = { [0] = {
+                                cost = 0,
+                                secondary_cost = 0,
+                                damage = 0,
+                                self_healing = 0,
+                                mitigation = 0,
+                                group_healing = 0,
+                                execute_time = 0,
+                                delay = 0,
+                                trigger_results = generateActionState( 0 ),
+                                state = nil,
+                            } }
+
                             local tmpD = nil
                             local resultIdx = 0
                             local adjusted = 0
@@ -1539,33 +1369,6 @@ function(event, ...)
                                     end
                                 end
                                 
-                                if results.trigger_results.cdr then
-                                    for s, r in pairs( results.trigger_results.cdr ) do
-                                        results.reduce_cd[ s ] = r
-                                    end
-                                end
-                                
-                                -- Healing Caps
-                                results.self_healing = min( results.self_healing, Player.health_deficit )
-                                results.self_healing = max( results.self_healing, 0 )
-                                
-                                local groupdeficit = 0
-                                for t_it = 1, action_targets do
-                                    groupdeficit = groupdeficit + ( aura_env.healer_targets[ t_it ] and aura_env.healer_targets[ t_it ].deficit or 0 )
-                                end
-                                
-                                results.group_healing = min( results.group_healing, groupdeficit )
-                                results.group_healing = max( results.group_healing, 0 )
-                                
-                                -- Damage Caps
-                                if results.target_count == 1 and aura_env.targetHealthRemaining > 0 then
-                                    results.damage = min ( aura_env.targetHealthRemaining, results.damage )
-                                end
-                                
-                                if aura_env.combatHealthRemaining > 0 then
-                                    results.damage = min ( aura_env.combatHealthRemaining, results.damage )
-                                end
-                                
                                 -- -----------------------------------------------------
                                 
                                 -- Adjust damage / heal value based on spec roles
@@ -1583,8 +1386,6 @@ function(event, ...)
                                 
                                 results.adjusted = D
                                 
-                                D = D / max( 1, 1 + results.execute_time + results.delay ) 
-                                
                                 if not tmpD or tmpD < D then
                                     tmpD = D
                                     resultIdx = idx
@@ -1592,181 +1393,24 @@ function(event, ...)
                             end
                             
                             local result = resultMatrix[ resultIdx ]
-                            
-                            adjusted                = result.adjusted or 0
-                            cost                    = result.cost
-                            secondary_cost          = result.secondary_cost
-                            ticks                   = result.ticks
-                            action_targets          = result.target_count
-                            damage                  = result.damage
-                            healing                 = result.self_healing
-                            group_healing           = result.group_healing
-                            mitigation              = result.mitigation
-                            crit_rate               = result.crit_rate
-                            crit_mod                = result.crit_mod
-                            crit_damage             = result.critical_damage
-                            crit_healing            = result.critical_healing
-                            crit_group_healing      = result.critical_group_healing
-                            execute_time            = result.execute_time
-                            action_delay            = result.delay                           
-                            temporary_amplifiers    = result.amplifier
-                            
-                            action.result = result.result_base
-                            
-                            for s, v in pairs( result.reduce_cd ) do
-                                action.reduces_cd[ s ] = v
-                            end
-                            
-                            -- Cache curent player amplifier
-                            if name == default_action then
-                                Player.action_modifier = temporary_amplifiers
-                            end       
-                            
+
                             -- -----------------------------------------------------
-                            
-                            -- Generic Brew CDR
-                            if spec == aura_env.SPEC_INDEX["MONK_BREWMASTER"] and action.brew_cdr then
-                                local brew_cdr = action.brew_cdr or 0 
-                                local brew_list = { "purifying_brew", "celestial_brew", "fortifying_brew", "black_ox_brew" }
-                                
-                                if type( brew_cdr ) == "function" then
-                                    brew_cdr = brew_cdr( action )
-                                end
-                                
-                                if brew_cdr > 0 then
-                                    -- initialize table
-                                    action.reduces_cd = action.reduces_cd or {}
-                                    
-                                    for _, brew in pairs ( brew_list ) do
-                                        if spells[brew] and spells[brew].spellID then
-                                            -- 000 is a unique identifier for general brew cdr
-                                            -- this allows usage of both brew_cdr and reduces_cd for brew spells
-                                            action.reduces_cd[brew.."-000"] = brew_cdr
-                                        end
-                                    end
-                                end
-                            end
-                            
-                            -- CDR
-                            if action.reduces_cd then
-                                
-                                local cdr_value = 0
-                                local cdr_cost = 0
-                                local cdr_time = 0
-                                
-                                for spell, value in pairs( action.reduces_cd ) do
-                                    
-                                    local useResult = find( spell, "-010" )
-                                    
-                                    spell = gsub( spell, "%-.*", "" )
-                                    
-                                    local cdr = value  
-                                    local total_cdr = 0
-                                    
-                                    if type(cdr) == "function" then
-                                        cdr = cdr( action )
-                                    end
-                                    
-                                    local spell_action = spells[ spell ]
-                                    local base_cd = Player.getBaseCooldown( spell )
-                                    
-                                    if base_cd > 1 then
-                                        if spell_action and cdr > 0 then
-                                            if useResult then
-                                                total_cdr = cdr
-                                            else
-                                                local timeLeft = Player.getCooldown( spell )
-                                                
-                                                if timeLeft > 0 then
-                                                    
-                                                    total_cdr = min( cdr, timeLeft - execute_time )
-                                                    
-                                                    local mod_rate = aura_env.actionModRate( spell_action )
-                                                    
-                                                    if mod_rate < 1 then
-                                                        total_cdr = total_cdr * ( 1 - mod_rate )
-                                                    end  
-                                                end
-                                            end
-                                        end
-                                        
-                                        if total_cdr > 0 then
-                                            local spell_raw = spellRaw( spell )
-                                            local spell_time = spell_action.time_total or spell_action.execute_time()
-                                            if spell_raw > adjusted then
-                                                spell_raw = spell_raw - adjusted
-                                                cdr_value = cdr_value + ( total_cdr / base_cd * spell_raw )
-                                                cdr_cost  = cdr_cost + ( max( 0, ( spell_action.cost_total or 0 ) ) * total_cdr / base_cd )
-                                                cdr_time  = cdr_time + ( spell_time * total_cdr / base_cd )
-                                            end
-                                        end
-                                    end
-                                end
-                                
-                                adjusted     = adjusted + cdr_value
-                                cost         = cost + cdr_cost
-                                execute_time = execute_time + cdr_time
-                            end
-                            
-                            -- Action has increased recharge rate
-                            local actionModRate = aura_env.actionModRate( action )
-                            
-                            if action_cd_remains == 0 and action_cooldown > 0 and actionModRate < 1 then
-                                local duration = action_cooldown
-                                local recharge_cdr = min( duration, max( 0, action_cooldown - execute_time ) ) * ( 1 - actionModRate )
-                                if recharge_cdr > 0 then
-                                    local recast = 1 + ( recharge_cdr / action_cooldown )
-                                    adjusted     = adjusted * recast
-                                    cost         = cost * recast
-                                    execute_time = execute_time * recast
-                                end
-                            end
-                            
-                            -- Resource Gain
-                            if Player.primary_resource then
-                                
-                                if Player.primary_resource.regen > 0 then
-                                    gain = gain + ( Player.primary_resource.regen * ( execute_time + action_delay ) )
-                                end
-                                
-                                gain = min( Player.primary_resource.deficit, gain )
-                                
-                                if aura_env.fight_remains > 5 then
-                                    
-                                    if Player.secondary_resource then
-                                        
-                                        if Player.secondary_resource.regen > 0 then
-                                            secondary_gain = secondary_gain + ( Player.secondary_resource.regen * ( execute_time + action_delay ) )
-                                        end
-                                        
-                                        secondary_cost = secondary_cost - min( Player.primary_resource.deficit, secondary_gain )
-                                    end
-                                end
-                            end 
-                            
-                            cost            = cost - gain
-                            secondary_cost  = secondary_cost - secondary_gain 
-                            action.cost_total = cost
-                            action.time_total = execute_time
                             
                             action_set( { 
                                     type = action_type,
                                     name = name,
-                                    raw = adjusted,
-                                    ticks = ticks,
-                                    cost = cost,
-                                    secondary_cost = secondary_cost,
-                                    damage = damage,
-                                    healing = healing,
-                                    group_healing = group_healing,
-                                    cooldown = action_cooldown,
-                                    cooldown_remains = action_cd_remains,
+                                    raw = result.adjusted,
+                                    cost = result.cost,
+                                    secondary_cost = result.secondary_cost,
+                                    damage = result.damage,
+                                    healing = result.healing,
+                                    group_healing = result.group_healing,
                                     starts_cooldown = start_cooldown,
-                                    delay = action_delay,
+                                    delay = result.delay,
+                                    cooldown = Player.getBaseCooldown( combo_base or name ),
                                     base_cost = action.base_cost or 0,
-                                    execute_time = execute_time,
+                                    execute_time = result.execute_time,
                                     background = action.background,
-                                    t_amp = temporary_amplifiers,
                                     combo_base = combo_base,
                             })
                         end
@@ -1794,137 +1438,38 @@ function(event, ...)
             
             -- Sort and rank candidate actions
             -- -----------------------------------------------------------
-            local t = min( 5, aura_env.fight_remains )
-            local a = Player.action_modifier
-            local c = 0
-            local o = 0
-            local s = 0
             local n = #actionlist
-            local ow = {}
             
             if n > 0 then
                 debugprofilestart()
                 
-                local scale_mode = 1
-                local hashed = {}
-                
                 local function sortActionList( list )
-                    local maximum_sequence = 5
-                    local minimum_step = 1
-                    local sequence_n = 0
-                    local sequence_t = {}
-                    local previous_s = s
-                    local non_op = false
-                    local pool = false
                     
-                    o = global_modifier( default_action, t, false ) * targetAuraEffect( default_action, t ) 
-                    if o > a then
-                        pool = true
-                    else
-                        if o < a then
-                            local bi_t = t / 2 
-                            local bi_o = global_modifier( default_action, bi_t, false ) * targetAuraEffect( default_action, bi_t )
-                            if bi_o < a then
-                                t = bi_t
-                            end
+                    local validActions = {}
+                    for i = 1, n do
+                        local action = list[ i ]
+                        if not action or not action.cb or not action.cb.spellID 
+                        or action.background or action.raw <= 0 or action.delay > t
+                        or not IsSpellKnown( action.cb.replaces or action.cb.spellID ) then
+                            list[ i ] = nil
                         end
                     end
                     
-                    if not pool then
-                        -- Sort actions by time
-                        sort( list, function( l, r )
-                                return l.d_time > r.d_time
-                        end)
-                        
-                        local validActions = {}
-                        for i = 1, n do
-                            local action = list[ i ]
-                            if not action or not action.cb or not action.cb.spellID 
-                            or action.background or action.raw <= 0 or action.delay > t
-                            or not IsSpellKnown( action.cb.replaces or action.cb.spellID ) then
-                                list[ i ]         = nil
-                                validActions[ i ] = nil
-                            else                            
-                                validActions[ i ] = action
-                                hashed[ i ]       = list[ i ]
-                            end
-                        end
-                        
-                        if not next( list ) then
-                            return {}
-                        end
-                        
-                        while true do
-                            
-                            local delta_s = s - previous_s
-                            if non_op or s >= t or c <= 0 or ( delta_s > 0 and delta_s < minimum_step ) then
-                                break
-                            end
-                            
-                            previous_s = s
-                            
-                            local n_actions = #validActions
-                            if n_actions <= 1 then
-                                return list
-                            end
-                            
-                            non_op = true
-                            
-                            for j, action in pairs( validActions ) do
-                                
-                                local cd_remaining = ( ow[ action.name ] or action.cd_remains ) - s
-                                
-                                if action.cost <= c and cd_remaining <= 0 and action.delay <= ( t - s ) then
-                                    
-                                    non_op = false
-                                    
-                                    sequence_n = sequence_n + 1
-                                    sequence_t[ #sequence_t + 1 ] = action.name
-                                    
-                                    s = s + action.execute_time
-                                    c = c - action.cost
-                                    
-                                    if s >= t or action.execute_time == 0 or action.cost <= 0 or sequence_n >= maximum_sequence then
-                                        Player.action_sequence = sequence_t
-                                        return list
-                                    end
-                                    
-                                    if c <= 0 then
-                                        break
-                                    end
-                                    
-                                    ow[ action.name ] = action.cooldown
-                                    for _, v in pairs( action.start_cd ) do
-                                        local trigger = hashed[ actionhash[ v ] ]
-                                        if trigger then
-                                            ow[ trigger.name ] = trigger.cooldown
-                                        end
-                                    end
-                                elseif cd_remaining > t or action.delay > t then
-                                    validActions[ j ] = nil
-                                end
-                            end
-                        end
+                    if not next( list ) then
+                        return {}
                     end
                     
-                    -- Adjust by cost 
-                    if Player.primary_resource then
-                        sort( list, function( l, r )
-                                return l.d_cost > r.d_cost
-                        end )
-                        
-                        local _, start = next( list )
-                        Player.action_sequence = next( sequence_t ) ~= nil and sequence_t or { start.name }
-                        scale_mode = 0
-                    end
-                    
+                    sort( list, function( l, r )
+                        return l.d_cost > r.d_cost
+                    end )
+
                     return list
                 end
                 
                 actionlist = sortActionList( actionlist )
                 
                 local debug_out = {}
-                local action_debug = false
+                local action_debug = true
                 
                 for k, v in pairs( actionlist ) do
                     if not v.raw or v.raw == 0 then
@@ -1934,7 +1479,7 @@ function(event, ...)
                     else
                         local action_name = gsub( v.combo_base and v.combo_base or v.name, "_cancel", "" )
                         jeremy.rank[ action_name ] = jeremy.rank[ action_name ] or k
-                        jeremy.scale[ action_name ] = jeremy.scale[ action_name ] or ( scale_mode == 1 and v.d_time or v.d_cost )
+                        jeremy.scale[ action_name ] = jeremy.scale[ action_name ] or v.d_cost
                         if action_debug and k <= 5 then
                             debug_out[ k ] = {
                                 name = v.name,
@@ -2167,6 +1712,7 @@ function(event, ...)
             if Enemy.rate then
                 
                 Enemy.ttd = Enemy.healthPct / Enemy.rate
+                Enemy.dtps = Enemy.healthActual / Enemy.ttd
                 
                 if Enemy.intermission then
                     Enemy.ttd = min( Enemy.ttd, Enemy.intermission )    

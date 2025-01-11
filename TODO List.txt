@@ -1,6 +1,8 @@
+
 [Generic]:
 
 Absorb Shield SpellIDs
+Create state for base spell calls
 Debuff States
 PPM Effects
 Refactor spell caching

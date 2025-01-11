@@ -49,6 +49,7 @@ local GetSpellInfo = GetSpellInfo or function( spellID )
         return spellInfo.name, nil, spellInfo.iconID, spellInfo.castTime, spellInfo.minRange, spellInfo.maxRange, spellInfo.spellID, spellInfo.originalIconID
     end
 end
+local GetSpellPowerCost = GetSpellPowerCost or C_Spell.GetSpellPowerCost
 local _GetTime = GetTime
 local GetTime = function()
     return aura_env.frameTime or _GetTime()
@@ -525,7 +526,9 @@ aura_env.CPlayer = {
     gcd_duration = 0,
     gcd_remains = 0,
     haste = 1,
+    health_current = 0,
     health_deficit = 0,
+    health_max = 0,
     lastFullUpdate = nil,
     leader = false,
     main_hand = {
@@ -563,6 +566,7 @@ aura_env.CPlayer = {
     },
     
     talent = {},
+    targets ={},
     
     -- Monk 
     bof_targets = 0,
@@ -716,7 +720,11 @@ aura_env.CPlayer = {
                 effect = _tick_data.effectN( iter )
                 if effect and effect.ap_coefficient then
                     action.ap = function()
-                        return effect.ap_coefficient
+                        local ap = effect.ap_coefficient
+                        if Player.is_pvp and effect.pvp_coefficient then
+                            ap = ap * effect.pvp_coefficient
+                        end
+                        return ap
                     end
                     action.aoe          = initialize_value( action.aoe, effect.max_targets )
                     action.is_periodic  = initialize_value( action.is_periodic, effect.is_periodic )
@@ -734,7 +742,11 @@ aura_env.CPlayer = {
                 effect = _tick_data.effectN( iter )
                 if effect and effect.sp_coefficient then
                     action.sp = function() 
-                        return effect.sp_coefficient
+                        local sp = effect.sp_coefficient
+                        if Player.is_pvp and effect.pvp_coefficient then
+                            sp = sp * effect.pvp_coefficient
+                        end
+                        return sp
                     end
                     action.aoe          = initialize_value( action.aoe, effect.max_targets )
                     action.is_periodic  = initialize_value( action.is_periodic, effect.is_periodic  )
@@ -751,39 +763,112 @@ aura_env.CPlayer = {
             action.ap_type = initialize_value( action.ap_type, "MAINHAND" )
         end
         
+        action.ap = initialize_value( action.ap, function()
+            return 0
+        end )
+        
+        action.sp = initialize_value( action.sp, function() 
+            return 0
+        end )
+        
         action.type = initialize_value( action.type, "damage" )
         
-        -- Echo Procs
-        -- Example: Bonedust Brew, Charred Passions
-        if action.echo_callback then
-            action.skip_calcs = true
-            action.echo_pct = initialize_value( action.echo_pct, 0 )
-            action.action_multiplier = function( self, state )
+        -- Tick Value
+        action.tick_value = function( self, state )
+            
+            if self.echo_callback then
+
                 local echo = self.echo_pct
                 
                 if type( echo ) == "function" then
                     echo = echo()
-                end
+                end   
                 
-                if state then
-                    local result = state.result
-                    if result then
-                        local tick_value = 0
-                        
-                        if self.type == "damage" then
-                            tick_value = result.damage / state.count
-                        elseif self.type == "self_heal" then
-                            tick_value = result.self_healing / state.count
-                        else
-                            tick_value = result.group_healing / state.count
-                        end
-                        
-                        echo = echo * tick_value
-                    end
-                end
-                
-                return echo
+                return {
+                    damage          = ( self.type == "damage" and state.result.damage * echo / state.count ) or 0,
+                    healing         = ( self.type == "self_heal" and state.result.healing * echo / state.count ) or 0,
+                    group_healing   = ( self.type == "smart_heal" and state.result.group_healing * echo / state.count ) or 0,
+                }
             end
+            
+            local value = 0
+
+            local sp_mod  = self.sp()
+            local ap_mod  = self.ap()
+            
+            if sp_mod > 0 then
+                value = sp_mod * aura_env.spell_power
+            else
+                value = ap_mod * Player.composite_attack_power( self.ap_type )
+            end
+            
+            -- Cache spec auras
+            -- these sometimes change in PvP so we will cache both
+            if not self.aura_modifier_pve and not Player.is_pvp
+            or not self.aura_modifier_pvp and Player.is_pvp then
+                local total_aura_effect = aura_env.auraEffectForSpell( self.triggerSpell or spellID )
+                
+                if Player.is_pvp then
+                    self.aura_modifier_pvp = total_aura_effect
+                else
+                    self.aura_modifier_pve = total_aura_effect
+                end
+            end
+            
+            value = value * ( Player.is_pvp and self.aura_modifier_pvp or self.aura_modifier_pve )   
+        
+            -- Bonus damage and healing not related to ap or sp modifier
+            local bonus_damage = self.bonus_da and self.bonus_da() or 0
+            local bonus_healing = self.bonus_heal and self.bonus_heal() or 0
+            
+            -- Damage value
+            local damage        = ( self.type == "damage" and value or 0 ) + bonus_damage
+            local healing       = ( self.type == "self_heal" and value or 0 ) + bonus_healing
+            local group_healing = ( self.type == "smart_heal" and value or 0 ) + bonus_healing
+        
+            -- Versatility
+            damage          = damage * Player.vers_bonus
+            healing         = healing * Player.vers_bonus
+            group_healing   = group_healing * Player.vers_bonus
+            
+            -- Critical modifiers
+            local crit_damage        = 0
+            local crit_healing       = 0
+            local crit_group_healing = 0
+            local crit_rate          = 0
+            local crit_mod           = 0
+            
+            if self.may_crit then
+                crit_rate = self.critical_rate and self.critical_rate() or Player.crit_bonus
+                crit_mod = self.critical_modifier and self.critical_modifier() or 1
+                
+                if Player.is_pvp then
+                    local pvp_crit_modifier = Player.spell.pvp_enabled.effectN( 3 ).mod
+                    crit_mod = crit_mod * pvp_crit_modifier
+                end
+                
+                local crit_effect   = crit_rate * crit_mod
+                crit_damage         = damage * crit_effect
+                crit_healing        = healing * crit_effect
+                crit_group_healing  = group_healing * crit_effect
+                
+                damage          = damage + crit_damage
+                healing         = healing + crit_healing
+                group_healing   = group_healing + crit_group_healing
+            end
+           
+           return {
+               damage = damage,
+               healing = healing,
+               group_healing = group_healing,
+           } 
+        end        
+        
+        -- Echo Procs
+        -- Example: Bonedust Brew, Charred Passions
+        if action.echo_callback then
+            action.background = true
+            action.echo_pct = initialize_value( action.echo_pct, 0 )
         end
         
         -- Area of Effect Functions
@@ -819,43 +904,6 @@ aura_env.CPlayer = {
             end
             
             return max( 1, min( 20, action.composite_target_count( self, state, spell_targets ) ) )
-        end
-        
-        action.target_multiplier = function( self, state, target_count )
-            
-            local primary_target_multiplier     = ( action.aoe and action.primary_target_multiplier( self, state ) ) or 1
-            local secondary_target_multiplier    = ( action.aoe and action.secondary_target_multiplier( self, state ) ) or 1
-            
-            if target_count == 1 then
-                return primary_target_multiplier
-            else
-                local result = 0
-                
-                local targets           = target_count
-                local sqrt_targets      = action.sqrt_after or 0
-                
-                if type( sqrt_targets ) == "function" then
-                    sqrt_targets = sqrt_targets()
-                end
-                
-                local primary_targets   = action.aoe and min( targets, action.primary_aoe_targets ) or 0
-                local secondary_targets = targets - primary_targets 
-                
-                if primary_targets > 0 then
-                    result = result + ( primary_targets * primary_target_multiplier )
-                    targets = targets - primary_targets
-                end
-                
-                if targets > 0 then
-                    local secondary_result = ( sqrt_targets > 0 and sqrt( sqrt_targets / target_count ) ) or 1
-                    
-                    secondary_result = secondary_result * targets * secondary_target_multiplier
-                    
-                    result = result + secondary_result
-                end
-                
-                return result
-            end
         end
         
         -- GCD Value
@@ -980,10 +1028,41 @@ aura_env.CPlayer = {
             return self.miss( self, state )
         end
         
+        -- Cost
+        action.cost = function( self, state )
+            local cost = nil
+            local secondary_cost = nil
+            
+            if Player.primary_resource then
+                
+                if not Player.secondary_resource then
+                    secondary_cost = 0
+                end
+                
+                local costTable = GetSpellPowerCost( action.replaces or action.spellID )
+                if costTable then 
+                    for _, costInfo in pairs( costTable ) do
+                        if cost and secondary_cost then
+                            break
+                        end
+                        
+                        if not cost and costInfo.type == Player.primary_resource.type then
+                            cost = costInfo.cost
+                        elseif not secondary_cost and costInfo.type == Player.secondary_resource.type then
+                            secondary_cost = costInfo.cost
+                        end
+                    end
+                end
+                cost = cost or 0
+                secondary_cost = secondary_cost or 0
+            end
+            return cost, secondary_cost
+        end
+        
         -- Action Ready
         local ready = initialize_value( action.ready, function() return true end )
         action.ready = function( self, state )
-            if action.combo and aura_env.fight_remains < action.execute_time() then
+            if state and aura_env.fight_remains < state.time then
                 return false
             end
             
@@ -995,6 +1074,27 @@ aura_env.CPlayer = {
         end
         
         return action
+    end,
+    
+    composite_attack_power = function( ap_type )
+        local self = aura_env.CPlayer
+        
+        local base_power_mod = 1
+        local weapon_power = self.weapon_power.main_hand
+        
+        if IsEquippedItemType( "Two-Hand" ) then
+            if ap_type == "BOTH" then
+                base_power_mod = 0.98
+            end
+        elseif ap_type == "BOTH" then
+            weapon_power = self.weapon_power.both
+        elseif ap_type == "OFFHAND" then
+            weapon_power = self.weapon_power.off_hand
+        elseif ap_type == "NONE" then
+            weapon_power = self.weapon_power.none
+        end
+        
+        return floor( self.attack_power + weapon_power + 0.5 ) * base_power_mod
     end,
     
     -- Simple helper function if you only need to know if one instance of a spellID exists
@@ -1248,8 +1348,10 @@ aura_env.CPlayer = {
         -- PvP Flag
         Player.is_pvp = UnitIsPlayer( "target" ) and aura_env.validTarget(  "target" )
         
-        -- Health Deficit
-        Player.health_deficit = UnitHealthMax( "player" ) - UnitHealth( "player" )
+        -- Health
+        Player.health_current   = UnitHealth( "player" )
+        Player.health_max       = UnitHealthMax( "player" )
+        Player.health_deficit   = Player.health_max - Player.health_current
         
         -- Primary Stat
         Player.primary_stat = select( 2, UnitStat( "player", 2 ) )
@@ -1371,7 +1473,8 @@ aura_env.GetEnemy = function( srcGUID )
             combatEnd = nil,
             combatStart = nil,
             dead = false,
-            healthActual = 0,
+            dtps = 0,
+            healthActual = 1,
             healthPct = 1.0,
             inCombat = nil,
             intermission = nil,
@@ -1426,6 +1529,10 @@ aura_env.GetEnemy = function( srcGUID )
     
     aura_env.CEnemy[ srcGUID ].unitID = UnitTokenFromGUID( srcGUID )
     
+    if aura_env.CEnemy[ srcGUID ].unitID then
+        aura_env.CEnemy[ srcGUID ].healthActual = UnitHealth( aura_env.CEnemy[ srcGUID ].unitID ) 
+    end
+    
     return aura_env.CEnemy[ srcGUID ];
 end
 
@@ -1445,6 +1552,7 @@ aura_env.ResetEnemy = function( GUID, dead )
     Enemy.combatEnd = Enemy.inCombat and GetTime() or nil
     Enemy.combatStart = nil
     Enemy.dead = dead or false
+    Enemy.dtps = 0
     Enemy.healthActual = 0
     Enemy.healthPct = 1.0
     Enemy.inCombat = nil
@@ -1523,7 +1631,7 @@ Player.makeBuff( 459841, "darting_hurricane" )
 -- brm
 Player.makeBuff( 228563, "blackout_combo" )
 Player.makeBuff( 325190, "celestial_flames" )
-Player.makeBuff( 389963, "charred_passions" ) 
+Player.makeBuff( 386963, "charred_passions" ) 
 Player.makeBuff( 383800, "counterstrike" )
 Player.makeBuff( 202346, "double_barrel" )
 Player.makeBuff( 325153, "exploding_keg" )
@@ -2521,7 +2629,7 @@ local function generateCallbacks( spells )
                             _init.ready = function( self, state ) 
                                 if not base_spell.background and IsSpellKnown( base_spell.replaces or base_spell.spellID ) then
                                     if cb_spell.ready then
-                                        return cb_spell.ready()
+                                        return cb_spell.ready( cb_spell, state )
                                     else
                                         return true
                                     end
@@ -2813,6 +2921,7 @@ local ww_spells = {
     } ),
     
     ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
+            background = true,
             skip_calcs = true, -- This is just the script that triggers the individual hits
             
             ready = function( self, state )
@@ -3108,7 +3217,7 @@ local ww_spells = {
             end,
             
             trigger_rate = function() 
-                return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).roll * Player.haste
+                return Player.getTalent( "glory_of_the_dawn" ).effectN( 2 ).roll * ( Player.haste - 1 )
             end,
             
             ready = function( self, state )
@@ -3352,11 +3461,6 @@ local ww_spells = {
                 
                 am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
                 
-                if Player.getBuff( "bok_proc", state ).stacks() > 1 then
-                    -- BUG: Courageous Impulse affects TotM only at 2 stacks
-                    am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
-                end
-                
                 return am
             end,
             
@@ -3444,9 +3548,7 @@ local ww_spells = {
                 am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
                 
                 if Player.getBuff( "bok_proc", state ).up() then
-                    --am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
-                    -- BUG: Courageous Impulse stacks
-                    am = am * ( Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod * Player.getBuff( "bok_proc", state ).stacks() )
+                    am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
                 end
                 
                 -- T33 Windwalker 2PC
@@ -3547,17 +3649,6 @@ local ww_spells = {
                 end,            
             },
             
-            ready = function( self, state )
-                -- Force bug abuse
-                if Player.getTalent( "courageous_impulse" ).ok and Player.getBuff( "bok_proc", state ).remains() > 1 then
-                    if Player.getBuff( "bok_proc", state ).stacks() < 2 then
-                        return false
-                    end
-                end
-                
-                return true
-            end,
-            
             trigger = {
                 ["energy_burst"] = true,
                 ["strength_of_the_black_ox"] = function( self, state )
@@ -3620,25 +3711,19 @@ local ww_spells = {
                     return false
                 end
                 
-                if not state then
-                    return true
-                end
-                
-                local brain_lag = 1.25
                 local grace_period = 1.5
-                local gcd = state.callback.gcd()
-                
+
                 local fof_cd = Player.getCooldown( "fists_of_fury", state )
                 local rsk_cd = Player.getCooldown( "rising_sun_kick", state )
                 local wdp_cd = Player.getCooldown( "whirling_dragon_punch", state )
                 
-                if  fof_cd > ( gcd + brain_lag - grace_period ) 
-                and rsk_cd > ( gcd + brain_lag - grace_period )
-                and wdp_cd < ( gcd + grace_period ) then
-                    return false
+                if  fof_cd > 0
+                and rsk_cd > 0
+                and ( wdp_cd - grace_period ) <= 0 then
+                    return true
                 end
                 
-                return true     
+                return false     
             end,
             
             action_multiplier = function( self, state )
@@ -4337,6 +4422,7 @@ local brm_spells = {
     } ),
     
     ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
+            background = true,
             skip_calcs = true, -- This is just the script that triggers the individual hits
             
             ready = function( self, state )
@@ -4466,7 +4552,15 @@ local brm_spells = {
     -- TODO: Maybe figure out a better solution for the healing sphere mess
     ["expel_harm"] = Player.createAction( 322101, {
             
-            ap = 0, sp = 0, -- Because healing spheres are added before modifiers I'm overwriting these and using bonus_heal instead
+            -- Because healing spheres are added before modifiers I'm overwriting these and using bonus_heal instead
+            ap = function() 
+                return 0
+            end,
+            
+            sp = function() 
+                return 0
+            end,
+            
             type = "self_heal", -- because ap and sp are set to zero the heal effect isn't parsed
             
             usable_during_sck = true,
@@ -5121,57 +5215,6 @@ local brm_spells = {
             
             ap = function()
                 return Player.getTalent( "exploding_keg" ).effectN( 4 ).ap_coefficient
-            end,
-            
-            trigger_rate = function( state )
-                -- State function to determine the residual ticks from DoTs applied prior to Exploding Keg in the call stack
-                -- e.g, Rushing Jade Wind -> Exploding Keg -> Exploding Keg Proc
-                
-                if Player.buffs.exploding_keg.up() then
-                    return 1
-                end
-                
-                if state then
-                    local dot_time = 0
-                    local dot_rate = 0
-                    
-                    for cb_idx, callback in ipairs( state.callback_stack ) do
-                        if cb_idx == #state.callback_stack then
-                            break
-                        end         
-                        
-                        if callback.result then
-                            local execute_time = callback.result.execute_time
-                            local delay = callback.result.delay
-                            
-                            dot_time = max( 0, dot_time - execute_time - delay )
-                            
-                            if callback.name == "exploding_keg" then
-                                if dot_time > 0 then
-                                    local ek_ticks = min( Player.getTalent( "exploding_keg" ).duration, dot_time ) / dot_rate
-                                    return ek_ticks
-                                end
-                                return 1
-                            else
-                                if callback.is_periodic and callback.duration then
-                                    local ticks = callback.ticks
-                                    local duration = callback.duration
-                                    
-                                    if callback.duration_hasted then
-                                        duration = duration / Player.haste
-                                    end
-                                    
-                                    if duration > execute_time then
-                                        dot_time = duration - execute_time
-                                        dot_rate = duration / ticks
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-                
-                return 0
             end,
             
             tick_trigger = {
