@@ -1273,17 +1273,12 @@ aura_env.CPlayer = {
             return 0
         end
         
-        local cooldown
-        if action.spellID and GetSpellBaseCooldown(action.spellID) then
-            cooldown = GetSpellBaseCooldown(action.spellID) / 1000
-        else
-            cooldown = action.cooldown or action.icd or 0
-        end
-
-        if name == "celestial_conduit" and Player.getTalent("absolute_serenity").ok then
-            cooldown = cooldown - 15
+        if not action.spellID or not GetSpellBaseCooldown( action.spellID ) then
+            return action.cooldown or action.icd or 0
         end
         
+        local cooldown = GetSpellBaseCooldown( action.spellID ) / 1000
+
         if cooldown > 0 then
             if action.hasted_cooldown then
                 cooldown = cooldown / self.haste
