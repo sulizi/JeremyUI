@@ -1,4 +1,3 @@
-
 [Generic]:
 
 Absorb Shield SpellIDs
@@ -48,4 +47,3 @@ Way of a Thousand Strikes
 Acclamation
 Courageous Impulse
 Gale Force
-Ordered Elements
