@@ -346,10 +346,10 @@ function(event, ...)
                         if auraData.sourceUnit == "player" then
                             local expires = auraData.expirationTime
                             if expires == 0 then
-                                expires = frameTime + 3600
+                                expires = frameTime + 10
                             end
                             aura_env.targetAuras[ unitID ][ "jadefire_harmony" ] = {
-                                amp = 1.10,
+                                amp = 1.06,
                                 expire = expires
                             }
                             return true
@@ -361,7 +361,7 @@ function(event, ...)
                         if auraData.sourceUnit == "player" then
                             local expires = auraData.expirationTime
                             if expires == 0 then
-                                expires = frameTime + 3600
+                                expires = frameTime + 12
                             end
                             aura_env.targetAuras[unitID]["acclamation"] = {
                                 amp = 1 + (0.03 * (auraData.stacks or 1)),
