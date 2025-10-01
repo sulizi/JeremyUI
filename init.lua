@@ -2803,7 +2803,7 @@ Player.action_multiplier = function( action, state )
     if Player.spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ]  then
         
         if Player.getTalent( "dual_threat" ).ok and Player.getBuff( "dual_threat", state ).up() then
-            am = am * ( 1 + Player.getBuff( "dual_threat", state ).stacks() * Player.getTalent( "dual_threat" ).effectN( 1 ).pct )
+            am = am * ( 1 + Player.getTalent( "dual_threat" ).effectN( 1 ).pct )
         end
 
         -- WW Mastery and Hit Combo effects
