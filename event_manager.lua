@@ -314,6 +314,15 @@ function(event, ...)
                 aura_env.targetAuras[ unitID ] = {}
                 aura_env.targetAuras[ unitID ][ "priority_check" ] = { amp = Enemy.priority_modifier, expire = frameTime + 3600 }
                 
+                if Enemy.gale_force_debuff and Enemy.gale_force_debuff > GetTime() then
+                    aura_env.targetAuras[unitID][451580] = {
+                        amp = 1.1,
+                        expire = Enemy.gale_force_debuff,
+                    }
+                else
+                    Enemy.gale_force_debuff = nil
+                end
+
                 if Player.role == "TANK" then
                     local threat_status = UnitThreatSituation( "player", unitID ) or 0
                     aura_env.targetAuras[ unitID ][ "threat_check" ] = { 
@@ -2087,6 +2096,9 @@ function(event, ...)
             else
                 -- Not pet damage
                 if srcGUID == UnitGUID( "player" ) then
+                    if Player.getTalent("gale_force").ok and (spellID == 395519 or spellID == 395521) then
+                        Enemy.gale_force_debuff = GetTime() + 10
+                    end
                     -- spell tracking ... 
                     if spellID and aura_env.pull_hash ~= "" then
                         aura_env.coneTickListener( spellID, enemyGUID )
