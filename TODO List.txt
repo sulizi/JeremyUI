@@ -12,11 +12,6 @@ Hasted GCD
 Hasted Cooldown
 Action Usable Off GCD?
 
-[Windwalker]:
-
-Refactor SEF
-Refactor ETL
-
 [Brewmaster]:
 
 August Blessing
