@@ -2105,6 +2105,26 @@ function(event, ...)
             LogDamage( CombatLogGetCurrentEventInfo() )
             LogDeath( CombatLogGetCurrentEventInfo() )
         end
+
+        local eventtype, _, _, srcGUID, _, _, _, dstGUID, _, _, _, spellID, _, _, amount = CombatLogGetCurrentEventInfo()
+
+        if srcGUID == UnitGUID("player") then
+            if eventtype == "SPELL_AURA_APPLIED" and spellID == 451580 then
+                local unitID = dstGUID:match("-(%d+)-%x+$")
+                if not aura_env.targetAuras[unitID] then
+                    aura_env.targetAuras[unitID] = {}
+                end
+                aura_env.targetAuras[unitID][spellID] = {
+                    amp = 1.10,
+                    expire = GetTime() + 3600
+                }
+            elseif eventtype == "SPELL_AURA_REMOVED" and spellID == 451580 then
+                local unitID = dstGUID:match("-(%d+)-%x+$")
+                if aura_env.targetAuras[unitID] and aura_env.targetAuras[unitID][spellID] then
+                    aura_env.targetAuras[unitID][spellID] = nil
+                end
+            end
+        end
         
         return false
         

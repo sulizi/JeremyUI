@@ -14,8 +14,6 @@ Action Usable Off GCD?
 
 [Windwalker]:
 
-Gale Force
-Ordered Elements
 Refactor SEF
 Refactor ETL
 
@@ -48,3 +46,5 @@ Way of a Thousand Strikes
 
 Acclamation
 Courageous Impulse
+Gale Force
+Ordered Elements

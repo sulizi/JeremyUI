@@ -1055,6 +1055,10 @@ aura_env.CPlayer = {
                 end
                 cost = cost or 0
                 secondary_cost = secondary_cost or 0
+
+                if cost > 0 and Player.getTalent("ordered_elements").ok and Player.getBuff("storm_earth_and_fire", state) and Player.getBuff("storm_earth_and_fire", state):up() then
+                    cost = cost - 1
+                end
             end
             return cost, secondary_cost
         end
@@ -2825,6 +2829,13 @@ end
 -- WW Spells
 -- --------- --
 
+local function getOrderedElementsCDR(state)
+    if Player.getTalent("ordered_elements").ok and Player.getBuff("storm_earth_and_fire", state) and Player.getBuff("storm_earth_and_fire", state):up() then
+        return 1
+    end
+    return 0
+end
+
 local ww_spells = {
     
     ["dual_threat"] = Player.createAction( 451823, {
@@ -3615,6 +3626,7 @@ local ww_spells = {
                         cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                     end
                     
+                    cdr = cdr + getOrderedElementsCDR(state)
                     return cdr
                 end,
                 
@@ -3623,8 +3635,9 @@ local ww_spells = {
                     
                     if Player.getBuff( "blackout_reinforcement", state ).up() then
                         cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
-                    end                
+                    end
                     
+                    cdr = cdr + getOrderedElementsCDR(state)
                     return cdr
                 end,
                 
@@ -3634,7 +3647,8 @@ local ww_spells = {
                     if Player.getBuff( "blackout_reinforcement", state ).up() then
                         cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                     end                
-                    
+
+                    cdr = cdr + getOrderedElementsCDR(state)
                     return cdr
                 end,
                 
@@ -3643,8 +3657,9 @@ local ww_spells = {
                     
                     if Player.getBuff( "blackout_reinforcement", state ).up() then
                         cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
-                    end             
+                    end
                     
+                    cdr = cdr + getOrderedElementsCDR(state)
                     return cdr
                 end,            
             },
