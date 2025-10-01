@@ -841,7 +841,13 @@ aura_env.CPlayer = {
             
             if self.may_crit then
                 crit_rate = self.critical_rate and self.critical_rate() or Player.crit_bonus
+                if Player.getBuff("wisdom_of_the_wall_dodge_crit"):up() then
+                    crit_rate = crit_rate + ((GetCombatRatingBonus(29) / 100) * 0.25)
+                end
                 crit_mod = self.critical_modifier and self.critical_modifier() or 1
+                if Player.getBuff("wisdom_of_the_wall_crit"):up() then
+                    crit_mod = crit_mod + 0.30
+                end
                 
                 if Player.is_pvp then
                     local pvp_crit_modifier = Player.spell.pvp_enabled.effectN( 3 ).mod
@@ -1267,11 +1273,16 @@ aura_env.CPlayer = {
             return 0
         end
         
-        if not action.spellID or not GetSpellBaseCooldown( action.spellID ) then
-            return action.cooldown or action.icd or 0
+        local cooldown
+        if action.spellID and GetSpellBaseCooldown(action.spellID) then
+            cooldown = GetSpellBaseCooldown(action.spellID) / 1000
+        else
+            cooldown = action.cooldown or action.icd or 0
         end
-        
-        local cooldown = GetSpellBaseCooldown( action.spellID ) / 1000
+
+        if name == "celestial_conduit" and Player.getTalent("absolute_serenity").ok then
+            cooldown = cooldown - 15
+        end
         
         if cooldown > 0 then
             if action.hasted_cooldown then
@@ -1593,6 +1604,7 @@ Player.makeBuff( 451233, "vigilant_watch" )
 Player.makeBuff( 452684, "wisdom_of_the_wall_crit" )
 Player.makeBuff( 452688, "wisdom_of_the_wall_flurry" )
 Player.makeBuff( 452685, "wisdom_of_the_wall_mastery" )
+Player.makeBuff( 451242, "wisdom_of_the_wall_dodge_crit" )
 
 -- celestial conduit
 Player.makeBuff( 442850, "august_dynasty" )
@@ -1600,6 +1612,7 @@ Player.makeBuff( 443112, "strength_of_the_black_ox" )
 Player.makeBuff( 456368, "heart_of_the_jade_serpent" )
 Player.makeBuff( 443421, "hotjs_cdr" )
 Player.makeBuff( 443616, "hotjs_cdr_celestial" )
+Player.makeBuff( 443028, "celestial_conduit" )
 
 -- ww 
 Player.makeBuff( 424454, "blackout_reinforcement" )
@@ -1632,6 +1645,7 @@ Player.makeBuff( 242387, "thunderfist" )
 Player.makeBuff( 195321, "transfer_the_power" )
 Player.makeBuff( 123904, "xuen_the_white_tiger" )
 Player.makeBuff( 459841, "darting_hurricane" )
+Player.makeBuff( 451823, "dual_threat" )
 
 -- brm
 Player.makeBuff( 228563, "blackout_combo" )
@@ -2212,14 +2226,6 @@ aura_env.targetAuraEffect = function( callback, future )
     
     if callback_type == "damage" then
 
-        if Player.spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"] and aura_env.targetAuras["target"] then
-            for _, aura in pairs( aura_env.targetAuras["target"] ) do
-                if aura.spellID == spell.acclamation.id then
-                    amp = amp * (1 + 0.03 * aura.stacks)
-                    break
-                end
-            end
-        end
         
         if target_count == 1 and aura_env.targetAuras["target"] then
             for _, aura in pairs( aura_env.targetAuras["target"] ) do
@@ -2796,11 +2802,20 @@ Player.action_multiplier = function( action, state )
     
     if Player.spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ]  then
         
+        if Player.getTalent( "dual_threat" ).ok and Player.getBuff( "dual_threat", state ).up() then
+            am = am * ( 1 + Player.getBuff( "dual_threat", state ).stacks() * Player.getTalent( "dual_threat" ).effectN( 1 ).pct )
+        end
+
         -- WW Mastery and Hit Combo effects
         local cs, hit_combo = IsComboStrike( action, state )
         
+        local mastery_bonus = Player.mast_bonus
+        if Player.getBuff("wisdom_of_the_wall_mastery", state):up() then
+             mastery_bonus = 1 + ((Player.mast_bonus - 1) * 1.25)
+        end
+
         if cs then
-            am = am * Player.mast_bonus
+            am = am * mastery_bonus
         end
         
         if LibDBCache:spell_affected_by_effect( action.spellID, Player.buffs.hit_combo.effectN( 1 ) ) then
@@ -2848,23 +2863,6 @@ end
 
 local ww_spells = {
     
-    ["dual_threat"] = Player.createAction( 451823, {
-            background = true,
-            
-            triggerSpell = 451839,
-            trigger_rate = function( state )
-                return Player.getTalent( "dual_threat" ).effectN( 1 ).pct
-            end,
-            
-            bonus_da = function()
-                return -1 * Player.main_hand.swing_damage
-            end,
-            
-            ready = function( self, state )
-                return Player.getTalent( "dual_threat" ).ok
-            end,
-    } ),
-    
     ["mainhand_attack"] = Player.createAction( AUTO_ATTACK, {
             background = true,
             school = 0x1,
@@ -2899,8 +2897,13 @@ local ww_spells = {
                 ["thunderfist"] = function( self, state )
                     return Player.getBuff( "thunderfist", state ).up()
                 end,
-                ["dual_threat"] = true,
             },
+
+            onExecute = function( self, state )
+                if Player.getTalent( "dual_threat" ).ok then
+                    Player.getBuff( "dual_threat", state ).increment()
+                end
+            end,
     } ),
     
     ["offhand_attack"] = Player.createAction( AUTO_ATTACK, {
@@ -2937,8 +2940,13 @@ local ww_spells = {
                 ["thunderfist"] = function( self, state )
                     return Player.getBuff( "thunderfist", state ).up()
                 end,
-                ["dual_threat"] = true,
-            },        
+            },
+
+            onExecute = function( self, state )
+                if Player.getTalent( "dual_threat" ).ok then
+                    Player.getBuff( "dual_threat", state ).increment()
+                end
+            end,
     } ),
     
     ["auto_attack"] = Player.createAction( AUTO_ATTACK, {
@@ -2981,6 +2989,11 @@ local ww_spells = {
     
     ["flurry_strike_wisdom"] = Player.createAction( 451250, {
             background = true,
+            type = 'damage',
+            school = 0x8, -- Shadow
+            ignore_armor = true,
+            aoe = -1,
+            ap = function() return 1.6 end,
             
             ready = function( self, state )
                 return Player.getTalent( "wisdom_of_the_wall" ).ok
@@ -4359,6 +4372,70 @@ local ww_spells = {
                 )
             end,        
     } ),
+
+    ["celestial_conduit_healing"] = Player.createAction(443028, {
+        background = true,
+        type = "smart_heal",
+        aoe = 5,
+        -- The spell data is probably for the full channel, let's assume 4 ticks.
+        sp = function(self, state)
+            return (5.5 / 4) / self.target_count(self, state)
+        end,
+        action_multiplier = function(self, state)
+            local am = 1
+            -- Increased by 6% per enemy struck, up to 30%.
+            am = am * (1 + math.min(0.3, aura_env.target_count * 0.06))
+            if Player.getTalent("unity_within").ok then
+                am = am * 1.10
+            end
+            return am
+        end,
+        target_count = function(self, state)
+            return math.min(5, #aura_env.healer_targets)
+        end,
+    }),
+
+    ["celestial_conduit_damage"] = Player.createAction(443028, {
+        background = true,
+        type = "damage",
+        ignore_armor = true,
+        -- The spell data is probably for the full channel, let's assume 4 ticks.
+        ap = function(self, state)
+            return (5.5 / 4) / self.target_count(self, state)
+        end,
+        action_multiplier = function(self, state)
+            local am = 1
+            -- Increased by 6% per enemy struck, up to 30%.
+            am = am * (1 + math.min(0.3, aura_env.target_count * 0.06))
+            if Player.getTalent("unity_within").ok then
+                am = am * 1.10
+            end
+            return am
+        end,
+        ww_mastery = true,
+    }),
+
+    ["celestial_conduit"] = Player.createAction(443028, {
+        skip_calcs = true,
+        channeled = true,
+        ticks = 4,
+        base_duration = 4,
+        cooldown = 90,
+        mitigate = function(self, state)
+            if Player.getTalent("jade_sanctuary").ok then
+                return Player.health_max * 0.15
+            end
+            return 0
+        end,
+        ready = function(self, state)
+            -- This is a Hero Talent keystone, so IsPlayerSpell should be sufficient.
+            return IsPlayerSpell(443028)
+        end,
+        tick_trigger = {
+            ["celestial_conduit_damage"] = true,
+            ["celestial_conduit_healing"] = true,
+        },
+    }),
 }
 
 -- --------- -- 
