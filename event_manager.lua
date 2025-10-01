@@ -340,6 +340,36 @@ function(event, ...)
                                 return true
                             end
                     end )
+
+                    -- Jadefire Harmony
+                    Enemy.auraExists( 451580, function( auraData )
+                        if auraData.sourceUnit == "player" then
+                            local expires = auraData.expirationTime
+                            if expires == 0 then
+                                expires = frameTime + 10
+                            end
+                            aura_env.targetAuras[ unitID ][ "jadefire_harmony" ] = {
+                                amp = 1.06,
+                                expire = expires
+                            }
+                            return true
+                        end
+                    end)
+
+                    -- Acclamation
+                    Enemy.auraExists(431385, function(auraData)
+                        if auraData.sourceUnit == "player" then
+                            local expires = auraData.expirationTime
+                            if expires == 0 then
+                                expires = frameTime + 12
+                            end
+                            aura_env.targetAuras[unitID]["acclamation"] = {
+                                amp = 1 + (0.03 * (auraData.stacks or 1)),
+                                expire = expires
+                            }
+                            return true
+                        end
+                    end)
                     
                     -- Shadowflame Vulnerability
                     Enemy.auraExists( 411376, function( auraData )
@@ -1665,6 +1695,10 @@ function(event, ...)
     
     if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_REGEN_ENABLED" then
         aura_env.updateDB()
+
+        if Player.getBuff("dual_threat") then
+            Player.getBuff("dual_threat"):expire()
+        end
         
         Combat = {
             avg_level = 0,
