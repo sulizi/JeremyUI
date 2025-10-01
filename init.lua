@@ -213,6 +213,7 @@ local spell = {
     -- PvP Talents
     pvp_enabled  = LibDBCache:find_spell( 134735 ),
     reverse_harm = LibDBCache:find_spell( 342928 ),
+    acclamation = LibDBCache:find_spell( 431385 ),
 }
 
 -- ------------------------------------------------------------------------------
@@ -2206,6 +2207,15 @@ aura_env.targetAuraEffect = function( callback, future )
     local amp = 1
     
     if callback_type == "damage" then
+
+        if Player.spec == aura_env.SPEC_INDEX["MONK_WINDWALKER"] and aura_env.targetAuras["target"] then
+            for _, aura in pairs( aura_env.targetAuras["target"] ) do
+                if aura.spellID == spell.acclamation.id then
+                    amp = amp * (1 + 0.03 * aura.stacks)
+                    break
+                end
+            end
+        end
         
         if target_count == 1 and aura_env.targetAuras["target"] then
             for _, aura in pairs( aura_env.targetAuras["target"] ) do
@@ -3548,7 +3558,7 @@ local ww_spells = {
                 am = am * Player.getTalent( "brawlers_intensity" ).effectN( 2 ).mod
                 
                 if Player.getBuff( "bok_proc", state ).up() then
-                    am = am * Player.getTalent( "courageous_impulse" ).effectN( 1 ).mod
+                    am = am * 3.5
                 end
                 
                 -- T33 Windwalker 2PC
