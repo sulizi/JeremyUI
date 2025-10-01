@@ -325,6 +325,14 @@ function(event, ...)
                 -- Windwalker Specific
                 if spec == aura_env.SPEC_INDEX[ "MONK_WINDWALKER" ] then
                     
+                    -- Gale Force
+                    if Player.getTalent("gale_force").ok and Enemy.gale_force_debuff and Enemy.gale_force_debuff > GetTime() then
+                        aura_env.targetAuras[ unitID ][ "gale_force" ] = {
+                            amp = 1.10,
+                            expire = Enemy.gale_force_debuff
+                        }
+                    end
+
                     -- Mark of the Crane
                     Enemy.auraExists( 228287, function( auraData )
                             if auraData.sourceUnit == "player" then
@@ -2087,6 +2095,12 @@ function(event, ...)
             else
                 -- Not pet damage
                 if srcGUID == UnitGUID( "player" ) then
+
+                    -- Gale Force
+                    if spellID == 395519 or spellID == 395521 then
+                        Enemy.gale_force_debuff = GetTime() + 10
+                    end
+
                     -- spell tracking ... 
                     if spellID and aura_env.pull_hash ~= "" then
                         aura_env.coneTickListener( spellID, enemyGUID )

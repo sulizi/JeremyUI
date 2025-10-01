@@ -3657,7 +3657,6 @@ local ww_spells = {
                     if Player.getBuff( "blackout_reinforcement", state ).up() then
                         cdr = cdr + spell.t31_ww_4pc.effectN( 1 ).base_value
                     end                
-
                     cdr = cdr + getOrderedElementsCDR(state)
                     return cdr
                 end,
