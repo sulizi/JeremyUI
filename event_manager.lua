@@ -2152,6 +2152,26 @@ function(event, ...)
         if InCombatLockdown() then
             LogDamage( CombatLogGetCurrentEventInfo() )
             LogDeath( CombatLogGetCurrentEventInfo() )
+
+            local _, eventtype, _, srcGUID, _, _, _, dstGUID, _, _, _, arg12 = CombatLogGetCurrentEventInfo()
+
+            if Player.getTalent("veterans_eye").ok then
+                -- Veteran's Eye from Parry
+                if eventtype == "SWING_MISSED" and dstGUID == Player.guid then
+                    local missType = arg12
+                    if missType == "PARRY" then
+                        Player.applyBuff("veterans_eye")
+                    end
+                end
+
+                -- Veteran's Eye from Touch of Karma removal
+                if eventtype == "SPELL_AURA_REMOVED" and srcGUID == Player.guid then
+                    local spellID = arg12
+                    if spellID == 122470 then -- Touch of Karma
+                        Player.applyBuff("veterans_eye")
+                    end
+                end
+            end
         end
 
         local eventtype, _, _, srcGUID, _, _, _, dstGUID, _, _, _, spellID, _, _, amount = CombatLogGetCurrentEventInfo()
