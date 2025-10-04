@@ -582,6 +582,8 @@ aura_env.CPlayer = {
     woo_dur_total = 0,
     woo_targets = 0,
     
+    flurry_energy_spent = 0,
+
     --
     
     is_beta = function()
@@ -1594,12 +1596,17 @@ Player.makeBuff( 390105, "save_them_all" )
 Player.makeBuff( 460490, "chi_burst" )
 
 -- shadopan
-Player.makeBuff( 451021, "flurry_charge" )
+Player.makeBuff( 450615, "flurry_overload", {
+    max_stacks = function()
+        return 3
+    end,
+})
 Player.makeBuff( 451233, "vigilant_watch" )
 Player.makeBuff( 452684, "wisdom_of_the_wall_crit" )
 Player.makeBuff( 452688, "wisdom_of_the_wall_flurry" )
 Player.makeBuff( 452685, "wisdom_of_the_wall_mastery" )
 Player.makeBuff( 451242, "wisdom_of_the_wall_dodge_crit" )
+Player.makeBuff( 451253, "veterans_eye" )
 
 -- celestial conduit
 Player.makeBuff( 442850, "august_dynasty" )
@@ -2856,7 +2863,54 @@ local function getOrderedElementsCDR(state)
     return 0
 end
 
+local function checkFlurryOverload(state)
+    if Player.getTalent("flurry_strikes").ok and Player.flurry_energy_spent >= 240 then
+        Player.getBuff("flurry_overload", state):increment(3)
+        Player.flurry_energy_spent = Player.flurry_energy_spent - 240
+    end
+end
+
 local ww_spells = {
+
+    ["flurry_strike_proc"] = Player.createAction(450617, {
+        background = true,
+        type = 'damage',
+        school = 0x8,
+        ignore_armor = true,
+        ap = function() return 1.50 end,
+        aoe = 5,
+        secondary_target_multiplier = function()
+            if Player.getTalent("one_versus_many").ok then
+                return 0.25
+            end
+            return 1
+        end,
+        composite_target_count = function(self, state, count)
+            if not Player.getTalent("one_versus_many").ok then
+                return 1
+            end
+            return count
+        end,
+        action_multiplier = function(self, state)
+            local am = 1
+            if Player.getTalent("high_impact").ok then
+                am = am * 1.15
+            end
+            return am
+        end,
+        critical_rate = function()
+            local cr = Player.crit_bonus
+            if Player.getTalent("high_impact").ok then
+                if UnitExists("target") and UnitHealth("target") / UnitHealthMax("target") > 0.8 then
+                    cr = cr * 2
+                end
+            end
+            return cr
+        end,
+        onExecute = function(self, state)
+            Player.getBuff("flurry_overload", state):decrement()
+        end,
+    }),
     
     ["mainhand_attack"] = Player.createAction( AUTO_ATTACK, {
             background = true,
@@ -3447,11 +3501,22 @@ local ww_spells = {
                 
                 if Player.getTalent( "last_emperors_capacitor" ).ok then
                     Player.getBuff( "the_emperors_capacitor", state ).increment()
-                end            
+                end
+
+                -- Flurry Strikes
+                local _, energy_cost = self.cost(self, state)
+                if energy_cost and energy_cost > 0 then
+                    Player.flurry_energy_spent = Player.flurry_energy_spent + energy_cost
+                    checkFlurryOverload(state)
+                end
             end,
             
             trigger = {
                 ["chi_explosion"] = true,
+                ["flurry_strike_proc"] = function(self, state)
+                    local _, energy_cost = self.cost(self, state)
+                    return energy_cost and energy_cost > 0 and Player.getBuff("flurry_overload", state):up()
+                end,
             },
             
     } ),
@@ -4113,12 +4178,21 @@ local ww_spells = {
                 
                 Player.getBuff( "tigers_ferocity", state ).expire()
                 Player.getBuff( "darting_hurricane", state ).decrement()
+
+                -- Flurry Strikes
+                local _, energy_cost = self.cost(self, state)
+                if energy_cost and energy_cost > 0 then
+                    Player.flurry_energy_spent = Player.flurry_energy_spent + energy_cost
+                    checkFlurryOverload(state)
+                end
             end,
             
             trigger = {
                 ["expel_harm"] = true,
-                ["flurry_strikes"] = true,
                 ["tigers_ferocity"] = true,
+                ["flurry_strike_proc"] = function(self, state)
+                    return Player.getBuff("flurry_overload", state):up()
+                end,
             },
     } ),
     
@@ -4142,44 +4216,46 @@ local ww_spells = {
             trigger_etl = true,
     } ),
     
-    ["expel_harm"] = Player.createAction( 451968, {
-            background = true,
-            
-            action_multiplier = function( self, state )
-                local h = 1
-                
-                h = h * Player.getTalent( "vigorous_expulsion" ).effectN( 1 ).mod
-                
-                if Player.getTalent( "strength_of_spirit" ).ok then
-                    local health_deficit = UnitHealthMax( "player" ) - UnitHealth( "player" )
-                    local health_percent = health_deficit / UnitHealthMax( "player" )
-                    
-                    h = h * ( 1 + ( health_percent * Player.getTalent( "strength_of_spirit" ).effectN( 1 ).pct ) )
-                end
-                
-                if IsPlayerSpell( spell.reverse_harm.id ) then -- Reverse Harm
-                    h = h * spell.reverse_harm.effectN( 1 ).mod
-                end
-                
-                return h
+    ["expel_harm"] = Player.createAction(451968, {
+        type = "self_heal",
+        ww_mastery = true,
+        action_multiplier = function(self, state)
+            local h = 1
+            h = h * Player.getTalent("vigorous_expulsion").effectN(1).mod
+            if Player.getTalent("strength_of_spirit").ok then
+                local health_deficit = UnitHealthMax("player") - UnitHealth("player")
+                local health_percent = health_deficit / UnitHealthMax("player")
+                h = h * (1 + (health_percent * Player.getTalent("strength_of_spirit").effectN(1).pct))
+            end
+            if IsPlayerSpell(spell.reverse_harm.id) then -- Reverse Harm
+                h = h * spell.reverse_harm.effectN(1).mod
+            end
+            return h
+        end,
+        critical_rate = function()
+            local cr = Player.crit_bonus
+            cr = cr + Player.getTalent("vigorous_expulsion").effectN(2).mod
+            return min(1, cr)
+        end,
+        critical_modifier = function()
+            local cm = 1
+            cm = cm * Player.getTalent("profound_rebuttal").effectN(1).mod
+            return cm
+        end,
+        onExecute = function(self, state)
+            -- Flurry Strikes
+            local _, energy_cost = self.cost(self, state)
+            if energy_cost and energy_cost > 0 then
+                Player.flurry_energy_spent = Player.flurry_energy_spent + energy_cost
+                checkFlurryOverload(state)
+            end
+        end,
+        trigger = {
+            ["flurry_strike_proc"] = function(self, state)
+                return Player.getBuff("flurry_overload", state):up()
             end,
-            
-            critical_rate = function()
-                local cr = Player.crit_bonus
-                
-                cr = cr + Player.getTalent( "vigorous_expulsion" ).effectN( 2 ).mod
-                
-                return min( 1, cr )
-            end,
-            
-            critical_modifier = function()
-                local cm = 1
-                
-                cm = cm * Player.getTalent( "profound_rebuttal" ).effectN( 1 ).mod 
-                
-                return cm
-            end,        
-    } ),
+        },
+    }),
     
     -- TODO: Generic Actions
     ["arcane_torrent"] = Player.createAction( 28730, {
@@ -4256,10 +4332,19 @@ local ww_spells = {
             
             onExecute = function( self, state )
                 Player.getBuff( "the_emperors_capacitor", state ).expire()
+
+                -- Flurry Strikes
+                local _, energy_cost = self.cost(self, state)
+                if energy_cost and energy_cost > 0 then
+                    Player.flurry_energy_spent = Player.flurry_energy_spent + energy_cost
+                    checkFlurryOverload(state)
+                end
             end,
             
             trigger = {
-                ["flurry_strikes"] = true,
+                ["flurry_strike_proc"] = function(self, state)
+                    return Player.getBuff("flurry_overload", state):up()
+                end,
             },
     } ),
     
@@ -4296,6 +4381,13 @@ local ww_spells = {
                 end
                 
                 return InCombatLockdown() and aura_env.fight_remains >= 6 and aura_env.config.use_karma == 1
+            end,
+            onExecute = function(self, state)
+                if Player.getTalent("veterans_eye").ok then
+                    -- This is incorrect, should trigger on expire.
+                    -- Placeholder until event handling is figured out.
+                    Player.getBuff("veterans_eye", state):increment()
+                end
             end,
     } ),
     
